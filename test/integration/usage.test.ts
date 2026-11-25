@@ -97,6 +97,7 @@ const replierWith = (engine: Engine, turnTimeoutMs = 5000) =>
     engine,
     logger: createLogger('silent'),
     model: 'claude-sonnet-5-5',
+    timezone: 'UTC',
     retryDelayMs: 0,
     typingIntervalMs: 5,
     turnTimeoutMs,

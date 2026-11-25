@@ -64,6 +64,7 @@ it('clock.now through the engine: the answer comes back and the audit row says w
     engine,
     logger: createLogger('silent'),
     model: 'test',
+    timezone: 'UTC',
     gate: createGate({ db }),
     retryDelayMs: 0,
     typingIntervalMs: 5,

@@ -63,7 +63,7 @@ const replierFor = (
   const timing = { retryDelayMs, typingIntervalMs: 5, turnTimeoutMs: 5000 };
   return {
     engine,
-    reply: createReplier({ db, engine, logger, model: 'test', ...timing }),
+    reply: createReplier({ db, engine, logger, model: 'test', timezone: 'UTC', ...timing }),
   };
 };
 

@@ -100,6 +100,7 @@ it('a tool name the model made up is refused through the gate and recorded', asy
     logger: createLogger('silent'),
     gate: createGate({ db }),
     model: 'test',
+    timezone: 'UTC',
     retryDelayMs: 0,
     typingIntervalMs: 5,
     turnTimeoutMs: 5000,

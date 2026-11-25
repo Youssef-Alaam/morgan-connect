@@ -3,6 +3,7 @@ import {
   clearHistory,
   loadHistory,
   recordUsage,
+  usageSince,
   type Db,
   type Turn,
 } from '../data/index.js';
@@ -16,6 +17,7 @@ import {
 } from '../policy/index.js';
 import { isCommand } from './commands.js';
 import type { ChannelSender } from './sender.js';
+import { formatUsage } from './usage-report.js';
 
 /** A model error that is only a hiccup is tried again this many times (rule G3 for models). */
 const MODEL_RETRIES = 2;
@@ -36,6 +38,8 @@ export interface ReplyDeps {
   gate?: Gate;
   /** The model id the engine uses; written to the usage ledger. */
   model: string;
+  /** Where "today" starts for /usage (an IANA name). */
+  timezone: string;
   retryDelayMs: number;
   typingIntervalMs: number;
   /** The whole answer, retries included, must fit inside the queue's job expiry. */
@@ -157,12 +161,15 @@ async function ask(
   }
 }
 
-/** Build the replier: `/new` clears the chat; anything else goes to the model with its history. */
+/** Build the replier: `/new` clears the chat, `/usage` shows spend; anything else goes to the model with its history. */
 export function createReplier(deps: ReplyDeps): Replier {
   return async (turn, sender, signal) => {
     if (isCommand(turn.text, 'new')) {
       await clearHistory(deps.db, { channel: turn.channel, chatId: turn.chatId });
       return NEW_REPLY;
+    }
+    if (isCommand(turn.text, 'usage')) {
+      return formatUsage(await usageSince(deps.db, new Date(), deps.timezone), deps.timezone);
     }
     const limit = AbortSignal.timeout(deps.turnTimeoutMs);
     const both = AbortSignal.any(signal === undefined ? [limit] : [signal, limit]);
