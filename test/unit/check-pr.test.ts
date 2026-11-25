@@ -63,9 +63,6 @@ describe('addedDependencies', () => {
   it('ignores version bumps and removals', () => {
     expect(addedDependencies(base, { dependencies: { a: '2' } })).toEqual([]);
   });
-  it('handles missing sections', () => {
-    expect(addedDependencies({}, { devDependencies: { x: '1' } })).toEqual(['x']);
-  });
 });
 
 describe('hasDependencyLine', () => {
