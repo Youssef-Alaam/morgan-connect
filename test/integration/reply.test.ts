@@ -61,7 +61,10 @@ const replierFor = (
   const engine = new ScriptedEngine(script);
   const logger = createLogger('silent');
   const timing = { retryDelayMs, typingIntervalMs: 5, turnTimeoutMs: 5000 };
-  return { engine, reply: createReplier({ db, engine, logger, ...timing }) };
+  return {
+    engine,
+    reply: createReplier({ db, engine, logger, model: 'test', ...timing }),
+  };
 };
 
 it('shows typing, answers, and gives the next message the conversation so far', async () => {

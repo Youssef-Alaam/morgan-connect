@@ -47,7 +47,14 @@ function buildReplier(
     engine ?? (apiKey === undefined ? undefined : createAnthropicEngine({ apiKey, modelId }));
   return model === undefined
     ? undefined
-    : createReplier({ db, logger, engine: model, gate: createGate({ db, logger }), ...TIMING });
+    : createReplier({
+        db,
+        logger,
+        engine: model,
+        model: modelId,
+        gate: createGate({ db, logger }),
+        ...TIMING,
+      });
 }
 
 /** With a Telegram token set, start the queue, the worker and the poller. Returns its stop. */

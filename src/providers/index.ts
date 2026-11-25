@@ -1,6 +1,7 @@
 export {
   EngineError,
   type Engine,
+  type EngineCallUsage,
   type EngineErrorKind,
   type EngineMessage,
   type EngineSession,

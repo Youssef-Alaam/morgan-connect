@@ -1,6 +1,19 @@
-import { appendHistory, clearHistory, loadHistory, type Db, type Turn } from '../data/index.js';
+import {
+  appendHistory,
+  clearHistory,
+  loadHistory,
+  recordUsage,
+  type Db,
+  type Turn,
+} from '../data/index.js';
 import type { Logger } from '../ops/index.js';
-import { EngineError, type Caller, type Engine, type Gate } from '../policy/index.js';
+import {
+  EngineError,
+  type Caller,
+  type Engine,
+  type EngineCallUsage,
+  type Gate,
+} from '../policy/index.js';
 import { isCommand } from './commands.js';
 import type { ChannelSender } from './sender.js';
 
@@ -21,6 +34,8 @@ export interface ReplyDeps {
   system?: string;
   /** The tools the model may call, each behind the policy gate. */
   gate?: Gate;
+  /** The model id the engine uses; written to the usage ledger. */
+  model: string;
   retryDelayMs: number;
   typingIntervalMs: number;
   /** The whole answer, retries included, must fit inside the queue's job expiry. */
@@ -76,12 +91,45 @@ function gateOptions(
   return { tools: gate.toolsFor(caller), unknownTool: gate.unknownTool(caller) };
 }
 
-async function ask(deps: ReplyDeps, turn: Turn, signal: AbortSignal): Promise<string> {
+/**
+ * One ledger row per model call. A call that never reached the provider (nothing billed, nothing
+ * counted) is not a call, so it gets no row. A ledger failure never costs the owner the answer.
+ */
+async function recordCall(
+  deps: ReplyDeps,
+  turn: Turn,
+  call: EngineCallUsage,
+  timedOut: () => boolean,
+): Promise<void> {
+  const { status, ...used } = call;
+  const sent = used.inputTokens + used.outputTokens + used.cacheReadTokens + used.cacheWriteTokens;
+  if (sent === 0 && used.costUsd === 0) return;
+  try {
+    await recordUsage(deps.db, {
+      channel: turn.channel,
+      chatId: turn.chatId,
+      model: deps.model,
+      status: status === 'aborted' && timedOut() ? 'timeout' : status,
+      ...used,
+    });
+  } catch {
+    deps.logger.warn({ turnId: turn.id }, 'usage not recorded');
+  }
+}
+
+async function ask(
+  deps: ReplyDeps,
+  turn: Turn,
+  signal: AbortSignal,
+  timedOut: () => boolean,
+): Promise<string> {
   const chat = { channel: turn.channel, chatId: turn.chatId };
   const history = await loadHistory(deps.db, chat, HISTORY_LIMIT, HISTORY_CHARS);
   for (let attempt = 0; ; attempt += 1) {
+    const pending: Promise<void>[] = [];
     const session = deps.engine.open({
       history,
+      onUsage: (call) => pending.push(recordCall(deps, turn, call, timedOut)),
       ...(deps.system === undefined ? {} : { system: deps.system }),
       ...gateOptions(deps.gate, { ...chat, turnId: turn.id }),
     });
@@ -104,6 +152,7 @@ async function ask(deps: ReplyDeps, turn: Turn, signal: AbortSignal): Promise<st
       if (signal.aborted) throw error;
     } finally {
       signal.removeEventListener('abort', stop);
+      await Promise.all(pending);
     }
   }
 }
@@ -119,7 +168,7 @@ export function createReplier(deps: ReplyDeps): Replier {
     const both = AbortSignal.any(signal === undefined ? [limit] : [signal, limit]);
     const stopTyping = keepTyping(deps, turn, sender);
     try {
-      return await ask(deps, turn, both);
+      return await ask(deps, turn, both, () => limit.aborted && signal?.aborted !== true);
     } catch (error) {
       const kind = error instanceof EngineError ? error.kind : 'failed';
       deps.logger.warn({ turnId: turn.id, kind }, 'model reply failed');

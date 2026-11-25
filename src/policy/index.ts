@@ -4,6 +4,7 @@ export {
   createAnthropicEngine,
   createPiEngine,
   type Engine,
+  type EngineCallUsage,
   type EngineMessage,
   type EngineSession,
   type EngineTool,
