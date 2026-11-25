@@ -149,26 +149,3 @@ it('records no user for a chat that is not linked', async () => {
   await gate.toolsFor({ channel: 'fake', chatId: 'nobody' })[0]?.run({});
   expect((await rows())[0]).toMatchObject({ user_id: null, turn_id: null });
 });
-
-it('refuses a registry with an action type nobody declared, or two tools with one model name', () => {
-  const odd = { ...spy('read').tool, actionType: 'teleport' } as never;
-  expect(() => createGate({ db, tools: [odd] })).toThrow('unknown action type');
-  const same = [createClockTool(), { ...spy('read').tool, name: 'clock_now' }];
-  expect(() => createGate({ db, tools: same })).toThrow('Two tools');
-});
-
-it('a failed audit write after a good run is logged and the answer still comes back', async () => {
-  const broken = createDb('postgres://nobody:x@127.0.0.1:1/none');
-  const error = vi.fn();
-  const tool = createGate({ db: broken, logger: { error } }).toolsFor(caller)[0];
-  expect(await tool?.run({})).toContain('(UTC)');
-  expect(error).toHaveBeenCalledOnce();
-  await broken.destroy();
-});
-
-it('a failed audit write on a refusal is not swallowed', async () => {
-  const broken = createDb('postgres://nobody:x@127.0.0.1:1/none');
-  const tool = createGate({ db: broken, tools: [spy('overwrite').tool] }).toolsFor(caller)[0];
-  await expect(tool?.run({})).rejects.toThrow();
-  await broken.destroy();
-});

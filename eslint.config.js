@@ -11,6 +11,10 @@ const bodyCast = {
   selector: "TSAsExpression > MemberExpression[property.name='body']",
   message: 'Parse request bodies with a schema, not an `as` cast.',
 };
+const noDynamicImport = {
+  selector: 'ImportExpression',
+  message: 'No dynamic import() in src/: code must be reachable by static imports only.',
+};
 const topLevelLet = [
   "Program > VariableDeclaration[kind='let']",
   "ExportNamedDeclaration > VariableDeclaration[kind='let']",
@@ -101,7 +105,9 @@ export default tseslint.config(
   {
     files: ['src/**/*.ts'],
     ignores: ['**/*.test.ts'],
-    rules: { 'no-restricted-syntax': ['error', jsonParseCast, bodyCast, ...topLevelLet] },
+    rules: {
+      'no-restricted-syntax': ['error', jsonParseCast, bodyCast, noDynamicImport, ...topLevelLet],
+    },
   },
   {
     files: ['**/*.test.ts'],

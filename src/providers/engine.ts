@@ -4,7 +4,8 @@ export interface EngineTool {
   description: string;
   /** JSON Schema for the arguments. */
   parameters: Record<string, unknown>;
-  run: (args: Record<string, unknown>) => Promise<string>;
+  /** `signal` fires when the turn is stopped; a tool should give up when it does. */
+  run: (args: Record<string, unknown>, signal?: AbortSignal) => Promise<string>;
 }
 
 export interface EngineMessage {
@@ -34,6 +35,8 @@ export interface Engine {
     history: readonly EngineMessage[];
     system?: string;
     tools?: readonly EngineTool[];
+    /** Called when the model names a tool that is not in `tools`, so the caller can record it. */
+    unknownTool?: (name: string, args: Record<string, unknown>) => Promise<string>;
   }) => EngineSession;
 }
 
