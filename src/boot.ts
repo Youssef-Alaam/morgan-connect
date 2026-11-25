@@ -13,7 +13,12 @@ export async function start(env: Record<string, string | undefined>): Promise<Ru
   const config = loadConfig(env);
   const logger = createLogger(config.LOG_LEVEL);
   const db = createDb(config.DATABASE_URL);
-  logger.info({ applied: await migrateToLatest(db) }, 'migrations done');
+  try {
+    logger.info({ applied: await migrateToLatest(db) }, 'migrations done');
+  } catch (error) {
+    await db.destroy();
+    throw error;
+  }
   const app = createApp({ dbVersion: () => dbVersion(db), logger });
   const server = await new Promise<ReturnType<typeof serve>>((resolve) => {
     const listening = serve({ fetch: app.fetch, port: config.PORT }, () => {

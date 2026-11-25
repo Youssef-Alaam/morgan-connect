@@ -1,7 +1,7 @@
 import { sql } from 'kysely';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { start } from '../../src/boot.js';
-import { createDb } from '../../src/data/index.js';
+import { createDb, migrateToLatest } from '../../src/data/index.js';
 import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
@@ -24,6 +24,7 @@ it('migrates an empty database and answers /health with the server version', asy
   const running = await start({ DATABASE_URL: postgres.url, PORT: '0', LOG_LEVEL: 'silent' });
   try {
     expect((await probe.execute(db)).rows[0]?.name).toBe('schema_info');
+    expect(await migrateToLatest(db)).toEqual([]);
     const response = await fetch(`http://127.0.0.1:${String(running.port)}/health`);
     const body: unknown = await response.json();
     expect(response.status).toBe(200);

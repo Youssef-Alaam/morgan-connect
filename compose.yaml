@@ -3,7 +3,7 @@ services:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: morgan
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: morgan
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -17,7 +17,7 @@ services:
     build: .
     env_file: .env
     environment:
-      DATABASE_URL: postgres://morgan:${POSTGRES_PASSWORD}@db:5432/morgan
+      DATABASE_URL: postgres://morgan:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/morgan
       PORT: '3000'
     ports:
       - '127.0.0.1:3000:3000'
