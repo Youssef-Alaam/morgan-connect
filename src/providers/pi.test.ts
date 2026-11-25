@@ -181,3 +181,34 @@ it('builds the default Claude engine from the catalog', () => {
     costUsd: 0,
   });
 });
+
+it('hands a tool the model made up to the caller instead of failing', async () => {
+  const { faux, models } = fauxModels();
+  faux.setResponses([reply({ tool: 'made_up', args: { x: 1 } }), reply({ text: 'ok' })]);
+  const seen: string[] = [];
+  const unknownTool = (name: string): Promise<string> => {
+    seen.push(name);
+    return Promise.resolve('refused');
+  };
+  const engine = createPiEngine({ models, model: faux.getModel(), apiKey: 'k' });
+  expect(await engine.open({ history: [], unknownTool }).prompt('go')).toBe('ok');
+  expect(seen).toEqual(['made_up']);
+});
+
+it('passes the turn signal to a tool', async () => {
+  const { faux, models } = fauxModels();
+  faux.setResponses([reply({ tool: 'peek', args: {} }), reply({ text: 'ok' })]);
+  let signal: AbortSignal | undefined;
+  const peek = {
+    name: 'peek',
+    description: 'd',
+    parameters: {},
+    run: (_args: Record<string, unknown>, given?: AbortSignal) => {
+      signal = given;
+      return Promise.resolve('x');
+    },
+  };
+  const engine = createPiEngine({ models, model: faux.getModel(), apiKey: 'k' });
+  await engine.open({ history: [], tools: [peek] }).prompt('go');
+  expect(signal?.aborted).toBe(false);
+});

@@ -25,7 +25,12 @@ export class ScriptedEngine implements Engine {
 
   open(options: Parameters<Engine['open']>[0]): EngineSession {
     this.opened.push({ history: options.history, tools: options.tools ?? [] });
-    const session = new ScriptedSession(this.script, options.tools ?? [], this.prompts);
+    const session = new ScriptedSession(
+      this.script,
+      options.tools ?? [],
+      this.prompts,
+      options.unknownTool,
+    );
     this.sessions.push(session);
     return session;
   }
@@ -39,6 +44,7 @@ class ScriptedSession implements EngineSession {
     private readonly script: Step[],
     private readonly tools: readonly EngineTool[],
     private readonly prompts: string[],
+    private readonly unknownTool?: (name: string, args: Record<string, unknown>) => Promise<string>,
   ) {}
 
   async prompt(text: string): Promise<string> {
@@ -58,8 +64,13 @@ class ScriptedSession implements EngineSession {
 
   private async runTool(step: { tool: string; args: Record<string, unknown> }): Promise<void> {
     const tool = this.tools.find((t) => t.name === step.tool);
-    if (tool === undefined) throw new EngineError('failed', 'unknown tool');
-    await tool.run(step.args);
+    if (tool !== undefined) await tool.run(step.args, this.abortSignal());
+    else if (this.unknownTool !== undefined) await this.unknownTool(step.tool, step.args);
+    else throw new EngineError('failed', 'unknown tool');
+  }
+
+  private abortSignal(): AbortSignal {
+    return this.aborted.signal;
   }
 
   private waitForAbort(): Promise<never> {

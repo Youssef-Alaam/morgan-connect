@@ -73,7 +73,7 @@ function gateOptions(
   caller: Caller,
 ): Partial<Parameters<Engine['open']>[0]> {
   if (gate === undefined) return {};
-  return { tools: gate.toolsFor(caller) };
+  return { tools: gate.toolsFor(caller), unknownTool: gate.unknownTool(caller) };
 }
 
 async function ask(deps: ReplyDeps, turn: Turn, signal: AbortSignal): Promise<string> {

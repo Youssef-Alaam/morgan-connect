@@ -12,5 +12,6 @@ export interface ToolDefinition {
   actionType: ActionType;
   /** True when the tool changes anything outside Morgan (such a tool is never retried). */
   changesState: boolean;
-  run: (args: Record<string, unknown>) => Promise<string>;
+  /** `signal` fires when the turn is stopped or the time limit passes; give up when it does. */
+  run: (args: Record<string, unknown>, signal?: AbortSignal) => Promise<string>;
 }

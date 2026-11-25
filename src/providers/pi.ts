@@ -16,6 +16,8 @@ import {
   type EngineUsage,
 } from './engine.js';
 
+type UnknownTool = NonNullable<Parameters<Engine['open']>[0]['unknownTool']>;
+
 /** Model calls in one prompt, so a model stuck calling tools cannot run forever. */
 const MAX_STEPS = 10;
 /** Only a busy or unreachable service is worth a retry; any other 4xx (bad request, key) is not. */
@@ -60,6 +62,7 @@ class PiSession implements EngineSession {
     private readonly options: PiEngineOptions,
     history: readonly EngineMessage[],
     private readonly tools: readonly EngineTool[],
+    private readonly unknownTool?: UnknownTool,
   ) {
     this.context = {
       ...(options.system === undefined ? {} : { systemPrompt: options.system }),
@@ -110,7 +113,9 @@ class PiSession implements EngineSession {
 
   private async runTool(id: string, name: string, args: Record<string, unknown>): Promise<void> {
     const tool = this.tools.find((t) => t.name === name);
-    const output = tool === undefined ? `Unknown tool ${name}` : await this.run(tool, args);
+    const unknown = this.unknownTool;
+    const call = tool?.run ?? (unknown === undefined ? undefined : (a) => unknown(name, a));
+    const output = call === undefined ? `Unknown tool ${name}` : await this.run(call, args);
     this.context.messages.push({
       role: 'toolResult',
       toolCallId: id,
@@ -121,9 +126,9 @@ class PiSession implements EngineSession {
     });
   }
 
-  private async run(tool: EngineTool, args: Record<string, unknown>): Promise<string> {
+  private async run(call: EngineTool['run'], args: Record<string, unknown>): Promise<string> {
     try {
-      return await tool.run(args);
+      return await call(args, this.controller.signal);
     } catch (error) {
       throw new EngineError('failed', 'A tool failed', { cause: error });
     }
@@ -143,9 +148,9 @@ class PiSession implements EngineSession {
 /** An engine over any Pi `Models` collection. Tests pass Pi's own scripted provider here. */
 export function createPiEngine(options: PiEngineOptions): Engine {
   return {
-    open: ({ history, tools = [], system }) => {
+    open: ({ history, tools = [], system, unknownTool }) => {
       const merged = system === undefined ? options : { ...options, system };
-      return new PiSession(merged, history, tools);
+      return new PiSession(merged, history, tools, unknownTool);
     },
   };
 }
