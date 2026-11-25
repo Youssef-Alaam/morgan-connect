@@ -16,6 +16,8 @@ const schema = z.object({
     }, 'must be https unless the host is localhost or 127.0.0.1')
     .optional(),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  // The Claude model that answers. Any id in Pi's Anthropic catalog.
+  ANTHROPIC_MODEL: z.string().min(1).default('claude-sonnet-5-5'),
 });
 
 export type Config = z.infer<typeof schema>;
