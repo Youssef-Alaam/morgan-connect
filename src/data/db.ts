@@ -40,6 +40,20 @@ export interface Database {
     text: string;
     created_at: Generated<Date>;
   };
+  audit_log: {
+    id: Generated<string>;
+    created_at: Generated<Date>;
+    turn_id: string | null;
+    channel: string;
+    chat_id: string;
+    user_id: string | null;
+    tool: string;
+    action_type: string;
+    changes_state: boolean;
+    arg_names: string[];
+    decision: 'auto' | 'ask' | 'off';
+    outcome: 'ok' | 'error' | 'refused';
+  };
 }
 
 export type Db = Kysely<Database>;

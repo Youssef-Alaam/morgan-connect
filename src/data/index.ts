@@ -18,3 +18,4 @@ export {
   type ChatKey,
   type ChatMessage,
 } from './history.js';
+export { appendAudit, type AuditEntry } from './audit.js';

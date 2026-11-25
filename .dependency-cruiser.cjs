@@ -49,6 +49,14 @@ module.exports = {
       to: { path: '^src/(providers|tools)/' },
     },
     {
+      name: 'tools-only-from-policy',
+      severity: 'error',
+      comment:
+        'Only src/policy (the gate and its profile) may import tools, so no tool runs outside the gate.',
+      from: { path: '^src/', pathNot: '^src/(tools|policy)/' },
+      to: { path: '^src/tools/' },
+    },
+    {
       name: 'web-and-backend-never-import-each-other',
       severity: 'error',
       from: { path: '^web/' },
