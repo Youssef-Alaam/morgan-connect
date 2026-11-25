@@ -130,3 +130,9 @@ it('retries a failing send three times, then marks the turn failed', async () =>
   expect(channel.attempts).toHaveLength(4);
   expect(await turnRow('3')).toMatchObject({ status: 'failed', error: 'send_failed' });
 });
+
+it('logs and rethrows an invalid payload without storing it', async () => {
+  await expect(
+    ingest(deps(new FakeChannel()), { channel: 'fake', text: 'secret' }),
+  ).rejects.toThrow(/Invalid message fields/);
+});
