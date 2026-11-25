@@ -22,7 +22,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /** Copy `value` with every sensitive key's value replaced, at any depth. */
-export function redact(value: unknown, depth = 0): unknown {
+function redact(value: unknown, depth = 0): unknown {
   if (depth > MAX_DEPTH) return CENSOR;
   if (Array.isArray(value)) return value.map((item: unknown) => redact(item, depth + 1));
   if (!isPlainObject(value)) return value;
