@@ -62,11 +62,9 @@ jobs:
         run: npm audit --audit-level=high
       - name: 12. Unit tests (with coverage)
         run: npx vitest run --project unit --coverage --coverage.reportsDirectory=coverage/unit
-      # No integration tests exist yet (first arrive in M0-4), so this passes with no tests.
-      # It becomes real once Postgres-backed tests are added.
-      - name: 13. Integration tests (real Postgres; none yet)
+      - name: 13. Integration tests (real Postgres via Testcontainers)
         run: >
-          npx vitest run --project integration --passWithNoTests
+          npx vitest run --project integration
           --coverage --coverage.reportsDirectory=coverage/integration
       # No migrations exist yet, so the minimal script finds no tables and passes.
       - name: 14. Isolation coverage

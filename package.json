@@ -10,6 +10,8 @@
   },
   "scripts": {
     "prepare": "lefthook install",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "lint": "eslint . --max-warnings 0",
@@ -18,7 +20,7 @@
     "knip": "knip",
     "licences": "license-checker-rseidelsohn --production --excludePrivatePackages --onlyAllow \"MIT;ISC;BSD-2-Clause;BSD-3-Clause;Apache-2.0;0BSD;CC0-1.0;Unlicense;BlueOak-1.0.0\"",
     "test:unit": "vitest run --project unit",
-    "test:integration": "vitest run --project integration --passWithNoTests",
+    "test:integration": "vitest run --project integration",
     "test:perf": "vitest run --project perf --passWithNoTests",
     "secrets": "gitleaks git --no-banner --redact",
     "commits": "commitlint --from origin/main",
@@ -30,7 +32,9 @@
     "@commitlint/config-conventional": "^21.2.4",
     "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
     "@eslint/js": "^10.0.1",
+    "@testcontainers/postgresql": "^12.2.2",
     "@types/node": "^26.6.10",
+    "@types/pg": "^8.23.1",
     "@vitest/coverage-v8": "^5.1.1",
     "dependency-cruiser": "^18.9.0",
     "eslint": "^10.15.0",
@@ -43,6 +47,10 @@
     "vitest": "^5.1.1"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.11",
+    "hono": "^4.13.22",
+    "kysely": "^0.29.9",
+    "pg": "^8.23.1",
     "pino": "^10.4.0",
     "zod": "^4.6.7"
   }
