@@ -8,7 +8,7 @@ import {
   type Db,
   type Turn,
 } from '../data/index.js';
-import type { Logger } from '../ops/index.js';
+import { formatLocalTime, type Logger } from '../ops/index.js';
 import {
   EngineError,
   type Caller,
@@ -41,8 +41,10 @@ export interface ReplyDeps {
   gate?: Gate;
   /** The model id the engine uses; written to the usage ledger. */
   model: string;
-  /** Where "today" starts for /usage (an IANA name). */
+  /** Where "today" starts for /usage, and the zone of the time shown to the model (an IANA name). */
   timezone: string;
+  /** The clock; tests fix it. */
+  now?: () => Date;
   retryDelayMs: number;
   typingIntervalMs: number;
   /** The whole answer, retries included, must fit inside the queue's job expiry. */
@@ -142,6 +144,28 @@ async function keepStopped(
   }
 }
 
+const TIME_NOTE = 'The current local time is given at the start of each user message.';
+
+/** The system prompt never changes between turns, so the provider can cache it. */
+const systemFor = (deps: ReplyDeps): string =>
+  deps.system === undefined
+    ? TIME_NOTE
+    : `${deps.system}
+
+${TIME_NOTE}`;
+
+/** "[Now: Wed 25 Nov 2026 13:30 (Africa/Cairo, UTC+02:00)] hello": kept in the history, so each turn keeps its own time. */
+function stamped(deps: ReplyDeps, text: string): string {
+  const date = (deps.now ?? (() => new Date()))();
+  let when: string;
+  try {
+    when = formatLocalTime(date, deps.timezone);
+  } catch {
+    when = formatLocalTime(date, 'UTC');
+  }
+  return `[Now: ${when}] ${text}`;
+}
+
 /**
  * After a failed prompt: wait and say true when another try is worth it. Otherwise remember what
  * happened so far and say false. A hiccup is retried only while no tool has run, because a tool
@@ -177,7 +201,7 @@ async function ask(
     const session = deps.engine.open({
       history,
       onUsage: (call) => pending.push(recordCall(deps, turn, call, timedOut)),
-      ...(deps.system === undefined ? {} : { system: deps.system }),
+      system: systemFor(deps),
       ...gateOptions(deps.gate, { ...chat, turnId: turn.id }),
     });
     const stop = (): void => {
@@ -187,7 +211,7 @@ async function ask(
     if (signal.aborted) stop();
     let answered = false;
     try {
-      const answer = await session.prompt(turn.text);
+      const answer = await session.prompt(stamped(deps, turn.text));
       answered = true;
       await appendHistory(deps.db, chat, session.transcript());
       return answer;
