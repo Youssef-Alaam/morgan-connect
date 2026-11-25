@@ -12,8 +12,7 @@ export function hasTicketId(title) {
 function isExcludedFromSize(filename) {
   return (
     filename === 'package-lock.json' ||
-    filename.endsWith('.snap') ||
-    filename.includes('__snapshots__/') ||
+    (filename.endsWith('.snap') && filename.includes('__snapshots__/')) ||
     filename.startsWith('test/fixtures/')
   );
 }
@@ -25,10 +24,18 @@ export function changedLineCount(files) {
 }
 
 const isTestFile = (filename) => filename.endsWith('.test.ts');
+const dirOf = (filename) => filename.slice(0, filename.lastIndexOf('/') + 1);
 
+// Deleted files (status "D") neither need a test nor count as one.
 export function srcChangedWithoutTest(files) {
-  const srcChanged = files.some((f) => f.filename.startsWith('src/') && !isTestFile(f.filename));
-  return srcChanged && !files.some((f) => isTestFile(f.filename));
+  const live = files.filter((f) => f.status !== 'D');
+  const srcFiles = live.filter((f) => f.filename.startsWith('src/') && !isTestFile(f.filename));
+  if (srcFiles.length === 0) return false;
+  const srcDirs = new Set(srcFiles.map((f) => dirOf(f.filename)));
+  return !live.some(
+    (f) =>
+      isTestFile(f.filename) && (f.filename.startsWith('test/') || srcDirs.has(dirOf(f.filename))),
+  );
 }
 
 export function addedDependencies(base, head) {
@@ -42,8 +49,34 @@ export function addedDependencies(base, head) {
   return added.sort();
 }
 
-export function hasDependencyLine(body) {
-  return /^Dependency:[ \t]*\S/m.test(body);
+function stripFencedCode(body) {
+  let fence = null;
+  const kept = [];
+  for (const line of body.split('\n')) {
+    const marker = /^[ \t]*(`{3,}|~{3,})/.exec(line)?.[1];
+    if (fence === null && marker !== undefined) {
+      fence = marker;
+    } else if (fence !== null && marker?.startsWith(fence)) {
+      fence = null;
+    } else if (fence === null) {
+      kept.push(line);
+    }
+  }
+  return kept.join('\n');
+}
+
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// One "Dependency: <name> ..." line per added package; fenced code is ignored.
+export function missingDependencyLines(body, names) {
+  const lines = stripFencedCode(body)
+    .split('\n')
+    .map((line) => /^Dependency:[ \t]*(.*)$/.exec(line.trim())?.[1])
+    .filter((rest) => rest !== undefined);
+  return names.filter((name) => {
+    const pattern = new RegExp(`^${escapeRegExp(name)}(?![\\w@/.-])`);
+    return !lines.some((rest) => pattern.test(rest));
+  });
 }
 
 export function evaluatePr({ title, body, files, basePackage, headPackage }) {
@@ -56,11 +89,11 @@ export function evaluatePr({ title, body, files, basePackage, headPackage }) {
     errors.push(`PR changes ${lines} lines; the limit is ${MAX_CHANGED_LINES}.`);
   }
   if (srcChangedWithoutTest(files)) {
-    errors.push('A file under src/ changed but no *.test.ts file did (test-first rule).');
+    errors.push('A file under src/ changed but no matching *.test.ts file did (test-first rule).');
   }
   const added = addedDependencies(basePackage, headPackage);
-  if (added.length > 0 && !hasDependencyLine(body)) {
-    errors.push(`package.json adds ${added.join(', ')}; the PR body needs a "Dependency:" line.`);
+  for (const name of missingDependencyLines(body, added)) {
+    errors.push(`package.json adds ${name}; the PR body needs a "Dependency: ${name}" line.`);
   }
   return errors;
 }
@@ -69,14 +102,21 @@ function git(...args) {
   return execFileSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 }
 
-function readChangedFiles(baseSha) {
-  return git('diff', '--numstat', baseSha, 'HEAD')
+function readChangedFiles(range) {
+  const status = new Map();
+  for (const line of git('diff', '--name-status', '--no-renames', range).split('\n')) {
+    const [code, ...name] = line.split('\t');
+    if (name.length > 0) status.set(name.join('\t'), code);
+  }
+  return git('diff', '--numstat', '--no-renames', range)
     .split('\n')
     .filter((line) => line !== '')
     .map((line) => {
-      const [add, del, ...name] = line.split('\t');
+      const [add, del, ...parts] = line.split('\t');
+      const filename = parts.join('\t');
       return {
-        filename: name.join('\t'),
+        filename,
+        status: status.get(filename),
         additions: Number(add) || 0,
         deletions: Number(del) || 0,
       };
@@ -95,9 +135,9 @@ function main() {
   const errors = evaluatePr({
     title: pr.title ?? '',
     body: pr.body ?? '',
-    files: readChangedFiles(pr.base.sha),
+    files: readChangedFiles(`${pr.base.sha}...${pr.head.sha}`),
     basePackage: JSON.parse(git('show', `${pr.base.sha}:package.json`)),
-    headPackage: JSON.parse(readFileSync('package.json', 'utf8')),
+    headPackage: JSON.parse(git('show', `${pr.head.sha}:package.json`)),
   });
   for (const message of errors) console.error(`::error::${message}`);
   if (errors.length > 0) process.exit(1);
