@@ -11,3 +11,4 @@ export {
   type EngineUsage,
 } from './engine.js';
 export { createAnthropicEngine, createPiEngine, type PiEngineOptions } from './pi.js';
+export { createHttpEngine, type HttpEngineOptions } from './http.js';

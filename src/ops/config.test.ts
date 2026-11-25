@@ -10,6 +10,7 @@ it('applies defaults and treats empty values as unset', () => {
     PORT: 3000,
     LOG_LEVEL: 'info',
     ANTHROPIC_MODEL: 'claude-sonnet-5-5',
+    ENGINE: 'pi',
     TIMEZONE: 'UTC',
   });
 });
@@ -44,4 +45,25 @@ it('requires https for TELEGRAM_API_ROOT unless the host is local', () => {
 it('lets the model be chosen', () => {
   const config = loadConfig({ DATABASE_URL: URL, ANTHROPIC_MODEL: 'claude-opus-5' });
   expect(config.ANTHROPIC_MODEL).toBe('claude-opus-5');
+});
+
+it('needs ENGINE_URL and ENGINE_TOKEN when ENGINE is http, and says which is missing', () => {
+  const env = { DATABASE_URL: URL, ENGINE: 'http' };
+  expect(() => loadConfig(env)).toThrow(/ENGINE_URL/);
+  expect(() => loadConfig({ ...env, ENGINE_URL: 'http://localhost:8787' })).toThrow(/ENGINE_TOKEN/);
+  const config = loadConfig({ ...env, ENGINE_URL: 'http://localhost:8787', ENGINE_TOKEN: 't' });
+  expect(config).toMatchObject({ ENGINE: 'http', ENGINE_URL: 'http://localhost:8787' });
+});
+
+it('sends the engine token only over https or to this machine or the compose host', () => {
+  const url = (value: string): unknown =>
+    loadConfig({ DATABASE_URL: URL, ENGINE: 'http', ENGINE_URL: value, ENGINE_TOKEN: 't' });
+  expect(() => url('http://engine.example.com')).toThrow(/ENGINE_URL/);
+  expect(() => url('http://host.docker.internal:8787')).not.toThrow();
+  expect(() => url('http://127.0.0.1:8787')).not.toThrow();
+  expect(() => url('https://engine.example.com')).not.toThrow();
+});
+
+it('refuses an unknown ENGINE', () => {
+  expect(() => loadConfig({ DATABASE_URL: URL, ENGINE: 'magic' })).toThrow(/ENGINE/);
 });

@@ -2,6 +2,7 @@
 export {
   EngineError,
   createAnthropicEngine,
+  createHttpEngine,
   createPiEngine,
   type Engine,
   type EngineCallUsage,
