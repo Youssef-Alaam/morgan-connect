@@ -6,6 +6,8 @@ const schema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   // Optional until the tickets that use them land.
   TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
+  // A self-hosted Bot API server, or a test double. Default: api.telegram.org.
+  TELEGRAM_API_ROOT: z.url().optional(),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
 });
 
