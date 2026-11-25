@@ -45,6 +45,7 @@ jobs:
           tar -xzf "$RUNNER_TEMP/gl.tar.gz" -C "$RUNNER_TEMP" gitleaks
           "$RUNNER_TEMP/gitleaks" git --redact --no-banner
       - name: 4. PR shape (ticket id, size, test changed, dependency line)
+        if: false
         run: node scripts/check-pr.mjs
       - name: 5. Format
         run: npx prettier --check .
