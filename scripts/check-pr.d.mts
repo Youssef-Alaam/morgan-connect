@@ -1,15 +1,21 @@
-export type ChangedFile = { filename: string; additions: number; deletions: number };
+export interface ChangedFile {
+  filename: string;
+  additions: number;
+  deletions: number;
+}
 type DepMap = Record<string, string>;
-export type PackageJson = Partial<
-  Record<'dependencies' | 'devDependencies' | 'optionalDependencies', DepMap>
->;
-export type PrInput = {
+export interface PackageJson {
+  dependencies?: DepMap;
+  devDependencies?: DepMap;
+  optionalDependencies?: DepMap;
+}
+export interface PrInput {
   title: string;
   body: string;
   files: ChangedFile[];
   basePackage: PackageJson;
   headPackage: PackageJson;
-};
+}
 export function hasTicketId(title: string): boolean;
 export function changedLineCount(files: ChangedFile[]): number;
 export function srcChangedWithoutTest(files: ChangedFile[]): boolean;

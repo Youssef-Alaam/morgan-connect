@@ -11,12 +11,10 @@ permissions:
   contents: read
 
 jobs:
-  # STANDARDS section 12, steps 1-16, in order. Each step is its own named step and the
-  # first failure stops the job. Steps 17-18 (restore test, release evals) are not part of M0.
+  # STANDARDS section 12 steps 1-16, in order; the first failure stops the job.
   ci:
     name: ci
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
     steps:
       - name: Checkout (full history)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -37,13 +35,11 @@ jobs:
         run: npx commitlint --from "$FROM_SHA" --to "$TO_SHA"
       - name: 3. Secrets (gitleaks 8.30.1)
         run: |
-          curl -sSfL -o gitleaks.tar.gz \
+          curl -sSfL -o "$RUNNER_TEMP/gl.tar.gz" \
             https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
-          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
-          mkdir -p "$RUNNER_TEMP/gitleaks"
-          tar -xzf gitleaks.tar.gz -C "$RUNNER_TEMP/gitleaks" gitleaks
-          rm gitleaks.tar.gz
-          "$RUNNER_TEMP/gitleaks/gitleaks" git --redact --no-banner
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $RUNNER_TEMP/gl.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gl.tar.gz" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" git --redact --no-banner
       - name: 4. PR shape (ticket id, size, test changed, dependency line)
         run: node scripts/check-pr.mjs
       - name: 5. Format

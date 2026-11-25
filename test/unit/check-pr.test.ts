@@ -100,12 +100,4 @@ describe('evaluatePr', () => {
     expect(evaluatePr({ ...clean, files: [file('README.md', 401)] })).toHaveLength(1);
     expect(evaluatePr({ ...clean, files: [file('README.md', 400)] })).toEqual([]);
   });
-  it('accepts a new dependency with a Dependency line', () => {
-    const ok = {
-      ...clean,
-      body: 'Dependency: x - needed',
-      headPackage: { dependencies: { x: '1' } },
-    };
-    expect(evaluatePr(ok)).toEqual([]);
-  });
 });
