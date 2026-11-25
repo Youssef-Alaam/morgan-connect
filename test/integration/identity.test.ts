@@ -78,7 +78,8 @@ it('issues a fresh code on each start while unclaimed; the old one stops working
 
 it('refuses a wrong code and rate-limits the chat, even for the right code', async () => {
   const code = (await identity.issueSetupCode()) ?? '';
-  for (let i = 0; i < 5; i += 1) expect(await identity.claim('fake', '9', `wrong${String(i)}`)).toBe('refused');
+  for (let i = 0; i < 5; i += 1)
+    expect(await identity.claim('fake', '9', `wrong${String(i)}`)).toBe('refused');
   expect(await identity.claim('fake', '9', code)).toBe('limited');
   expect(await identity.isLinked('fake', '9')).toBe(false);
   expect(await identity.claim('fake', '1', code)).toBe('claimed');

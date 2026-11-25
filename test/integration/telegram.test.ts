@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
+import { sql } from 'kysely';
 import { start } from '../../src/boot.js';
+import { createDb, migrateToLatest } from '../../src/data/index.js';
 import { startFakeTelegram } from '../helpers/fake-telegram.js';
 import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
@@ -21,7 +23,19 @@ const env = (apiRoot: string): Record<string, string> => ({
   TELEGRAM_API_ROOT: apiRoot,
 });
 
-it('echoes a Telegram text message back to the same chat', async () => {
+/** Link chat 42 (the fake update's chat) so the gate lets it through. */
+async function linkChat42(): Promise<void> {
+  const db = createDb(postgres.url);
+  await migrateToLatest(db);
+  await sql`insert into users (id) values ('00000000-0000-0000-0000-000000000042')`.execute(db);
+  await sql`insert into devices (user_id, channel, chat_id) values ('00000000-0000-0000-0000-000000000042', 'telegram', '42')`.execute(
+    db,
+  );
+  await db.destroy();
+}
+
+it('echoes a Telegram text message back to a linked chat', async () => {
+  await linkChat42();
   const telegram = await startFakeTelegram({ rejectToken: false });
   const running = await start(env(telegram.apiRoot));
   try {

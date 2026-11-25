@@ -18,6 +18,20 @@ export interface Database {
     error: string | null;
     created_at: Generated<Date>;
   };
+  users: { id: Generated<string>; role: Generated<string>; created_at: Generated<Date> };
+  devices: {
+    id: Generated<string>;
+    user_id: string;
+    channel: string;
+    chat_id: string;
+    created_at: Generated<Date>;
+  };
+  setup_codes: {
+    id: Generated<string>;
+    code_hash: string;
+    created_at: Generated<Date>;
+    claimed_at: Date | null;
+  };
 }
 
 export type Db = Kysely<Database>;

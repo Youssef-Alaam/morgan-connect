@@ -15,6 +15,7 @@ import {
   type Db,
   type TurnQueue,
 } from '../../src/data/index.js';
+import { createIdentity } from '../../src/identity/index.js';
 import { createLogger } from '../../src/ops/index.js';
 import { FakeChannel } from '../helpers/fake-channel.js';
 import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
@@ -28,6 +29,10 @@ beforeAll(async () => {
   postgres = await startPostgres();
   db = createDb(postgres.url);
   await migrateToLatest(db);
+  await sql`insert into users (id) values ('00000000-0000-0000-0000-000000000042')`.execute(db);
+  await sql`insert into devices (user_id, channel, chat_id) values ('00000000-0000-0000-0000-000000000042', 'fake', '42')`.execute(
+    db,
+  );
   queue = createTurnQueue(postgres.url, () => undefined);
   await queue.start();
 }, 180_000);
@@ -44,6 +49,7 @@ const deps = (channel: FakeChannel): PipelineDeps => ({
   senders: [channel],
   logger,
   retryDelayMs: 0,
+  identity: createIdentity(db),
 });
 const message = (messageId: string, text = 'hello') => ({
   channel: 'fake',

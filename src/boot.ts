@@ -1,6 +1,7 @@
 import { serve } from '@hono/node-server';
 import { createTelegramAdapter } from './channels/index.js';
 import { ingest, requeueStuckTurns, startWorker } from './core/index.js';
+import { createIdentity, type Identity } from './identity/index.js';
 import { createDb, createTurnQueue, dbVersion, migrateToLatest, type Db } from './data/index.js';
 import { createApp } from './http/index.js';
 import { type Config, createLogger, loadConfig, type Logger } from './ops/index.js';
@@ -8,6 +9,12 @@ import { type Config, createLogger, loadConfig, type Logger } from './ops/index.
 export interface Running {
   port: number;
   stop: () => Promise<void>;
+}
+
+/** While nobody has claimed the install, log a fresh one-time code (once per boot). */
+async function announceSetupCode(identity: Identity, logger: Logger): Promise<void> {
+  const code = await identity.issueSetupCode();
+  if (code !== undefined) logger.info(`Setup code: send "/start ${code}" to the bot to claim it`);
 }
 
 /** With a Telegram token set, start the queue, the worker and the poller. Returns its stop. */
@@ -22,8 +29,10 @@ async function startTelegram(config: Config, db: Db, logger: Logger): Promise<()
     logger,
     config.TELEGRAM_API_ROOT,
   );
-  const deps = { db, queue, senders: [telegram], logger, retryDelayMs: 1000 };
+  const identity = createIdentity(db);
+  const deps = { db, queue, senders: [telegram], logger, retryDelayMs: 1000, identity };
   try {
+    await announceSetupCode(identity, logger);
     await startWorker(deps);
     await requeueStuckTurns(deps);
     await telegram.start((message) => ingest(deps, message));
