@@ -1,0 +1,21 @@
+# Can Morgan's safety layer sit in front of every tool call of each agent SDK?
+
+Checked 2026-11-24. Lookup by Gemini; lines marked **[read]** were then read on the official page by the reviewer. Much of the rest comes from blog posts and GitHub issues and is marked "reported". This decides the engine rule in `spec.md` section 5: an engine ships only when every tool call it can make is routed through the safety layer or switched off.
+
+## Summary
+
+| SDK | Hook before every tool call | Built-in tools can be switched off | Known holes | Licence | Verdict for the engine rule |
+|---|---|---|---|---|---|
+| Claude Agent SDK | Yes: a `PreToolUse` hook can return `permissionDecision: "deny"` **[read]**, and a deny holds "even in `bypassPermissions` mode" **[read]**; it can also rewrite the arguments | Reported yes: a `tools` list and `disallowedTools` | Reported past cases where hooks were not applied to sub-agents; `canUseTool` alone is skippable, so the hook must be the gate | Proprietary (Anthropic's terms) | **Likely passes.** Use the hook as the gate, switch off the sub-agent tool until proven, prove it with the safety evals |
+| GitHub Copilot SDK | Reported yes: `onPreToolUse`, which denies if the handler crashes | Reported partly: allow and exclude lists exist, but an empty allow list is reported to fall back to all tools | Reported: tool calls made by sub-agents started through `task()` may skip the session's hooks | SDK is MIT **[read]**; the Copilot CLI it drives is proprietary | **Open.** Ship only with the `task` tool excluded and an explicit exclude list, if the evals pass |
+| Cursor SDK and CLI | Only through hook scripts in a config file; no in-code callback was found. Hooks **allow the call if the hook fails or times out** unless set to fail closed | Reported yes in the SDK (`tools: []` gives text only); no such switch found for the CLI | Fail-open default; argument rewriting ignored for some tools; hooks not loaded unless a setting is given | Proprietary | **Fails as a tool-running engine today.** Offer it text-only (`tools: []`) with Morgan's own tools, or as a later "hand a coding task to Cursor" tool |
+
+## Two findings that change the plan
+
+1. **Copilot SDK works with an ordinary API key.** Its README says a Copilot subscription is required "unless you are using BYOK (Bring Your Own Key)" **[read]**. So the Copilot engine can be built and tested on an API key without anyone owning a Copilot plan.
+2. **Cursor cannot be a normal engine yet.** Decision 16 lists the Cursor SDK as one of five engines. Under the engine rule it can only ship text-only or as a delegated-task tool. That is a question for the owner before M7, not a change made here.
+
+## Still unverified
+
+- The exact tool list of each SDK and the empty-list behaviour, on the official reference pages.
+- Whether sub-agent tool calls are covered by hooks in the current versions of all three.
