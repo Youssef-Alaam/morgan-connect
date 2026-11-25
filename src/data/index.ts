@@ -27,6 +27,7 @@ export {
   type ChatMessage,
   type StoredToolCall,
 } from './history.js';
+export { conversationFor, endConversation } from './conversations.js';
 export { appendAudit, type AuditEntry } from './audit.js';
 export {
   recordUsage,

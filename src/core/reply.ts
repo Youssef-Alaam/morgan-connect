@@ -2,6 +2,8 @@ import {
   appendHistory,
   clearHistory,
   closeStoppedTurn,
+  conversationFor,
+  endConversation,
   loadHistory,
   recordUsage,
   usageSince,
@@ -196,10 +198,12 @@ async function ask(
 ): Promise<string> {
   const chat = { channel: turn.channel, chatId: turn.chatId };
   const history = await loadHistory(deps.db, chat, HISTORY_TURNS, HISTORY_CHARS);
+  const conversationId = await conversationFor(deps.db, chat);
   for (let attempt = 0; ; attempt += 1) {
     const pending: Promise<void>[] = [];
     const session = deps.engine.open({
       history,
+      conversationId,
       onUsage: (call) => pending.push(recordCall(deps, turn, call, timedOut)),
       system: systemFor(deps),
       ...gateOptions(deps.gate, { ...chat, turnId: turn.id }),
@@ -225,11 +229,24 @@ async function ask(
   }
 }
 
+/** `/new`: forget the chat, then tell the engine the conversation is over. A failure there never blocks `/new`. */
+async function startOver(deps: ReplyDeps, turn: Turn): Promise<void> {
+  const chat = { channel: turn.channel, chatId: turn.chatId };
+  const ended = await endConversation(deps.db, chat);
+  await clearHistory(deps.db, chat);
+  if (ended === undefined || deps.engine.end === undefined) return;
+  try {
+    await deps.engine.end(ended);
+  } catch {
+    deps.logger.warn({ turnId: turn.id }, 'engine did not close the conversation');
+  }
+}
+
 /** Build the replier: `/new` clears the chat, `/usage` shows spend; anything else goes to the model with its history. */
 export function createReplier(deps: ReplyDeps): Replier {
   return async (turn, sender, signal) => {
     if (isCommand(turn.text, 'new')) {
-      await clearHistory(deps.db, { channel: turn.channel, chatId: turn.chatId });
+      await startOver(deps, turn);
       return NEW_REPLY;
     }
     if (isCommand(turn.text, 'usage')) {

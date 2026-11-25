@@ -104,6 +104,32 @@ it('/new forgets the chat and leaves other chats alone', async () => {
   expect(engine.opened[3]?.history).toHaveLength(2);
 });
 
+it('gives a chat one conversation id until /new, then a new one, and ends the old one', async () => {
+  const { reply, engine } = replierFor([{ text: 'a' }, { text: 'b' }, { text: 'c' }]);
+  const channel = new FakeChannel();
+  await reply(turn('c11', 'one'), channel);
+  await reply(turn('c11', 'two'), channel);
+  const first = engine.opened[0]?.conversationId;
+  expect(first).toMatch(/^[0-9a-f-]{36}$/);
+  expect(engine.opened[1]?.conversationId).toBe(first);
+  await reply(turn('c11', '/new'), channel);
+  expect(engine.ended).toEqual([first]);
+  await reply(turn('c11', 'three'), channel);
+  const second = engine.opened[2]?.conversationId;
+  expect(second).toMatch(/^[0-9a-f-]{36}$/);
+  expect(second).not.toBe(first);
+});
+
+it('/new still works when the engine cannot end the conversation, and when none was started', async () => {
+  const { reply, engine } = replierFor([{ text: 'a' }]);
+  const channel = new FakeChannel();
+  expect(await reply(turn('c12', '/new'), channel)).toBe(NEW_REPLY);
+  expect(engine.ended).toEqual([]);
+  await reply(turn('c12', 'hi'), channel);
+  engine.endFails = true;
+  expect(await reply(turn('c12', '/new'), channel)).toBe(NEW_REPLY);
+});
+
 it('retries a transient model error twice, then answers', async () => {
   const { reply, engine } = replierFor([
     { error: 'transient' },

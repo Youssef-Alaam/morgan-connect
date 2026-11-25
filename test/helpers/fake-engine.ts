@@ -22,16 +22,27 @@ export class ScriptedEngine implements Engine {
     history: readonly EngineMessage[];
     tools: readonly EngineTool[];
     system: string | undefined;
+    conversationId: string | undefined;
   }[] = [];
   readonly prompts: string[] = [];
+  readonly ended: string[] = [];
+  /** Set to make `end` fail, to prove a failure there does not block `/new`. */
+  endFails = false;
   readonly sessions: ScriptedSession[] = [];
   constructor(private readonly script: Step[]) {}
+
+  end = (conversationId: string): Promise<void> => {
+    if (this.endFails) return Promise.reject(new Error('end failed'));
+    this.ended.push(conversationId);
+    return Promise.resolve();
+  };
 
   open(options: Parameters<Engine['open']>[0]): EngineSession {
     this.opened.push({
       history: options.history,
       tools: options.tools ?? [],
       system: options.system,
+      conversationId: options.conversationId,
     });
     const session = new ScriptedSession(
       this.script,
