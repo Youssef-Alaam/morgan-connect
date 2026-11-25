@@ -1,0 +1,17 @@
+Morgan Connect
+Copyright 2026 the Morgan Connect authors
+
+This product includes software developed by the Morgan Connect authors,
+licensed under the Apache License, Version 2.0.
+
+Third-party files lifted into this repository are listed below with their
+origin, licence, and whether they were changed. Each keeps its original
+licence header.
+
+Format:
+  <path in this repo>
+    Origin:  <project and URL>
+    Licence: <SPDX id>
+    Changed: yes | no
+
+(No third-party files yet.)
