@@ -4,6 +4,7 @@ import {
   type Message,
   type Model,
   type Models,
+  type ToolCall,
   createModels,
 } from '@earendil-works/pi-ai';
 import { anthropicProvider } from '@earendil-works/pi-ai/providers/anthropic';
@@ -40,22 +41,73 @@ export interface PiEngineOptions {
 function pastMessage(message: EngineMessage, model: Model<string>): Message {
   const timestamp = Date.now();
   if (message.role === 'user') return { role: 'user', content: message.text, timestamp };
+  if (message.role === 'tool') {
+    return {
+      role: 'toolResult',
+      toolCallId: message.id,
+      toolName: message.name,
+      content: [{ type: 'text', text: message.text }],
+      isError: message.isError,
+      timestamp,
+    };
+  }
+  const calls = message.toolCalls ?? [];
   const cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
   const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost };
+  const content: AssistantMessage['content'] = [
+    ...(message.text === '' ? [] : [{ type: 'text' as const, text: message.text }]),
+    ...calls.map((c) => ({
+      type: 'toolCall' as const,
+      id: c.id,
+      name: c.name,
+      arguments: c.args as ToolCall['arguments'],
+    })),
+  ];
   return {
     role: 'assistant',
-    content: [{ type: 'text', text: message.text }],
+    content,
     api: model.api,
     provider: model.provider,
     model: model.id,
     usage,
-    stopReason: 'stop',
+    stopReason: calls.length === 0 ? 'stop' : 'toolUse',
     timestamp,
   };
 }
 
+/** A Pi message as a stored one. Thinking blocks are not kept. */
+function toEngineMessage(message: Message): EngineMessage {
+  if (message.role === 'user') {
+    const { content } = message;
+    const text =
+      typeof content === 'string'
+        ? content
+        : content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+    return { role: 'user', text };
+  }
+  if (message.role === 'toolResult') {
+    const text = message.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+    return {
+      role: 'tool',
+      text,
+      id: message.toolCallId,
+      name: message.toolName,
+      isError: message.isError,
+    };
+  }
+  if (message.role !== 'assistant') return { role: 'assistant', text: '' };
+  const text = message.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+  const toolCalls = message.content.flatMap((b) =>
+    b.type === 'toolCall' ? [{ id: b.id, name: b.name, args: b.arguments }] : [],
+  );
+  return toolCalls.length === 0
+    ? { role: 'assistant', text }
+    : { role: 'assistant', text, toolCalls };
+}
+
 class PiSession implements EngineSession {
   private readonly context: Context;
+  private readonly historyLength: number;
   private readonly steered: string[] = [];
   private readonly controller = new AbortController();
   private readonly used: EngineUsage = { inputTokens: 0, outputTokens: 0, costUsd: 0 };
@@ -71,6 +123,7 @@ class PiSession implements EngineSession {
       messages: history.map((m) => pastMessage(m, options.model)),
       tools: tools.map(({ name, description, parameters }) => ({ name, description, parameters })),
     };
+    this.historyLength = this.context.messages.length;
   }
 
   async prompt(text: string): Promise<string> {
@@ -145,6 +198,9 @@ class PiSession implements EngineSession {
     }
   }
 
+  transcript(): EngineMessage[] {
+    return this.context.messages.slice(this.historyLength).map(toEngineMessage);
+  }
   steer(text: string): void {
     this.steered.push(text);
   }

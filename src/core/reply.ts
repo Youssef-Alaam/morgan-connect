@@ -144,10 +144,7 @@ async function ask(
     if (signal.aborted) stop();
     try {
       const answer = await session.prompt(turn.text);
-      await appendHistory(deps.db, chat, [
-        { role: 'user', text: turn.text },
-        { role: 'assistant', text: answer },
-      ]);
+      await appendHistory(deps.db, chat, session.transcript());
       return answer;
     } catch (error) {
       const kind = error instanceof EngineError ? error.kind : 'failed';

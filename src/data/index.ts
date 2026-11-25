@@ -24,6 +24,7 @@ export {
   loadHistory,
   type ChatKey,
   type ChatMessage,
+  type StoredToolCall,
 } from './history.js';
 export { appendAudit, type AuditEntry } from './audit.js';
 export {

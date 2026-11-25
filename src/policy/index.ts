@@ -6,6 +6,7 @@ export {
   type Engine,
   type EngineCallUsage,
   type EngineMessage,
+  type EngineToolCall,
   type EngineSession,
   type EngineTool,
   type EngineUsage,

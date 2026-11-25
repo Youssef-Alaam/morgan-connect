@@ -37,8 +37,10 @@ export interface Database {
     id: Generated<string>;
     channel: string;
     chat_id: string;
-    role: 'user' | 'assistant';
+    role: 'user' | 'assistant' | 'tool';
     text: string;
+    /** Tool calls (assistant) or the tool result details (tool); null for plain text. */
+    data: ColumnType<unknown, string | null | undefined, string | null>;
     created_at: Generated<Date>;
   };
   audit_log: {

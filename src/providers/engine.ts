@@ -8,10 +8,17 @@ export interface EngineTool {
   run: (args: Record<string, unknown>, signal?: AbortSignal) => Promise<string>;
 }
 
-export interface EngineMessage {
-  role: 'user' | 'assistant';
-  text: string;
+export interface EngineToolCall {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
 }
+
+/** One step of a conversation: tool calls and their results are kept, matched by `id`. */
+export type EngineMessage =
+  | { role: 'user'; text: string }
+  | { role: 'assistant'; text: string; toolCalls?: EngineToolCall[] }
+  | { role: 'tool'; text: string; id: string; name: string; isError: boolean };
 
 export interface EngineUsage {
   inputTokens: number;
@@ -29,6 +36,8 @@ export interface EngineCallUsage extends EngineUsage {
 export interface EngineSession {
   /** Send one user message and run the model (and its tool calls) to a final text answer. */
   prompt: (text: string) => Promise<string>;
+  /** The messages this session added (the user's, the model's, tool calls and results), in order. */
+  transcript: () => EngineMessage[];
   /** Add a user message that the model sees before its next step. */
   steer: (text: string) => void;
   /** Stop the running prompt. It rejects with an `aborted` error. */

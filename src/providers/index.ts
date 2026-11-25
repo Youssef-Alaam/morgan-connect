@@ -4,6 +4,7 @@ export {
   type EngineCallUsage,
   type EngineErrorKind,
   type EngineMessage,
+  type EngineToolCall,
   type EngineSession,
   type EngineTool,
   type EngineUsage,

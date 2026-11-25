@@ -61,6 +61,10 @@ const billedEngine = (outcomes: Outcome[]): Engine => ({
     if (outcome === undefined) throw new Error('no outcome left');
     const abort = new AbortController();
     return {
+      transcript: () => [
+        { role: 'user', text: 'hello' },
+        { role: 'assistant', text: 'hi' },
+      ],
       prompt: async () => {
         if (outcome.end === 'hang') {
           await new Promise<void>((resolve) => {
