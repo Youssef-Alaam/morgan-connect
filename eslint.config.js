@@ -30,6 +30,16 @@ const mockPg = {
   message: 'Integration tests use a real Postgres, never a mocked pg.',
 };
 
+const rawWrites = [
+  'writeFile',
+  'writeFileSync',
+  'appendFile',
+  'appendFileSync',
+  'createWriteStream',
+];
+const rawWriteMessage =
+  'Write files with atomicWrite from src/ops/atomic-write.ts (temp, then rename).';
+
 export default tseslint.config(
   { ignores: ['node_modules/**', 'coverage/**', 'dist/**', '.claude/**'] },
   eslint.configs.recommended,
@@ -68,7 +78,25 @@ export default tseslint.config(
       'max-depth': ['error', 3],
       'max-nested-callbacks': ['error', 3],
       'no-restricted-syntax': ['error', jsonParseCast, bodyCast],
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: ['fs', 'node:fs', 'fs/promises', 'node:fs/promises'].map((name) => ({
+            name,
+            importNames: rawWrites,
+            message: rawWriteMessage,
+          })),
+        },
+      ],
+      'no-restricted-properties': [
+        'error',
+        ...rawWrites.map((property) => ({ property, message: rawWriteMessage })),
+      ],
     },
+  },
+  {
+    files: ['src/ops/atomic-write.ts'],
+    rules: { 'no-restricted-imports': 'off', 'no-restricted-properties': 'off' },
   },
   {
     files: ['src/**/*.ts'],
