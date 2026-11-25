@@ -1,6 +1,7 @@
 import { type Generated, Kysely, PostgresDialect, sql } from 'kysely';
 import pg from 'pg';
 
+export type AuditOutcome = 'ok' | 'error' | 'refused' | 'denied' | 'expired' | 'aborted';
 export type TurnStatus = 'queued' | 'sending' | 'done' | 'failed';
 
 export interface Database {
@@ -51,8 +52,10 @@ export interface Database {
     action_type: string;
     changes_state: boolean;
     arg_names: string[];
+    extra_args: number;
+    args_sha256: string;
     decision: 'auto' | 'ask' | 'off';
-    outcome: 'ok' | 'error' | 'refused';
+    outcome: AuditOutcome;
   };
 }
 

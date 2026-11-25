@@ -1,4 +1,4 @@
-import type { Db } from './db.js';
+import type { AuditOutcome, Db } from './db.js';
 
 export interface AuditEntry {
   turnId?: string | undefined;
@@ -7,10 +7,12 @@ export interface AuditEntry {
   tool: string;
   actionType: string;
   changesState: boolean;
-  /** Names of the arguments only. Values can hold private text, so they are never stored. */
+  /** Argument names only. Values can hold private text, so they are never stored. */
   argNames: readonly string[];
+  extraArgs: number;
+  argsSha256: string;
   decision: 'auto' | 'ask' | 'off';
-  outcome: 'ok' | 'error' | 'refused';
+  outcome: AuditOutcome;
 }
 
 /** Add one row. The person is looked up from the linked device of the chat. */
@@ -32,6 +34,8 @@ export async function appendAudit(db: Db, entry: AuditEntry): Promise<void> {
       action_type: entry.actionType,
       changes_state: entry.changesState,
       arg_names: [...entry.argNames],
+      extra_args: entry.extraArgs,
+      args_sha256: entry.argsSha256,
       decision: entry.decision,
       outcome: entry.outcome,
     })

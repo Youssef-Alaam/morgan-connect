@@ -2,8 +2,12 @@ import { type Kysely, sql } from 'kysely';
 
 /**
  * Every tool call, allowed or refused, once. Append-only: the database refuses to change or
- * remove a row, so the record can be trusted even if the app has a bug. Holds argument names,
+ * remove a row, so a bug in the app cannot rewrite history. Holds argument names and a hash,
  * never argument values.
+ *
+ * Limit: the triggers guard against app bugs, not a compromised app, because the app's database
+ * role can still disable them. Planned: an owner role for migrations and an app role that may
+ * only INSERT and SELECT here (docs/adr/0008-audit-log-guards.md).
  */
 export async function up(db: Kysely<unknown>): Promise<void> {
   await db.schema
@@ -18,11 +22,15 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn('action_type', 'text', (col) => col.notNull())
     .addColumn('changes_state', 'boolean', (col) => col.notNull())
     .addColumn('arg_names', sql`text[]`, (col) => col.notNull())
+    .addColumn('extra_args', 'integer', (col) => col.notNull())
+    .addColumn('args_sha256', 'text', (col) => col.notNull())
     .addColumn('decision', 'text', (col) =>
       col.notNull().check(sql`decision in ('auto', 'ask', 'off')`),
     )
     .addColumn('outcome', 'text', (col) =>
-      col.notNull().check(sql`outcome in ('ok', 'error', 'refused')`),
+      col
+        .notNull()
+        .check(sql`outcome in ('ok', 'error', 'refused', 'denied', 'expired', 'aborted')`),
     )
     .execute();
   await sql`

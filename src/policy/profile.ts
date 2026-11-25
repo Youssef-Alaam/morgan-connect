@@ -9,4 +9,6 @@ export const OWNER_PROFILE: Profile = Object.fromEntries(
   ACTION_TYPES.map((type) => [type, type === 'read' ? 'auto' : 'ask']),
 ) as Profile;
 
-export const decide = (profile: Profile, actionType: ActionType): Mode => profile[actionType];
+/** A type the profile does not list is `off`, never an accident of the object (`toString`). */
+export const decide = (profile: Profile, actionType: ActionType): Mode =>
+  Object.hasOwn(profile, actionType) ? profile[actionType] : 'off';

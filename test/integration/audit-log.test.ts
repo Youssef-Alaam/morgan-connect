@@ -29,6 +29,8 @@ const entry = (chatId: string): Parameters<typeof appendAudit>[1] => ({
   actionType: 'read',
   changesState: false,
   argNames: ['timezone'],
+  extraArgs: 0,
+  argsSha256: 'a'.repeat(64),
   decision: 'auto',
   outcome: 'ok',
 });
@@ -47,6 +49,13 @@ it('adds a row with the person from the linked chat, and none for an unlinked ch
   ]);
 });
 
+it('accepts the outcomes kept for approvals and aborts, and refuses others', async () => {
+  for (const outcome of ['denied', 'expired', 'aborted'] as const) {
+    await appendAudit(db, { ...entry('linked'), outcome });
+  }
+  await expect(appendAudit(db, { ...entry('linked'), outcome: 'maybe' as 'ok' })).rejects.toThrow();
+});
+
 it('refuses to update, delete or truncate an audit row, and a bad decision', async () => {
   await expect(sql`update audit_log set tool = 'x'`.execute(db)).rejects.toThrow('append-only');
   await expect(sql`delete from audit_log`.execute(db)).rejects.toThrow('append-only');
@@ -54,5 +63,5 @@ it('refuses to update, delete or truncate an audit row, and a bad decision', asy
   await expect(
     appendAudit(db, { ...entry('linked'), decision: 'maybe' as 'auto' }),
   ).rejects.toThrow();
-  expect(await db.selectFrom('audit_log').select('id').execute()).toHaveLength(2);
+  expect(await db.selectFrom('audit_log').select('id').execute()).toHaveLength(5);
 });
