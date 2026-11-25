@@ -48,6 +48,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.11",
+    "grammy": "^1.48.0",
     "hono": "^4.13.22",
     "kysely": "^0.29.9",
     "pg": "^8.23.1",
