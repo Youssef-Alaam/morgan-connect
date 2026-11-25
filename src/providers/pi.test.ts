@@ -7,6 +7,7 @@ import {
   type FauxResponseStep,
 } from '@earendil-works/pi-ai';
 import { expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { describeEngineContract } from '../../test/helpers/engine-contract.js';
 import type { Step } from '../../test/helpers/fake-engine.js';
 import type { EngineMessage } from './engine.js';
@@ -280,4 +281,46 @@ it('records the whole turn: the user, the tool call, its result and the answer',
   expect(log[1]).toMatchObject({ toolCalls: [{ name: 'echo', args: { a: 1 } }] });
   expect(log[2]).toMatchObject({ text: 'out', name: 'echo', isError: false });
   expect(log[3]).toEqual({ role: 'assistant', text: 'hi' });
+});
+
+it('sends Anthropic every tool_use id with a matching tool_result', async () => {
+  const bodies: string[] = [];
+  vi.stubGlobal('fetch', (_url: unknown, init?: { body?: unknown }) => {
+    bodies.push(String(init?.body));
+    return Promise.resolve(
+      new Response('{"error":{"type":"invalid_request_error"}}', { status: 400 }),
+    );
+  });
+  try {
+    const history: EngineMessage[] = [
+      { role: 'user', text: 'time?' },
+      { role: 'assistant', text: '', toolCalls: [{ id: 'toolu_1', name: 'clock_now', args: {} }] },
+      { role: 'tool', text: 'noon', id: 'toolu_1', name: 'clock_now', isError: false },
+      { role: 'assistant', text: 'noon' },
+      { role: 'user', text: 'again' },
+      { role: 'assistant', text: '', toolCalls: [{ id: 'toolu_2', name: 'clock_now', args: {} }] },
+      { role: 'tool', text: 'aborted', id: 'toolu_2', name: 'clock_now', isError: true },
+      { role: 'assistant', text: '(turn stopped)' },
+    ];
+    const models = createAnthropicModels('k');
+    const model = models.getModel('anthropic', 'claude-sonnet-5-5');
+    if (model === undefined) throw new Error('model missing');
+    const session = createPiEngine({ models, model, apiKey: 'k' }).open({ history });
+    await session.prompt('now').catch(() => undefined);
+    const block = z.object({
+      type: z.string(),
+      id: z.string().optional(),
+      tool_use_id: z.string().optional(),
+    });
+    const sent = z
+      .object({ messages: z.array(z.object({ content: z.union([z.string(), z.array(block)]) })) })
+      .parse(JSON.parse(bodies[0] ?? '{}'));
+    const blocks = sent.messages.flatMap((m) => (typeof m.content === 'string' ? [] : m.content));
+    const uses = blocks.filter((b) => b.type === 'tool_use').map((b) => b.id);
+    const results = blocks.filter((b) => b.type === 'tool_result').map((b) => b.tool_use_id);
+    expect(uses).toEqual(['toolu_1', 'toolu_2']);
+    expect(results).toEqual(uses);
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

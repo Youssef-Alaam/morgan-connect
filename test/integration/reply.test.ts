@@ -167,7 +167,7 @@ it('keeps recent history within the character budget and never starts on an answ
   const kept = await loadHistory(db, chat, 40, 120);
   expect(kept.map((m) => m.text[0])).toEqual(['c', 'd']);
   expect(await loadHistory(db, chat, 40, 160)).toHaveLength(2);
-  expect(await loadHistory(db, chat, 3, 1000)).toHaveLength(2);
+  expect(await loadHistory(db, chat, 1, 1000)).toHaveLength(2);
 });
 
 const clockReplier = (script: Step[]) => {
@@ -203,12 +203,10 @@ it('trims only between user turns, so a tool call keeps its result', async () =>
     { role: 'user', text: 'new' },
     { role: 'assistant', text: 'ok' },
   ]);
-  for (const limit of [2, 3, 4, 5]) {
-    const kept = await loadHistory(db, chat, limit, 10_000);
-    expect(kept.map((m) => m.role)).toEqual(['user', 'assistant']);
-  }
-  expect(await loadHistory(db, chat, 6, 10_000)).toHaveLength(6);
-  const budget = await loadHistory(db, chat, 6, 'new'.length + 'ok'.length + 'done'.length);
+  const last = await loadHistory(db, chat, 1, 10_000);
+  expect(last.map((m) => m.role)).toEqual(['user', 'assistant']);
+  expect(await loadHistory(db, chat, 2, 10_000)).toHaveLength(6);
+  const budget = await loadHistory(db, chat, 2, 'new'.length + 'ok'.length + 'done'.length);
   expect(budget.map((m) => m.text)).toEqual(['new', 'ok']);
 });
 
@@ -220,6 +218,104 @@ it('still loads rows saved before tool calls were kept', async () => {
     { role: 'user', text: 'q' },
     { role: 'assistant', text: 'a' },
   ]);
+});
+
+const hangingTool = {
+  name: 'test.hang',
+  description: 'never answers',
+  actionType: 'read' as const,
+  changesState: false,
+  parameters: {},
+  run: () => new Promise<string>(() => undefined),
+};
+const gateWith = (options: Partial<Parameters<typeof createGate>[0]>) =>
+  createGate({ db, logger: createLogger('silent'), ...options });
+
+it('remembers a stopped turn: the open tool call is closed as aborted, then a note', async () => {
+  const gate = gateWith({ tools: [hangingTool] });
+  const { reply, engine } = replierFor([{ tool: 'test_hang', args: {} }], 0, { gate });
+  const controller = new AbortController();
+  const answer = reply(turn('c16', 'wait'), new FakeChannel(), controller.signal);
+  await vi.waitFor(() => {
+    expect(engine.prompts).toEqual(['wait']);
+  });
+  controller.abort();
+  expect(await answer).toBe(STOPPED_REPLY);
+  const kept = await loadHistory(db, { channel: 'fake', chatId: 'c16' }, 20, 24_000);
+  expect(kept.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant']);
+  expect(kept[2]).toMatchObject({ isError: true, text: 'aborted' });
+  expect(kept[3]).toEqual({ role: 'assistant', text: '(turn stopped)' });
+});
+
+it('does not retry a model hiccup once a tool has run, and keeps what happened', async () => {
+  const { reply, engine } = clockReplier([
+    { tool: 'clock_now', args: {} },
+    { error: 'transient' },
+    { text: 'never' },
+  ]);
+  expect(await reply(turn('c17', 'time?'), new FakeChannel())).toBe(FAILURE_REPLY);
+  expect(engine.opened).toHaveLength(1);
+  const kept = await loadHistory(db, { channel: 'fake', chatId: 'c17' }, 20, 24_000);
+  expect(kept.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant']);
+});
+
+it('stores a refused tool call as an error result', async () => {
+  const off = {
+    read: 'off',
+    create: 'off',
+    overwrite: 'off',
+    delete: 'off',
+    send: 'off',
+    execute: 'off',
+  } as const;
+  const { reply } = replierFor([{ tool: 'clock_now', args: {} }, { text: 'sorry' }], 0, {
+    gate: gateWith({ profile: off }),
+  });
+  await reply(turn('c18', 'time?'), new FakeChannel());
+  const kept = await loadHistory(db, { channel: 'fake', chatId: 'c18' }, 20, 24_000);
+  expect(kept[2]).toMatchObject({ role: 'tool', isError: true });
+});
+
+it('cuts a stored tool result to 4000 characters with a marker', async () => {
+  const chat = { channel: 'fake', chatId: 'c19' };
+  await appendHistory(db, chat, [
+    { role: 'user', text: 'q' },
+    { role: 'assistant', text: '', toolCalls: [{ id: 'a', name: 'big', args: {} }] },
+    { role: 'tool', id: 'a', name: 'big', isError: false, text: 'x'.repeat(5000) },
+    { role: 'assistant', text: 'ok' },
+  ]);
+  const kept = await loadHistory(db, chat, 20, 24_000);
+  expect(kept[2]?.text).toHaveLength(4000 + ' [truncated]'.length);
+  expect(kept[2]?.text.endsWith('[truncated]')).toBe(true);
+});
+
+it('counts user turns, not rows, and leaves out a turn with a damaged tool row', async () => {
+  const chat = { channel: 'fake', chatId: 'c20' };
+  const call = { id: 'z', name: 'clock_now', args: {} };
+  await appendHistory(db, chat, [
+    { role: 'user', text: 'broken' },
+    { role: 'assistant', text: '', toolCalls: [call] },
+    { role: 'tool', id: 'z', name: 'clock_now', isError: false, text: 'noon' },
+    { role: 'assistant', text: 'done' },
+  ]);
+  await sql`update chat_messages set data = null where chat_id = 'c20' and role = 'tool'`.execute(
+    db,
+  );
+  for (let n = 0; n < 3; n += 1) {
+    await appendHistory(db, chat, [
+      { role: 'user', text: `q${String(n)}` },
+      { role: 'assistant', text: `a${String(n)}` },
+    ]);
+  }
+  expect((await loadHistory(db, chat, 20, 24_000)).map((m) => m.text)).toEqual([
+    'q0',
+    'a0',
+    'q1',
+    'a1',
+    'q2',
+    'a2',
+  ]);
+  expect(await loadHistory(db, chat, 2, 24_000)).toHaveLength(4);
 });
 
 const workerDeps = (channel: FakeChannel, reply: Replier) => {

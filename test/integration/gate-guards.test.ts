@@ -71,7 +71,9 @@ it('a turn that is already stopped never runs the tool', async () => {
 
 it('a tool that takes too long is stopped, the model is told, and one error row is written', async () => {
   const tool = createGate({ db, tools: [hang], toolTimeoutMs: 30 }).toolsFor(caller)[0];
-  expect(await tool?.run({})).toContain('too long');
+  const stopped = await tool?.run({});
+  expect(stopped).toMatchObject({ isError: true });
+  expect(JSON.stringify(stopped)).toContain('too long');
   expect(await outcomes()).toEqual(['error']);
 });
 

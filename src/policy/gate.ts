@@ -1,6 +1,6 @@
 import type { Db } from '../data/index.js';
 import type { Logger } from '../ops/index.js';
-import type { EngineTool } from '../providers/index.js';
+import type { EngineTool, EngineToolOutput } from '../providers/index.js';
 import { ACTION_TYPES, createClockTool, type ToolDefinition } from '../tools/index.js';
 import { abortedError, runGuarded } from './guard.js';
 import { decide, OWNER_PROFILE, type Mode, type Profile } from './profile.js';
@@ -62,18 +62,18 @@ export function createGate(options: GateOptions): Gate {
     caller: Caller,
     args: Record<string, unknown>,
     signal?: AbortSignal,
-  ): Promise<string> {
+  ): Promise<string | EngineToolOutput> {
     const decision = decide(profile, tool.actionType);
     const call = { caller, tool, args, decision };
     if (decision !== 'auto') {
       await record({ ...call, outcome: 'refused' });
-      return refusalFor(decision);
+      return { text: refusalFor(decision), isError: true };
     }
     const ran = await runGuarded(tool, args, signal, timeoutMs);
     const outcome = ran.kind === 'ok' ? 'ok' : ran.kind === 'aborted' ? 'aborted' : 'error';
     await recordAfterRun({ ...call, outcome });
     if (ran.kind === 'ok') return ran.output;
-    if (ran.kind === 'timeout') return TIMEOUT_MESSAGE;
+    if (ran.kind === 'timeout') return { text: TIMEOUT_MESSAGE, isError: true };
     throw ran.kind === 'aborted' ? abortedError() : ran.error;
   }
 

@@ -15,6 +15,7 @@ import {
   type EngineMessage,
   type EngineSession,
   type EngineTool,
+  type EngineToolOutput,
   type EngineUsage,
 } from './engine.js';
 
@@ -179,18 +180,23 @@ class PiSession implements EngineSession {
     const tool = this.tools.find((t) => t.name === name);
     const unknown = this.unknownTool;
     const call = tool?.run ?? (unknown === undefined ? undefined : (a) => unknown(name, a));
-    const output = call === undefined ? `Unknown tool ${name}` : await this.run(call, args);
+    const result = call === undefined ? `Unknown tool ${name}` : await this.run(call, args);
+    const { text, isError } =
+      typeof result === 'string' ? { text: result, isError: tool === undefined } : result;
     this.context.messages.push({
       role: 'toolResult',
       toolCallId: id,
       toolName: name,
-      content: [{ type: 'text', text: output }],
-      isError: tool === undefined,
+      content: [{ type: 'text', text }],
+      isError,
       timestamp: Date.now(),
     });
   }
 
-  private async run(call: EngineTool['run'], args: Record<string, unknown>): Promise<string> {
+  private async run(
+    call: EngineTool['run'],
+    args: Record<string, unknown>,
+  ): Promise<string | EngineToolOutput> {
     try {
       return await call(args, this.controller.signal);
     } catch (error) {

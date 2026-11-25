@@ -9,6 +9,7 @@ export {
   type EngineToolCall,
   type EngineSession,
   type EngineTool,
+  type EngineToolOutput,
   type EngineUsage,
 } from '../providers/index.js';
 export { createGate, type Caller, type Gate } from './gate.js';

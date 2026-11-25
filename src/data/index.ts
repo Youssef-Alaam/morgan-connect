@@ -21,6 +21,7 @@ export {
 export {
   appendHistory,
   clearHistory,
+  closeStoppedTurn,
   loadHistory,
   type ChatKey,
   type ChatMessage,

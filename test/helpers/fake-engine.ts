@@ -81,11 +81,13 @@ class ScriptedSession implements EngineSession {
     const id = `call-${String((this.calls += 1))}`;
     const toolCalls = [{ id, name: step.tool, args: step.args }];
     this.log.push({ role: 'assistant', text: '', toolCalls });
-    let output: string;
+    let output: string | { text: string; isError: boolean };
     if (tool !== undefined) output = await tool.run(step.args, this.abortSignal());
     else if (this.unknownTool !== undefined) output = await this.unknownTool(step.tool, step.args);
     else throw new EngineError('failed', 'unknown tool');
-    this.log.push({ role: 'tool', text: output, id, name: step.tool, isError: tool === undefined });
+    const { text: result, isError } =
+      typeof output === 'string' ? { text: output, isError: tool === undefined } : output;
+    this.log.push({ role: 'tool', text: result, id, name: step.tool, isError });
   }
 
   private abortSignal(): AbortSignal {

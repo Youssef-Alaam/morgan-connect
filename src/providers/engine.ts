@@ -1,11 +1,17 @@
 /** The one door to a model (ADR 0003): `open`, then `prompt` / `steer` / `abort` / `usage`. */
+/** A tool's answer. A refusal, a timeout or another failure is flagged so the model is told it failed. */
+export interface EngineToolOutput {
+  text: string;
+  isError: boolean;
+}
+
 export interface EngineTool {
   name: string;
   description: string;
   /** JSON Schema for the arguments. */
   parameters: Record<string, unknown>;
   /** `signal` fires when the turn is stopped; a tool should give up when it does. */
-  run: (args: Record<string, unknown>, signal?: AbortSignal) => Promise<string>;
+  run: (args: Record<string, unknown>, signal?: AbortSignal) => Promise<string | EngineToolOutput>;
 }
 
 export interface EngineToolCall {
