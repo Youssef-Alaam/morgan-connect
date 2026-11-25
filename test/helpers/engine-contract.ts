@@ -34,13 +34,11 @@ export function describeEngineContract(name: string, make: (script: Step[]) => E
       expect(log).toEqual(['first:{"n":1}', 'second:{"n":2}']);
     });
 
-    it('accepts a steer message between steps', async () => {
-      const session = make([{ tool: 'first', args: {} }, { text: 'fine' }]).open({
-        history: [],
-        tools: [tool([], 'first')],
-      });
+    it('shows a steer message to the model before its next step', async () => {
+      const script: Step[] = [{ tool: 'first', args: {} }, { echoSteer: true }];
+      const session = make(script).open({ history: [], tools: [tool([], 'first')] });
       session.steer('shorter please');
-      expect(await session.prompt('hi')).toBe('fine');
+      expect(await session.prompt('hi')).toBe('shorter please');
     });
 
     it('raises a transient error for a model hiccup', async () => {
@@ -48,7 +46,7 @@ export function describeEngineContract(name: string, make: (script: Step[]) => E
       await expect(session.prompt('hi')).rejects.toMatchObject({ kind: 'transient' });
     });
 
-    it('raises a failed error for a refused key', async () => {
+    it('raises a failed error, not a retryable one, for a bad request', async () => {
       const session = make([{ error: 'failed' }]).open({ history: [] });
       await expect(session.prompt('hi')).rejects.toMatchObject({ kind: 'failed' });
     });

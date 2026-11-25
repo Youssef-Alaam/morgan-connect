@@ -12,7 +12,9 @@ export type Step =
   | { tool: string; args: Record<string, unknown> }
   | { text: string }
   | { error: 'transient' | 'failed' }
-  | { hang: true };
+  | { hang: true }
+  /** Answer with the last steer message, so a test can see it reached the model. */
+  | { echoSteer: true };
 
 /** A model that replays fixed steps. Records what each session was opened and prompted with. */
 export class ScriptedEngine implements Engine {
@@ -47,6 +49,7 @@ class ScriptedSession implements EngineSession {
       if (step === undefined) throw new EngineError('failed', 'script ran out');
       if (this.aborted.signal.aborted) throw new EngineError('aborted', 'aborted');
       if ('text' in step) return step.text;
+      if ('echoSteer' in step) return this.steered.at(-1) ?? '';
       if ('error' in step) throw new EngineError(step.error, 'scripted error');
       if ('hang' in step) await this.waitForAbort();
       else await this.runTool(step);
