@@ -129,10 +129,15 @@ it('still links the chat when the confirmation cannot be sent', async () => {
 });
 
 it('fails a stored turn of an unlinked chat without replying', async () => {
-  const { rows } = await sql<{ id: string }>`insert into turns (idempotency_key, channel, chat_id, text)
+  const { rows } = await sql<{
+    id: string;
+  }>`insert into turns (idempotency_key, channel, chat_id, text)
     values ('fake:9:1', 'fake', '9', 'x') returning id`.execute(db);
   await processTurn(deps(), rows[0]?.id ?? '');
-  const turn = await sql<{ status: string; error: string }>`select status, error from turns`.execute(db);
+  const turn = await sql<{
+    status: string;
+    error: string;
+  }>`select status, error from turns`.execute(db);
   expect(turn.rows[0]).toEqual({ status: 'failed', error: 'unlinked' });
   expect(channel.attempts).toEqual([]);
 });

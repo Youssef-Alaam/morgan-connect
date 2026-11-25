@@ -69,6 +69,9 @@ export async function processTurn(deps: PipelineDeps, turnId: string): Promise<v
     return;
   }
   try {
+    if (!(await deps.identity.isLinked(turn.channel, turn.chatId))) {
+      throw new PipelineError('unlinked', 'Chat is not linked');
+    }
     const sender = deps.senders.find((s) => s.channel === turn.channel);
     if (sender === undefined) throw new PipelineError('unknown_channel', 'No sender for channel');
     await sendWithRetry(() => sender.send(turn.chatId, turn.text), deps.retryDelayMs);
