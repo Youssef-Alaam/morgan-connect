@@ -5,7 +5,13 @@ export class FakeChannel implements ChannelSender {
   readonly channel = 'fake';
   readonly attempts: { chatId: string; text: string }[] = [];
   failures = 0;
+  readonly typings: string[] = [];
   hang = false;
+
+  typing(chatId: string): Promise<void> {
+    this.typings.push(chatId);
+    return Promise.resolve();
+  }
 
   async send(chatId: string, text: string): Promise<void> {
     this.attempts.push({ chatId, text });

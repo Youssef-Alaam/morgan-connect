@@ -46,6 +46,9 @@ export function createTelegramAdapter(
       });
       await Promise.race([bot.api.sendMessage(chatId, text), timeout]);
     },
+    typing: async (chatId) => {
+      await bot.api.sendChatAction(chatId, 'typing');
+    },
     start: async (onMessage) => {
       bot.on('message', async (ctx) => {
         const message = parseTelegramUpdate(ctx.update);

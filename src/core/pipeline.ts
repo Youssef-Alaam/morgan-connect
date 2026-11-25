@@ -17,11 +17,9 @@ import { admit } from './gate.js';
 import { idempotencyKey, parseInbound } from './message.js';
 import type { Replier } from './reply.js';
 import { sendWithRetry } from './retry.js';
+import type { ChannelSender } from './sender.js';
 
-export interface ChannelSender {
-  readonly channel: string;
-  send: (chatId: string, text: string) => Promise<void>;
-}
+export type { ChannelSender } from './sender.js';
 
 export interface PipelineDeps {
   db: Db;
@@ -70,10 +68,15 @@ export async function requeueStuckTurns(deps: PipelineDeps): Promise<number> {
 }
 
 /** Run the replier with an abort signal that `/stop` can fire while the model works. */
-async function replyTo(deps: PipelineDeps, turn: Turn, reply: Replier): Promise<string> {
+async function replyTo(
+  deps: PipelineDeps,
+  turn: Turn,
+  sender: ChannelSender,
+  reply: Replier,
+): Promise<string> {
   const signal = deps.aborts?.begin(turn.channel, turn.chatId);
   try {
-    return await reply(turn, signal);
+    return await reply(turn, sender, signal);
   } finally {
     deps.aborts?.end(turn.channel, turn.chatId);
   }
@@ -96,7 +99,8 @@ export async function processTurn(deps: PipelineDeps, turnId: string): Promise<v
     }
     const sender = deps.senders.find((s) => s.channel === turn.channel);
     if (sender === undefined) throw new PipelineError('unknown_channel', 'No sender for channel');
-    const text = deps.reply === undefined ? turn.text : await replyTo(deps, turn, deps.reply);
+    const text =
+      deps.reply === undefined ? turn.text : await replyTo(deps, turn, sender, deps.reply);
     await sendWithRetry(() => sender.send(turn.chatId, text), deps.retryDelayMs);
     await finishTurn(deps.db, turnId, { status: 'done', replyText: text });
   } catch (error) {

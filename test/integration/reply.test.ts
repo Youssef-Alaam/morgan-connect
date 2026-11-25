@@ -64,10 +64,12 @@ const replierFor = (
   return { engine, reply: createReplier({ db, engine, logger, ...timing }) };
 };
 
-it('answers and gives the next message the conversation so far', async () => {
+it('shows typing, answers, and gives the next message the conversation so far', async () => {
   const { reply, engine } = replierFor([{ text: 'one' }, { text: 'two' }]);
-  expect(await reply(turn('c1', 'first'))).toBe('one');
-  expect(await reply(turn('c1', 'second'))).toBe('two');
+  const channel = new FakeChannel();
+  expect(await reply(turn('c1', 'first'), channel)).toBe('one');
+  expect(channel.typings).toContain('c1');
+  expect(await reply(turn('c1', 'second'), channel)).toBe('two');
   expect(engine.opened[1]?.history).toEqual([
     { role: 'user', text: 'first' },
     { role: 'assistant', text: 'one' },
@@ -76,11 +78,12 @@ it('answers and gives the next message the conversation so far', async () => {
 
 it('/new forgets the chat and leaves other chats alone', async () => {
   const { reply, engine } = replierFor([{ text: 'a' }, { text: 'b' }, { text: 'c' }]);
-  await reply(turn('c2', 'hello'));
-  await reply(turn('c3', 'hello'));
-  expect(await reply(turn('c2', ' /new '))).toBe(NEW_REPLY);
-  await reply(turn('c2', 'again'));
-  await reply(turn('c3', 'again'));
+  const channel = new FakeChannel();
+  await reply(turn('c2', 'hello'), channel);
+  await reply(turn('c3', 'hello'), channel);
+  expect(await reply(turn('c2', ' /new '), channel)).toBe(NEW_REPLY);
+  await reply(turn('c2', 'again'), channel);
+  await reply(turn('c3', 'again'), channel);
   expect(engine.opened[2]?.history).toEqual([]);
   expect(engine.opened[3]?.history).toHaveLength(2);
 });
@@ -91,30 +94,30 @@ it('retries a transient model error twice, then answers', async () => {
     { error: 'transient' },
     { text: 'ok' },
   ]);
-  expect(await reply(turn('c4', 'hi'))).toBe('ok');
+  expect(await reply(turn('c4', 'hi'), new FakeChannel())).toBe('ok');
   expect(engine.opened).toHaveLength(3);
 });
 
 it('after two retries tells the user in one plain sentence and remembers nothing', async () => {
   const script: Step[] = [{ error: 'transient' }, { error: 'transient' }, { error: 'transient' }];
   const { reply, engine } = replierFor(script);
-  expect(await reply(turn('c5', 'hi'))).toBe(FAILURE_REPLY);
+  expect(await reply(turn('c5', 'hi'), new FakeChannel())).toBe(FAILURE_REPLY);
   expect(engine.opened).toHaveLength(3);
   const next = replierFor([{ text: 'x' }]);
-  await next.reply(turn('c5', 'again'));
+  await next.reply(turn('c5', 'again'), new FakeChannel());
   expect(next.engine.opened[0]?.history).toEqual([]);
 });
 
 it('does not retry a refused key', async () => {
   const { reply, engine } = replierFor([{ error: 'failed' }, { text: 'never' }]);
-  expect(await reply(turn('c6', 'hi'))).toBe(FAILURE_REPLY);
+  expect(await reply(turn('c6', 'hi'), new FakeChannel())).toBe(FAILURE_REPLY);
   expect(engine.opened).toHaveLength(1);
 });
 
 it('an abort stops the turn while the model is waiting', async () => {
   const { reply, engine } = replierFor([{ hang: true }]);
   const controller = new AbortController();
-  const answer = reply(turn('c7', 'hi'), controller.signal);
+  const answer = reply(turn('c7', 'hi'), new FakeChannel(), controller.signal);
   await vi.waitFor(() => {
     expect(engine.prompts).toEqual(['hi']);
   });
@@ -125,7 +128,7 @@ it('an abort stops the turn while the model is waiting', async () => {
 it('an abort during the wait before a retry stops the turn at once', async () => {
   const { reply, engine } = replierFor([{ error: 'transient' }, { text: 'never' }], 60_000);
   const controller = new AbortController();
-  const answer = reply(turn('c7', 'hi'), controller.signal);
+  const answer = reply(turn('c7', 'hi'), new FakeChannel(), controller.signal);
   await vi.waitFor(() => {
     expect(engine.opened).toHaveLength(1);
   });
@@ -136,8 +139,8 @@ it('an abort during the wait before a retry stops the turn at once', async () =>
 
 it('/new and /new@BotName both start over', async () => {
   const { reply } = replierFor([]);
-  expect(await reply(turn('c10', '/new'))).toBe(NEW_REPLY);
-  expect(await reply(turn('c10', '/new@MorganBot'))).toBe(NEW_REPLY);
+  expect(await reply(turn('c10', '/new'), new FakeChannel())).toBe(NEW_REPLY);
+  expect(await reply(turn('c10', '/new@MorganBot'), new FakeChannel())).toBe(NEW_REPLY);
 });
 
 it('keeps recent history within the character budget and never starts on an answer', async () => {

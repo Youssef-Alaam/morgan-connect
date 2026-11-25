@@ -1,9 +1,10 @@
 import { serve } from '@hono/node-server';
 import { createTelegramAdapter } from './channels/index.js';
-import { ingest, requeueStuckTurns, startWorker } from './core/index.js';
+import { createReplier, ingest, requeueStuckTurns, startWorker } from './core/index.js';
 import { createIdentity, type Identity } from './identity/index.js';
 import { createDb, createTurnQueue, dbVersion, migrateToLatest, type Db } from './data/index.js';
 import { createApp } from './http/index.js';
+import { createAnthropicEngine, type Engine } from './policy/index.js';
 import { type Config, createLogger, loadConfig, type Logger } from './ops/index.js';
 
 export interface Running {
@@ -18,7 +19,12 @@ async function announceSetupCode(identity: Identity, logger: Logger): Promise<vo
 }
 
 /** With a Telegram token set, start the queue, the worker and the poller. Returns its stop. */
-async function startTelegram(config: Config, db: Db, logger: Logger): Promise<() => Promise<void>> {
+async function startTelegram(
+  config: Config,
+  db: Db,
+  logger: Logger,
+  engine: Engine | undefined,
+): Promise<() => Promise<void>> {
   if (config.TELEGRAM_BOT_TOKEN === undefined) return () => Promise.resolve();
   const queue = createTurnQueue(config.DATABASE_URL, (error) => {
     logger.error({ kind: error.name }, 'queue error');
@@ -30,7 +36,18 @@ async function startTelegram(config: Config, db: Db, logger: Logger): Promise<()
     config.TELEGRAM_API_ROOT,
   );
   const identity = createIdentity(db);
-  const deps = { db, queue, senders: [telegram], logger, retryDelayMs: 1000, identity };
+  const model =
+    engine ??
+    (config.ANTHROPIC_API_KEY === undefined
+      ? undefined
+      : createAnthropicEngine({
+          apiKey: config.ANTHROPIC_API_KEY,
+          modelId: config.ANTHROPIC_MODEL,
+        }));
+  const timing = { retryDelayMs: 2000, typingIntervalMs: 4000, turnTimeoutMs: 120_000 };
+  const reply =
+    model === undefined ? undefined : createReplier({ db, logger, engine: model, ...timing });
+  const deps = { db, queue, senders: [telegram], logger, retryDelayMs: 1000, identity, reply };
   try {
     await announceSetupCode(identity, logger);
     await startWorker(deps);
@@ -46,8 +63,11 @@ async function startTelegram(config: Config, db: Db, logger: Logger): Promise<()
   };
 }
 
-/** Load config, migrate the database, then serve HTTP. */
-export async function start(env: Record<string, string | undefined>): Promise<Running> {
+/** Load config, migrate the database, then serve HTTP. Tests may pass their own engine. */
+export async function start(
+  env: Record<string, string | undefined>,
+  options: { engine?: Engine } = {},
+): Promise<Running> {
   const config = loadConfig(env);
   const logger = createLogger(config.LOG_LEVEL);
   const db = createDb(config.DATABASE_URL);
@@ -57,10 +77,12 @@ export async function start(env: Record<string, string | undefined>): Promise<Ru
     await db.destroy();
     throw error;
   }
-  const stopTelegram = await startTelegram(config, db, logger).catch(async (error: unknown) => {
-    await db.destroy();
-    throw error;
-  });
+  const stopTelegram = await startTelegram(config, db, logger, options.engine).catch(
+    async (error: unknown) => {
+      await db.destroy();
+      throw error;
+    },
+  );
   const app = createApp({ dbVersion: () => dbVersion(db), logger });
   const server = await new Promise<ReturnType<typeof serve>>((resolve) => {
     const listening = serve({ fetch: app.fetch, port: config.PORT }, () => {
