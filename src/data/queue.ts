@@ -2,6 +2,9 @@ import { PgBoss } from 'pg-boss';
 
 const QUEUE = 'turn';
 
+/** A job running longer than this is taken as dead and handed out again. */
+export const TURN_EXPIRE_SECONDS = 300;
+
 export interface TurnQueue {
   start: () => Promise<void>;
   enqueue: (turnId: string) => Promise<void>;
@@ -36,7 +39,7 @@ export function createTurnQueue(
         // failed sends already retry in-process. More job retries would only repeat that no-op.
         retryLimit: 1,
         retryDelay: 5,
-        expireInSeconds: tuning?.expireInSeconds ?? 300,
+        expireInSeconds: tuning?.expireInSeconds ?? TURN_EXPIRE_SECONDS,
       });
     },
     enqueue: async (turnId) => {

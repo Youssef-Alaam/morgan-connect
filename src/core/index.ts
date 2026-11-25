@@ -11,6 +11,7 @@ export {
 export { sendWithRetry } from './retry.js';
 export {
   FAILURE_REPLY,
+  assertFitsJobExpiry,
   NEW_REPLY,
   STOPPED_REPLY,
   createReplier,

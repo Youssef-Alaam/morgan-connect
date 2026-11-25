@@ -1,11 +1,28 @@
 import { serve } from '@hono/node-server';
 import { createTelegramAdapter } from './channels/index.js';
-import { createReplier, ingest, requeueStuckTurns, startWorker } from './core/index.js';
+import {
+  assertFitsJobExpiry,
+  createReplier,
+  createTurnAborts,
+  ingest,
+  type Replier,
+  requeueStuckTurns,
+  startWorker,
+} from './core/index.js';
 import { createIdentity, type Identity } from './identity/index.js';
-import { createDb, createTurnQueue, dbVersion, migrateToLatest, type Db } from './data/index.js';
+import {
+  TURN_EXPIRE_SECONDS,
+  createDb,
+  createTurnQueue,
+  dbVersion,
+  migrateToLatest,
+  type Db,
+} from './data/index.js';
 import { createApp } from './http/index.js';
 import { createAnthropicEngine, type Engine } from './policy/index.js';
 import { type Config, createLogger, loadConfig, type Logger } from './ops/index.js';
+
+const TIMING = { retryDelayMs: 2000, typingIntervalMs: 4000, turnTimeoutMs: 120_000 };
 
 export interface Running {
   port: number;
@@ -18,6 +35,19 @@ async function announceSetupCode(identity: Identity, logger: Logger): Promise<vo
   if (code !== undefined) logger.info(`Setup code: send "/start ${code}" to the bot to claim it`);
 }
 
+/** The model that answers: the one passed in, else Claude when a key is set, else none (echo). */
+function buildReplier(
+  config: Config,
+  db: Db,
+  logger: Logger,
+  engine: Engine | undefined,
+): Replier | undefined {
+  const { ANTHROPIC_API_KEY: apiKey, ANTHROPIC_MODEL: modelId } = config;
+  const model =
+    engine ?? (apiKey === undefined ? undefined : createAnthropicEngine({ apiKey, modelId }));
+  return model === undefined ? undefined : createReplier({ db, logger, engine: model, ...TIMING });
+}
+
 /** With a Telegram token set, start the queue, the worker and the poller. Returns its stop. */
 async function startTelegram(
   config: Config,
@@ -26,6 +56,7 @@ async function startTelegram(
   engine: Engine | undefined,
 ): Promise<() => Promise<void>> {
   if (config.TELEGRAM_BOT_TOKEN === undefined) return () => Promise.resolve();
+  assertFitsJobExpiry(TIMING, TURN_EXPIRE_SECONDS);
   const queue = createTurnQueue(config.DATABASE_URL, (error) => {
     logger.error({ kind: error.name }, 'queue error');
   });
@@ -36,18 +67,18 @@ async function startTelegram(
     config.TELEGRAM_API_ROOT,
   );
   const identity = createIdentity(db);
-  const model =
-    engine ??
-    (config.ANTHROPIC_API_KEY === undefined
-      ? undefined
-      : createAnthropicEngine({
-          apiKey: config.ANTHROPIC_API_KEY,
-          modelId: config.ANTHROPIC_MODEL,
-        }));
-  const timing = { retryDelayMs: 2000, typingIntervalMs: 4000, turnTimeoutMs: 120_000 };
-  const reply =
-    model === undefined ? undefined : createReplier({ db, logger, engine: model, ...timing });
-  const deps = { db, queue, senders: [telegram], logger, retryDelayMs: 1000, identity, reply };
+  const reply = buildReplier(config, db, logger, engine);
+  const aborts = createTurnAborts();
+  const deps = {
+    db,
+    queue,
+    senders: [telegram],
+    logger,
+    retryDelayMs: 1000,
+    identity,
+    reply,
+    aborts,
+  };
   try {
     await announceSetupCode(identity, logger);
     await startWorker(deps);

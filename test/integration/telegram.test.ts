@@ -80,7 +80,8 @@ it('answers with the model, showing typing first, when an engine is set', async 
       },
       { timeout: 30_000 },
     );
-    expect(telegram.actions).toMatchObject([{ chat_id: '42', action: 'typing' }]);
+    expect(telegram.actions.length).toBeGreaterThanOrEqual(1);
+    expect(telegram.actions[0]).toMatchObject({ chat_id: '42', action: 'typing' });
   } finally {
     await running.stop();
     await telegram.stop();

@@ -25,6 +25,17 @@ export interface ReplyDeps {
   turnTimeoutMs: number;
 }
 
+/** The time limit plus the waits before model retries must end before the queue gives up the job. */
+export function assertFitsJobExpiry(
+  timing: Pick<ReplyDeps, 'turnTimeoutMs' | 'retryDelayMs'>,
+  expireSeconds: number,
+): void {
+  const waits = timing.retryDelayMs * ((MODEL_RETRIES * (MODEL_RETRIES + 1)) / 2);
+  if (timing.turnTimeoutMs + waits >= expireSeconds * 1000) {
+    throw new Error('The turn time limit does not fit inside the queue job expiry');
+  }
+}
+
 /** Turns a stored turn into the text to send back. */
 export type Replier = (turn: Turn, sender: ChannelSender, signal?: AbortSignal) => Promise<string>;
 
