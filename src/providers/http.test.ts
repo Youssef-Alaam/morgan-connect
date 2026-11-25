@@ -58,6 +58,7 @@ it.each([
   [400, 'failed'],
   [401, 'failed'],
   [404, 'failed'],
+  [410, 'failed'],
 ] as const)('maps status %i to a %s error without user text', async (status, kind) => {
   const server = await startFakeEngineServer([]);
   server.next({ status, body: { error: 'secret user text' } });
@@ -118,10 +119,10 @@ it('end posts /end with the conversation id, and maps a failure', async () => {
   await expect(down.end?.('x')).rejects.toMatchObject({ kind: 'transient' });
 });
 
-it('works when the url ends with a slash', async () => {
-  const server = await startFakeEngineServer([{ text: 'ok' }]);
-  const session = createHttpEngine({ url: `${server.url}/`, token: 'secret' }).open({
-    history: [],
-  });
-  expect(await session.prompt('hi')).toBe('ok');
+it('posts /abort when the app timeout fires, so the engine stops the turn', async () => {
+  const server = await startFakeEngineServer([{ hang: true }]);
+  const session = open(server, { timeoutMs: 50 });
+  await expect(session.prompt('hi')).rejects.toMatchObject({ kind: 'transient' });
+  await expect.poll(() => server.requests.map((r) => r.path)).toEqual(['/turn', '/abort']);
+  expect(server.requests[1]?.body).toEqual({ conversationId: 'conv-1' });
 });

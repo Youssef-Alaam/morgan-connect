@@ -13,22 +13,15 @@ const tool = (log: string[], toolName: string): EngineTool => ({
 });
 
 /** The behaviour every engine adapter must show, run against any engine that replays `Step`s. */
-export function describeEngineContract(
-  name: string,
-  make: (script: Step[]) => Engine | Promise<Engine>,
-  /** An engine that sends no tools (the HTTP engine) skips the tests that need them. */
-  options: { tools?: boolean } = {},
-): void {
-  const withTools = options.tools ?? true;
-  const toolIt = withTools ? it : it.skip;
+export function describeEngineContract(name: string, make: (script: Step[]) => Engine): void {
   describe(`engine contract: ${name}`, () => {
     it('answers a prompt and reports usage', async () => {
-      const session = (await make([{ text: 'hello' }])).open({ history: [] });
+      const session = make([{ text: 'hello' }]).open({ history: [] });
       expect(await session.prompt('hi')).toBe('hello');
       expect(session.usage().outputTokens).toBeGreaterThan(0);
     });
 
-    toolIt('runs a scripted two-step tool call in order, then answers', async () => {
+    it('runs a scripted two-step tool call in order, then answers', async () => {
       const log: string[] = [];
       const script: Step[] = [
         { tool: 'first', args: { n: 1 } },
@@ -36,30 +29,30 @@ export function describeEngineContract(
         { text: 'done' },
       ];
       const tools = [tool(log, 'first'), tool(log, 'second')];
-      const session = (await make(script)).open({ history: [], tools });
+      const session = make(script).open({ history: [], tools });
       expect(await session.prompt('go')).toBe('done');
       expect(log).toEqual(['first:{"n":1}', 'second:{"n":2}']);
     });
 
-    toolIt('shows a steer message to the model before its next step', async () => {
+    it('shows a steer message to the model before its next step', async () => {
       const script: Step[] = [{ tool: 'first', args: {} }, { echoSteer: true }];
-      const session = (await make(script)).open({ history: [], tools: [tool([], 'first')] });
+      const session = make(script).open({ history: [], tools: [tool([], 'first')] });
       session.steer('shorter please');
       expect(await session.prompt('hi')).toBe('shorter please');
     });
 
     it('raises a transient error for a model hiccup', async () => {
-      const session = (await make([{ error: 'transient' }])).open({ history: [] });
+      const session = make([{ error: 'transient' }]).open({ history: [] });
       await expect(session.prompt('hi')).rejects.toMatchObject({ kind: 'transient' });
     });
 
     it('raises a failed error, not a retryable one, for a bad request', async () => {
-      const session = (await make([{ error: 'failed' }])).open({ history: [] });
+      const session = make([{ error: 'failed' }]).open({ history: [] });
       await expect(session.prompt('hi')).rejects.toMatchObject({ kind: 'failed' });
     });
 
     it('stops with an aborted error after abort', async () => {
-      const session = (await make([{ text: 'never' }])).open({ history: [] });
+      const session = make([{ text: 'never' }]).open({ history: [] });
       session.abort();
       const failure: unknown = await session.prompt('hi').catch((error: unknown) => error);
       expect(failure).toBeInstanceOf(EngineError);

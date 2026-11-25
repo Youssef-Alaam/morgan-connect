@@ -90,19 +90,7 @@ class HttpSession implements EngineSession {
       if (!parsed.success)
         throw new EngineError('failed', 'engine answered with an unexpected shape');
       const { text: reply, usage } = parsed.data;
-      this.used = {
-        inputTokens: this.used.inputTokens + usage.inputTokens,
-        outputTokens: this.used.outputTokens + usage.outputTokens,
-        costUsd: this.used.costUsd + usage.costUsd,
-      };
-      this.onUsage?.({
-        inputTokens: usage.inputTokens,
-        outputTokens: usage.outputTokens,
-        costUsd: usage.costUsd,
-        cacheReadTokens: usage.cacheReadTokens ?? 0,
-        cacheWriteTokens: usage.cacheWriteTokens ?? 0,
-        status: 'ok',
-      });
+      this.record(usage);
       this.log.push({ role: 'assistant', text: reply });
       return reply;
     } catch (error) {
@@ -114,8 +102,26 @@ class HttpSession implements EngineSession {
         status: aborted ? 'aborted' : 'failed',
       });
       if (aborted) throw new EngineError('aborted', 'aborted');
+      // Our own timeout fired: the engine may still be working, so stop it before any retry.
+      if (timeout.aborted) this.tellEngineToStop();
       throw error;
     }
+  }
+
+  private record(usage: z.infer<typeof answer>['usage']): void {
+    this.used = {
+      inputTokens: this.used.inputTokens + usage.inputTokens,
+      outputTokens: this.used.outputTokens + usage.outputTokens,
+      costUsd: this.used.costUsd + usage.costUsd,
+    };
+    this.onUsage?.({
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      costUsd: usage.costUsd,
+      cacheReadTokens: usage.cacheReadTokens ?? 0,
+      cacheWriteTokens: usage.cacheWriteTokens ?? 0,
+      status: 'ok',
+    });
   }
 
   transcript(): EngineMessage[] {
@@ -129,7 +135,11 @@ class HttpSession implements EngineSession {
   abort(): void {
     if (this.controller.signal.aborted) return;
     this.controller.abort();
-    // Tell the engine to stop work for this conversation; the turn is already over here.
+    this.tellEngineToStop();
+  }
+
+  /** Ask the engine to stop work for this conversation; the turn is already over here. */
+  private tellEngineToStop(): void {
     post(
       this.options,
       'abort',
