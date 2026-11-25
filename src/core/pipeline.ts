@@ -7,8 +7,10 @@ import {
   type Db,
   type TurnQueue,
 } from '../data/index.js';
+import type { Identity } from '../identity/index.js';
 import type { Logger } from '../ops/index.js';
 import { PipelineError } from './errors.js';
+import { admit } from './gate.js';
 import { idempotencyKey, parseInbound } from './message.js';
 import { sendWithRetry } from './retry.js';
 
@@ -23,6 +25,7 @@ export interface PipelineDeps {
   senders: readonly ChannelSender[];
   logger: Logger;
   retryDelayMs: number;
+  identity: Identity;
 }
 
 /** An incoming channel payload becomes one turn row and one queued job. Safe to call twice. */
@@ -31,6 +34,7 @@ export async function ingest(deps: PipelineDeps, raw: unknown): Promise<void> {
   try {
     const message = parseInbound(raw);
     where.channel = message.channel;
+    if (!(await admit(deps, message))) return;
     const turn = await insertTurn(deps.db, {
       idempotencyKey: idempotencyKey(message),
       channel: message.channel,
