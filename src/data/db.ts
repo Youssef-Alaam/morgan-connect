@@ -1,6 +1,7 @@
 import { type Generated, Kysely, PostgresDialect, sql } from 'kysely';
 import pg from 'pg';
 
+export type AuditOutcome = 'ok' | 'error' | 'refused' | 'denied' | 'expired' | 'aborted';
 export type TurnStatus = 'queued' | 'sending' | 'done' | 'failed';
 
 export interface Database {
@@ -39,6 +40,22 @@ export interface Database {
     role: 'user' | 'assistant';
     text: string;
     created_at: Generated<Date>;
+  };
+  audit_log: {
+    id: Generated<string>;
+    created_at: Generated<Date>;
+    turn_id: string | null;
+    channel: string;
+    chat_id: string;
+    user_id: string | null;
+    tool: string;
+    action_type: string;
+    changes_state: boolean;
+    arg_names: string[];
+    extra_args: number;
+    args_sha256: string;
+    decision: 'auto' | 'ask' | 'off';
+    outcome: AuditOutcome;
   };
 }
 
