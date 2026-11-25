@@ -1,6 +1,8 @@
 // The only door to engine adapters from above the policy layer (STANDARDS section 7).
 export {
   EngineError,
+  createAnthropicEngine,
+  createPiEngine,
   type Engine,
   type EngineMessage,
   type EngineSession,

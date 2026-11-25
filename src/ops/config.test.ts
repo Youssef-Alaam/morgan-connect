@@ -5,7 +5,12 @@ const URL = 'postgres://morgan:pw@localhost:5432/morgan';
 
 it('applies defaults and treats empty values as unset', () => {
   const config = loadConfig({ DATABASE_URL: URL, TELEGRAM_BOT_TOKEN: '' });
-  expect(config).toEqual({ DATABASE_URL: URL, PORT: 3000, LOG_LEVEL: 'info' });
+  expect(config).toEqual({
+    DATABASE_URL: URL,
+    PORT: 3000,
+    LOG_LEVEL: 'info',
+    ANTHROPIC_MODEL: 'claude-sonnet-5-5',
+  });
 });
 
 it('reads every key', () => {
@@ -28,4 +33,9 @@ it('requires https for TELEGRAM_API_ROOT unless the host is local', () => {
   expect(() => root('http://localhost:8081')).not.toThrow();
   expect(() => root('http://127.0.0.1:8081')).not.toThrow();
   expect(() => root('https://bot-api.example.com')).not.toThrow();
+});
+
+it('lets the model be chosen', () => {
+  const config = loadConfig({ DATABASE_URL: URL, ANTHROPIC_MODEL: 'claude-opus-5' });
+  expect(config.ANTHROPIC_MODEL).toBe('claude-opus-5');
 });
