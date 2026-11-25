@@ -111,7 +111,9 @@ it('every action type writes one audit row and runs only when the profile says a
 it('a refused ask tells the model plainly, and a turned-off tool is refused too', async () => {
   const { tool, run } = spy('overwrite');
   const asked = createGate({ db, tools: [tool] }).toolsFor(caller)[0];
-  expect(await asked?.run({})).toContain('approve');
+  const refusal = await asked?.run({});
+  expect(refusal).toMatchObject({ isError: true });
+  expect(JSON.stringify(refusal)).toContain('approve');
   const off = createGate({
     db,
     tools: [tool],
@@ -124,7 +126,9 @@ it('a refused ask tells the model plainly, and a turned-off tool is refused too'
       execute: 'off',
     },
   }).toolsFor(caller)[0];
-  expect(await off?.run({})).toContain('turned off');
+  const refused = await off?.run({});
+  expect(refused).toMatchObject({ isError: true });
+  expect(JSON.stringify(refused)).toContain('turned off');
   expect(run).not.toHaveBeenCalled();
   expect((await rows()).map((r) => [r['decision'], r['outcome']])).toEqual([
     ['ask', 'refused'],

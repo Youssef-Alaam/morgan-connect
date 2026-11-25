@@ -1,6 +1,7 @@
 import {
   appendHistory,
   clearHistory,
+  closeStoppedTurn,
   loadHistory,
   recordUsage,
   usageSince,
@@ -13,6 +14,7 @@ import {
   type Caller,
   type Engine,
   type EngineCallUsage,
+  type EngineSession,
   type Gate,
 } from '../policy/index.js';
 import { isCommand } from './commands.js';
@@ -21,7 +23,8 @@ import { formatUsage } from './usage-report.js';
 
 /** A model error that is only a hiccup is tried again this many times (rule G3 for models). */
 const MODEL_RETRIES = 2;
-const HISTORY_LIMIT = 40;
+/** How many past user turns (with their tool calls) the model is shown. */
+const HISTORY_TURNS = 20;
 /** About 6k tokens of past conversation; older messages are left out first. */
 const HISTORY_CHARS = 24_000;
 
@@ -121,6 +124,46 @@ async function recordCall(
   }
 }
 
+/** Remember a turn that stopped after it began using tools, so the model knows what it did. */
+async function keepStopped(
+  deps: ReplyDeps,
+  turn: Turn,
+  done: Parameters<typeof closeStoppedTurn>[0],
+): Promise<void> {
+  if (!done.some((m) => m.role !== 'user')) return;
+  try {
+    await appendHistory(
+      deps.db,
+      { channel: turn.channel, chatId: turn.chatId },
+      closeStoppedTurn(done),
+    );
+  } catch {
+    deps.logger.warn({ turnId: turn.id }, 'stopped turn not remembered');
+  }
+}
+
+/**
+ * After a failed prompt: wait and say true when another try is worth it. Otherwise remember what
+ * happened so far and say false. A hiccup is retried only while no tool has run, because a tool
+ * may have changed something.
+ */
+async function shouldRetry(
+  deps: ReplyDeps,
+  turn: Turn,
+  session: EngineSession,
+  failure: { error: unknown; attempt: number; signal: AbortSignal },
+): Promise<boolean> {
+  const { error, attempt, signal } = failure;
+  const done = session.transcript();
+  const kind = error instanceof EngineError ? error.kind : 'failed';
+  if (kind === 'transient' && attempt < MODEL_RETRIES && !done.some((m) => m.role === 'tool')) {
+    await wait(deps.retryDelayMs * (attempt + 1), signal);
+    return !signal.aborted;
+  }
+  await keepStopped(deps, turn, done);
+  return false;
+}
+
 async function ask(
   deps: ReplyDeps,
   turn: Turn,
@@ -128,7 +171,7 @@ async function ask(
   timedOut: () => boolean,
 ): Promise<string> {
   const chat = { channel: turn.channel, chatId: turn.chatId };
-  const history = await loadHistory(deps.db, chat, HISTORY_LIMIT, HISTORY_CHARS);
+  const history = await loadHistory(deps.db, chat, HISTORY_TURNS, HISTORY_CHARS);
   for (let attempt = 0; ; attempt += 1) {
     const pending: Promise<void>[] = [];
     const session = deps.engine.open({
@@ -142,15 +185,15 @@ async function ask(
     };
     signal.addEventListener('abort', stop);
     if (signal.aborted) stop();
+    let answered = false;
     try {
       const answer = await session.prompt(turn.text);
+      answered = true;
       await appendHistory(deps.db, chat, session.transcript());
       return answer;
     } catch (error) {
-      const kind = error instanceof EngineError ? error.kind : 'failed';
-      if (kind !== 'transient' || attempt >= MODEL_RETRIES) throw error;
-      await wait(deps.retryDelayMs * (attempt + 1), signal);
-      if (signal.aborted) throw error;
+      if (answered || !(await shouldRetry(deps, turn, session, { error, attempt, signal })))
+        throw error;
     } finally {
       signal.removeEventListener('abort', stop);
       await Promise.all(pending);
