@@ -1,0 +1,8 @@
+pre-commit:
+  commands:
+    gitleaks:
+      run: gitleaks git --staged --redact --no-banner
+commit-msg:
+  commands:
+    commitlint:
+      run: sh scripts/commitlint-hook.sh
