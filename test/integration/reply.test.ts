@@ -5,6 +5,8 @@ import {
   NEW_REPLY,
   STOPPED_REPLY,
   createReplier,
+  createTurnAborts,
+  ingest,
   processTurn,
   type Replier,
 } from '../../src/core/index.js';
@@ -157,7 +159,8 @@ const workerDeps = (channel: FakeChannel, reply: Replier) => {
   const queue = { start: nothing, enqueue: nothing, work: nothing, stop: nothing };
   const logger = createLogger('silent');
   const identity = createIdentity(db);
-  return { db, queue, senders: [channel], logger, retryDelayMs: 0, identity, reply };
+  const aborts = createTurnAborts();
+  return { db, queue, senders: [channel], logger, retryDelayMs: 0, identity, reply, aborts };
 };
 
 it('the worker sends the model answer as the reply', async () => {
@@ -172,4 +175,32 @@ it('the worker sends the model answer as the reply', async () => {
   await processTurn(workerDeps(channel, reply), created.id);
   expect(channel.attempts).toEqual([{ chatId: 'c8', text: 'from the model' }]);
   expect((await getTurn(db, created.id))?.status).toBe('done');
+});
+
+it('/stop from the same chat aborts the running turn; /stop with nothing running does nothing', async () => {
+  const { reply, engine } = replierFor([{ hang: true }]);
+  const channel = new FakeChannel();
+  const deps = workerDeps(channel, reply);
+  const stop = (id: string) => ({
+    channel: 'fake',
+    chatId: 'c9',
+    messageId: id,
+    text: '/stop@MorganBot',
+  });
+  await ingest(deps, stop('1'));
+  expect(channel.attempts).toEqual([]);
+  const created = await insertTurn(db, {
+    idempotencyKey: 'fake:c9:2',
+    channel: 'fake',
+    chatId: 'c9',
+    text: 'a long question',
+  });
+  const running = processTurn(deps, created.id);
+  await vi.waitFor(() => {
+    expect(engine.prompts).toEqual(['a long question']);
+  });
+  await ingest(deps, { ...stop('3'), chatId: 'c8' });
+  await ingest(deps, stop('3'));
+  await running;
+  expect(channel.attempts).toEqual([{ chatId: 'c9', text: STOPPED_REPLY }]);
 });

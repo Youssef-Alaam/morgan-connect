@@ -5,11 +5,14 @@ import {
   insertTurn,
   listQueuedTurnIds,
   type Db,
+  type Turn,
   type TurnQueue,
 } from '../data/index.js';
 import type { Identity } from '../identity/index.js';
 import type { Logger } from '../ops/index.js';
 import { PipelineError } from './errors.js';
+import type { TurnAborts } from './aborts.js';
+import { isCommand } from './commands.js';
 import { admit } from './gate.js';
 import { idempotencyKey, parseInbound } from './message.js';
 import type { Replier } from './reply.js';
@@ -29,6 +32,8 @@ export interface PipelineDeps {
   identity: Identity;
   /** Makes the reply text. Without one, the turn echoes its text. */
   reply?: Replier | undefined;
+  /** Lets `/stop` abort the running turn of the same chat. */
+  aborts?: TurnAborts | undefined;
 }
 
 /** An incoming channel payload becomes one turn row and one queued job. Safe to call twice. */
@@ -38,6 +43,10 @@ export async function ingest(deps: PipelineDeps, raw: unknown): Promise<void> {
     const message = parseInbound(raw);
     where.channel = message.channel;
     if (!(await admit(deps, message))) return;
+    if (isCommand(message.text, 'stop')) {
+      deps.aborts?.stop(message.channel, message.chatId);
+      return;
+    }
     const turn = await insertTurn(deps.db, {
       idempotencyKey: idempotencyKey(message),
       channel: message.channel,
@@ -60,6 +69,16 @@ export async function requeueStuckTurns(deps: PipelineDeps): Promise<number> {
   return ids.length;
 }
 
+/** Run the replier with an abort signal that `/stop` can fire while the model works. */
+async function replyTo(deps: PipelineDeps, turn: Turn, reply: Replier): Promise<string> {
+  const signal = deps.aborts?.begin(turn.channel, turn.chatId);
+  try {
+    return await reply(turn, signal);
+  } finally {
+    deps.aborts?.end(turn.channel, turn.chatId);
+  }
+}
+
 /** Run one turn: reply with the model's answer (or echo the text when no model is set). Claimed before the send, so a redelivery never resends. */
 export async function processTurn(deps: PipelineDeps, turnId: string): Promise<void> {
   const turn = await claimTurn(deps.db, turnId);
@@ -77,7 +96,7 @@ export async function processTurn(deps: PipelineDeps, turnId: string): Promise<v
     }
     const sender = deps.senders.find((s) => s.channel === turn.channel);
     if (sender === undefined) throw new PipelineError('unknown_channel', 'No sender for channel');
-    const text = deps.reply === undefined ? turn.text : await deps.reply(turn);
+    const text = deps.reply === undefined ? turn.text : await replyTo(deps, turn, deps.reply);
     await sendWithRetry(() => sender.send(turn.chatId, text), deps.retryDelayMs);
     await finishTurn(deps.db, turnId, { status: 'done', replyText: text });
   } catch (error) {
