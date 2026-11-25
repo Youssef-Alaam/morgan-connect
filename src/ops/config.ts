@@ -18,6 +18,19 @@ const schema = z.object({
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   // The Claude model that answers. Any id in Pi's Anthropic catalog.
   ANTHROPIC_MODEL: z.string().min(1).default('claude-sonnet-5-5'),
+  // Where "today" and "this month" start in /usage. An IANA name such as UTC or Asia/Riyadh.
+  TIMEZONE: z
+    .string()
+    .min(1)
+    .refine((name) => {
+      try {
+        new Intl.DateTimeFormat('en', { timeZone: name });
+        return true;
+      } catch {
+        return false;
+      }
+    }, 'must be an IANA time zone name')
+    .default('UTC'),
 });
 
 export type Config = z.infer<typeof schema>;

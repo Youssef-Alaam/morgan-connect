@@ -53,6 +53,7 @@ function buildReplier(
         engine: model,
         model: modelId,
         gate: createGate({ db, logger }),
+        timezone: config.TIMEZONE,
         ...TIMING,
       });
 }

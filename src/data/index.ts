@@ -26,4 +26,10 @@ export {
   type ChatMessage,
 } from './history.js';
 export { appendAudit, type AuditEntry } from './audit.js';
-export { recordUsage, type UsageEntry } from './usage.js';
+export {
+  recordUsage,
+  usageSince,
+  type UsageEntry,
+  type UsageReport,
+  type UsageTotals,
+} from './usage.js';

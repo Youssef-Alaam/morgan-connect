@@ -1,3 +1,4 @@
+import { sql } from 'kysely';
 import type { Db, UsageStatus } from './db.js';
 
 export interface UsageEntry {
@@ -29,4 +30,77 @@ export async function recordUsage(db: Db, entry: UsageEntry): Promise<void> {
       cost_usd: entry.costUsd.toFixed(8),
     })
     .execute();
+}
+
+export interface UsageTotals {
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  /** USD as a decimal string with 8 places, so no float ever touches money. */
+  costUsd: string;
+}
+
+export interface UsageReport {
+  today: UsageTotals;
+  month: UsageTotals;
+}
+
+interface Row {
+  day_calls: number;
+  day_in: number;
+  day_out: number;
+  day_cost: string;
+  month_calls: number;
+  month_in: number;
+  month_out: number;
+  month_cost: string;
+}
+
+/**
+ * Totals for the local day and the local month that contain `now`, in `timezone`. The edges are
+ * found on the local clock, so a 23 or 25 hour day (a clock change) is still one day.
+ */
+export async function usageSince(db: Db, now: Date, timezone: string): Promise<UsageReport> {
+  const { rows } = await sql<Row>`
+    with local as (
+      select
+        date_trunc('day', ${now}::timestamptz at time zone ${timezone}) as day,
+        date_trunc('month', ${now}::timestamptz at time zone ${timezone}) as month
+    ),
+    bounds as (
+      select
+        day at time zone ${timezone} as day_start,
+        (day + interval '1 day') at time zone ${timezone} as day_end,
+        month at time zone ${timezone} as month_start,
+        (month + interval '1 month') at time zone ${timezone} as month_end
+      from local
+    ),
+    today as (select * from usage_ledger, bounds where created_at >= day_start and created_at < day_end)
+    select
+      (select count(*) from today)::float8 as day_calls,
+      (select coalesce(sum(input_tokens), 0) from today)::float8 as day_in,
+      (select coalesce(sum(output_tokens), 0) from today)::float8 as day_out,
+      (select coalesce(sum(cost_usd), 0) from today)::text as day_cost,
+      count(*)::float8 as month_calls,
+      coalesce(sum(input_tokens), 0)::float8 as month_in,
+      coalesce(sum(output_tokens), 0)::float8 as month_out,
+      coalesce(sum(cost_usd), 0)::text as month_cost
+    from usage_ledger, bounds
+    where created_at >= month_start and created_at < month_end`.execute(db);
+  const r = rows[0];
+  if (r === undefined) throw new Error('The usage query returned no row');
+  return {
+    today: {
+      calls: r.day_calls,
+      inputTokens: r.day_in,
+      outputTokens: r.day_out,
+      costUsd: r.day_cost,
+    },
+    month: {
+      calls: r.month_calls,
+      inputTokens: r.month_in,
+      outputTokens: r.month_out,
+      costUsd: r.month_cost,
+    },
+  };
 }

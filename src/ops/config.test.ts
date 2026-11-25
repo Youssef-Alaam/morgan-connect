@@ -10,7 +10,13 @@ it('applies defaults and treats empty values as unset', () => {
     PORT: 3000,
     LOG_LEVEL: 'info',
     ANTHROPIC_MODEL: 'claude-sonnet-5-5',
+    TIMEZONE: 'UTC',
   });
+});
+
+it('takes an IANA TIMEZONE and rejects anything else', () => {
+  expect(loadConfig({ DATABASE_URL: URL, TIMEZONE: 'Asia/Riyadh' }).TIMEZONE).toBe('Asia/Riyadh');
+  expect(() => loadConfig({ DATABASE_URL: URL, TIMEZONE: 'Mars/Base' })).toThrow(/TIMEZONE/);
 });
 
 it('reads every key', () => {
