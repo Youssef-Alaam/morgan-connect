@@ -49,3 +49,43 @@ it('creates no target and cleans up its temp file when the first write fails to 
   );
   expect(await readdir(dir)).toEqual([]);
 });
+
+function lockedRename(failures: number, code: string): { fs: AtomicFs; calls: () => number } {
+  let calls = 0;
+  const rename: AtomicFs['rename'] = (from, to) => {
+    calls += 1;
+    if (calls <= failures) return Promise.reject(Object.assign(new Error('locked'), { code }));
+    return nodeFs.rename(from, to);
+  };
+  return { fs: { ...nodeFs, rename, sleep: () => Promise.resolve() }, calls: () => calls };
+}
+
+it('retries a locked rename and then succeeds', async () => {
+  const { fs, calls } = lockedRename(3, 'EBUSY');
+  await atomicWrite(target, 'new', fs);
+  expect(await readFile(target, 'utf8')).toBe('new');
+  expect(calls()).toBe(4);
+});
+
+it('gives up after three retries and leaves the old file', async () => {
+  await atomicWrite(target, 'old');
+  const { fs, calls } = lockedRename(99, 'EPERM');
+  await expect(atomicWrite(target, 'new', fs)).rejects.toThrow('locked');
+  expect(calls()).toBe(4);
+  expect(await readFile(target, 'utf8')).toBe('old');
+});
+
+it('does not retry other errors', async () => {
+  const { fs, calls } = lockedRename(99, 'ENOSPC');
+  await expect(atomicWrite(target, 'new', fs)).rejects.toThrow('locked');
+  expect(calls()).toBe(1);
+});
+
+it('flushes the directory after the rename', async () => {
+  const synced: string[] = [];
+  await atomicWrite(target, 'new', {
+    ...nodeFs,
+    syncDir: (d) => (synced.push(d), Promise.resolve()),
+  });
+  expect(synced).toEqual([dir]);
+});
