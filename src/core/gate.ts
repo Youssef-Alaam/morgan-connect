@@ -8,7 +8,9 @@ export interface GateDeps {
   logger: Logger;
 }
 
-const START_WITH_CODE = /^\/start\s+(\S+)\s*$/;
+/** `/start <code>` or `/start@BotName <code>`. */
+const START_WITH_CODE = /^\/start(?:@\w+)?\s+(\S+)\s*$/;
+const START_ANY = /^\/start(?:@\w+)?(?:\s|$)/;
 const LINKED_REPLY = 'Linked. This chat is now the admin.';
 
 /**
@@ -16,7 +18,10 @@ const LINKED_REPLY = 'Linked. This chat is now the admin.';
  * An unlinked chat gets no reply at all, except the one confirmation for a good setup code.
  */
 export async function admit(deps: GateDeps, message: InboundMessage): Promise<boolean> {
-  if (await deps.identity.isLinked(message.channel, message.chatId)) return true;
+  if (await deps.identity.isLinked(message.channel, message.chatId)) {
+    // A used code must never reach turns.text.
+    return !START_ANY.test(message.text);
+  }
   const code = START_WITH_CODE.exec(message.text)?.[1];
   if (code === undefined) return false;
   const result = await deps.identity.claim(message.channel, message.chatId, code);

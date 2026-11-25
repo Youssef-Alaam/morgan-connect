@@ -1,6 +1,7 @@
+import { createHash } from 'node:crypto';
 import { sql } from 'kysely';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
-import { ingest, type PipelineDeps } from '../../src/core/index.js';
+import { ingest, processTurn, type PipelineDeps } from '../../src/core/index.js';
 import {
   createDb,
   createTurnQueue,
@@ -125,4 +126,57 @@ it('still links the chat when the confirmation cannot be sent', async () => {
   channel.failures = 1;
   await ingest(deps(), msg('7', `/start ${code}`));
   expect(await identity.isLinked('fake', '7')).toBe(true);
+});
+
+it('fails a stored turn of an unlinked chat without replying', async () => {
+  const { rows } = await sql<{
+    id: string;
+  }>`insert into turns (idempotency_key, channel, chat_id, text)
+    values ('fake:9:1', 'fake', '9', 'x') returning id`.execute(db);
+  await processTurn(deps(), rows[0]?.id ?? '');
+  const turn = await sql<{
+    status: string;
+    error: string;
+  }>`select status, error from turns`.execute(db);
+  expect(turn.rows[0]).toEqual({ status: 'failed', error: 'unlinked' });
+  expect(channel.attempts).toEqual([]);
+});
+
+it('counts attempts before the database is asked: 10 concurrent wrong claims, 5 tried', async () => {
+  await identity.issueSetupCode();
+  const results = await Promise.all(
+    Array.from({ length: 10 }, () => identity.claim('fake', '9', 'wrong')),
+  );
+  expect(results.filter((r) => r === 'refused')).toHaveLength(5);
+  expect(results.filter((r) => r === 'limited')).toHaveLength(5);
+});
+
+it('two chats claiming the same code at once: exactly one wins, one admin exists', async () => {
+  const code = (await identity.issueSetupCode()) ?? '';
+  const results = await Promise.all([
+    identity.claim('fake', '1', code),
+    identity.claim('fake', '2', code),
+  ]);
+  expect([...results].sort()).toEqual(['claimed', 'refused']);
+  expect((await sql`select id from users`.execute(db)).rows).toHaveLength(1);
+});
+
+it('never makes a second admin, even if another code row is claimable', async () => {
+  const code = (await identity.issueSetupCode()) ?? '';
+  expect(await identity.claim('fake', '1', code)).toBe('claimed');
+  const other = createIdentity(db, { now: () => clock });
+  await sql`insert into setup_codes (code_hash) values (${createHash('sha256').update('late').digest('hex')})`.execute(
+    db,
+  );
+  expect(await other.claim('fake', '2', 'late')).toBe('refused');
+  expect((await sql`select id from users`.execute(db)).rows).toHaveLength(1);
+});
+
+it('accepts /start@BotName <code>, and drops /start from a linked chat without storing it', async () => {
+  const code = (await identity.issueSetupCode()) ?? '';
+  await ingest(deps(), msg('7', `/start@MorganBot ${code}`));
+  expect(await identity.isLinked('fake', '7')).toBe(true);
+  await ingest(deps(), msg('7', `/start ${code}`));
+  await ingest(deps(), msg('7', '/start'));
+  expect(await turnCount()).toBe(0);
 });

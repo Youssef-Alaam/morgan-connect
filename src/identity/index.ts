@@ -18,6 +18,8 @@ const WINDOW_MS = 15 * 60 * 1000;
 const hashCode = (code: string): string => createHash('sha256').update(code).digest('hex');
 
 export function createIdentity(db: Db, options: { now?: () => number } = {}): Identity {
+  /** Once an admin exists nothing can be claimed, so skip the database. */
+  let closed = false;
   const limiter = createFailureLimiter({
     max: MAX_WRONG_TRIES,
     windowMs: WINDOW_MS,
@@ -26,17 +28,20 @@ export function createIdentity(db: Db, options: { now?: () => number } = {}): Id
   return {
     issueSetupCode: async () => {
       const code = randomBytes(16).toString('base64url');
-      return (await replaceSetupCode(db, hashCode(code))) ? code : undefined;
+      if (await replaceSetupCode(db, hashCode(code))) return code;
+      closed = true;
+      return undefined;
     },
     claim: async (channel, chatId, code) => {
+      if (closed) return 'refused';
       const key = `${channel}:${chatId}`;
       if (limiter.blocked(key)) return 'limited';
-      if (await claimSetupCode(db, hashCode(code), channel, chatId)) {
-        limiter.reset(key);
-        return 'claimed';
-      }
+      // Counted before the database is asked, so concurrent tries cannot skip the limit.
       limiter.fail(key);
-      return 'refused';
+      if (!(await claimSetupCode(db, hashCode(code), channel, chatId))) return 'refused';
+      limiter.reset(key);
+      closed = true;
+      return 'claimed';
     },
     isLinked: (channel, chatId) => isDeviceLinked(db, channel, chatId),
   };

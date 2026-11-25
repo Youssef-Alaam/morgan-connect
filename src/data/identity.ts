@@ -1,3 +1,4 @@
+import { sql } from 'kysely';
 import type { Db } from './db.js';
 
 /** True when this chat is a linked device. */
@@ -30,6 +31,10 @@ export async function claimSetupCode(
   chatId: string,
 ): Promise<boolean> {
   return db.transaction().execute(async (trx) => {
+    // Share-row-exclusive: two claims cannot both see "no admin yet".
+    await sql`lock table users in share row exclusive mode`.execute(trx);
+    const admin = await trx.selectFrom('users').select('id').limit(1).executeTakeFirst();
+    if (admin !== undefined) return false;
     const code = await trx
       .updateTable('setup_codes')
       .set({ claimed_at: new Date() })

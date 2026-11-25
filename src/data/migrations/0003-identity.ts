@@ -11,6 +11,10 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn('role', 'text', (col) => col.notNull().defaultTo('admin'))
     .addColumn('created_at', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .execute();
+  // One admin per install: a second admin row is refused by the database itself.
+  await sql`create unique index users_single_admin on users (role) where role = 'admin'`.execute(
+    db,
+  );
   await db.schema
     .createTable('devices')
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
