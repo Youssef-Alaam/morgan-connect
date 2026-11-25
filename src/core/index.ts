@@ -3,6 +3,7 @@ export { idempotencyKey, parseInbound, type InboundMessage } from './message.js'
 export {
   ingest,
   processTurn,
+  requeueStuckTurns,
   startWorker,
   type ChannelSender,
   type PipelineDeps,

@@ -1,6 +1,6 @@
 import type { ChannelSender } from '../../src/core/index.js';
 
-/** A channel for tests: records what it was asked to send; can be told to fail or hang. */
+/** A test channel: records sends; can fail or hang. */
 export class FakeChannel implements ChannelSender {
   readonly channel = 'fake';
   readonly attempts: { chatId: string; text: string }[] = [];

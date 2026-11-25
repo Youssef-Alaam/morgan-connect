@@ -1,6 +1,6 @@
 import { serve } from '@hono/node-server';
 import { createTelegramAdapter } from './channels/index.js';
-import { ingest, startWorker } from './core/index.js';
+import { ingest, requeueStuckTurns, startWorker } from './core/index.js';
 import { createDb, createTurnQueue, dbVersion, migrateToLatest, type Db } from './data/index.js';
 import { createApp } from './http/index.js';
 import { type Config, createLogger, loadConfig, type Logger } from './ops/index.js';
@@ -19,8 +19,14 @@ async function startTelegram(config: Config, db: Db, logger: Logger): Promise<()
   await queue.start();
   const telegram = createTelegramAdapter(config.TELEGRAM_BOT_TOKEN, logger);
   const deps = { db, queue, senders: [telegram], logger, retryDelayMs: 1000 };
-  await startWorker(deps);
-  await telegram.start((message) => ingest(deps, message));
+  try {
+    await startWorker(deps);
+    await requeueStuckTurns(deps);
+    await telegram.start((message) => ingest(deps, message));
+  } catch (error) {
+    await queue.stop();
+    throw error;
+  }
   return async () => {
     await telegram.stop();
     await queue.stop();
