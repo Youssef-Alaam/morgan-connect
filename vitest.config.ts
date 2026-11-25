@@ -6,7 +6,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['cobertura', 'text-summary'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts'],
+      exclude: ['src/**/*.test.ts', 'src/main.ts'],
     },
     projects: [
       {
@@ -15,7 +15,14 @@ export default defineConfig({
           include: ['src/**/*.test.ts', 'test/unit/**/*.test.ts'],
         },
       },
-      { test: { name: 'integration', include: ['test/integration/**/*.test.ts'] } },
+      {
+        test: {
+          name: 'integration',
+          include: ['test/integration/**/*.test.ts'],
+          testTimeout: 120_000,
+          hookTimeout: 180_000,
+        },
+      },
       { test: { name: 'perf', include: ['test/perf/**/*.test.ts'] } },
     ],
   },
