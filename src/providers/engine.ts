@@ -55,6 +55,8 @@ export interface EngineSession {
 export interface Engine {
   open: (options: {
     history: readonly EngineMessage[];
+    /** Stable for one chat until `/new`. An engine that keeps its own session per conversation uses it; others ignore it. */
+    conversationId?: string;
     system?: string;
     tools?: readonly EngineTool[];
     /** Called when the model names a tool that is not in `tools`, so the caller can record it. */
@@ -62,6 +64,8 @@ export interface Engine {
     /** Called once per model call, so a prompt with tool steps reports each call. */
     onUsage?: (call: EngineCallUsage) => void;
   }) => EngineSession;
+  /** `/new` finished this conversation. An engine that keeps a session per conversation drops it. */
+  end?: (conversationId: string) => Promise<void>;
 }
 
 export type EngineErrorKind = 'transient' | 'failed' | 'aborted';

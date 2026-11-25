@@ -43,6 +43,12 @@ export interface Database {
     data: ColumnType<unknown, string | null | undefined, string | null>;
     created_at: Generated<Date>;
   };
+  chat_conversations: {
+    channel: string;
+    chat_id: string;
+    conversation_id: Generated<string>;
+    created_at: Generated<Date>;
+  };
   audit_log: {
     id: Generated<string>;
     created_at: Generated<Date>;
