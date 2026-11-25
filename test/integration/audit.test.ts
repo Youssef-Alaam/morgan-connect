@@ -63,6 +63,7 @@ it('clock.now through the engine: the answer comes back and the audit row says w
     db,
     engine,
     logger: createLogger('silent'),
+    model: 'test',
     gate: createGate({ db }),
     retryDelayMs: 0,
     typingIntervalMs: 5,

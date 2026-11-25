@@ -99,6 +99,7 @@ it('a tool name the model made up is refused through the gate and recorded', asy
     engine,
     logger: createLogger('silent'),
     gate: createGate({ db }),
+    model: 'test',
     retryDelayMs: 0,
     typingIntervalMs: 5,
     turnTimeoutMs: 5000,

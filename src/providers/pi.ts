@@ -10,6 +10,7 @@ import { anthropicProvider } from '@earendil-works/pi-ai/providers/anthropic';
 import {
   EngineError,
   type Engine,
+  type EngineCallUsage,
   type EngineMessage,
   type EngineSession,
   type EngineTool,
@@ -33,6 +34,7 @@ export interface PiEngineOptions {
   model: Model<string>;
   apiKey: string;
   system?: string;
+  onUsage?: (call: EngineCallUsage) => void;
 }
 
 function pastMessage(message: EngineMessage, model: Model<string>): Message {
@@ -101,6 +103,15 @@ class PiSession implements EngineSession {
     this.used.inputTokens += reply.usage.input;
     this.used.outputTokens += reply.usage.output;
     this.used.costUsd += reply.usage.cost.total;
+    this.options.onUsage?.({
+      inputTokens: reply.usage.input,
+      outputTokens: reply.usage.output,
+      cacheReadTokens: reply.usage.cacheRead,
+      cacheWriteTokens: reply.usage.cacheWrite,
+      costUsd: reply.usage.cost.total,
+      status:
+        reply.stopReason === 'error' ? 'failed' : reply.stopReason === 'aborted' ? 'aborted' : 'ok',
+    });
     if (reply.stopReason === 'aborted') throw new EngineError('aborted', 'The turn was aborted');
     if (reply.stopReason === 'error') {
       throw new EngineError(
@@ -148,8 +159,12 @@ class PiSession implements EngineSession {
 /** An engine over any Pi `Models` collection. Tests pass Pi's own scripted provider here. */
 export function createPiEngine(options: PiEngineOptions): Engine {
   return {
-    open: ({ history, tools = [], system, unknownTool }) => {
-      const merged = system === undefined ? options : { ...options, system };
+    open: ({ history, tools = [], system, unknownTool, onUsage }) => {
+      const merged = {
+        ...options,
+        ...(system === undefined ? {} : { system }),
+        ...(onUsage === undefined ? {} : { onUsage }),
+      };
       return new PiSession(merged, history, tools, unknownTool);
     },
   };

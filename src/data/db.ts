@@ -1,4 +1,4 @@
-import { type Generated, Kysely, PostgresDialect, sql } from 'kysely';
+import { type ColumnType, type Generated, Kysely, PostgresDialect, sql } from 'kysely';
 import pg from 'pg';
 
 export type AuditOutcome = 'ok' | 'error' | 'refused' | 'denied' | 'expired' | 'aborted';
@@ -57,7 +57,23 @@ export interface Database {
     decision: 'auto' | 'ask' | 'off';
     outcome: AuditOutcome;
   };
+  usage_ledger: {
+    id: Generated<string>;
+    channel: string;
+    chat_id: string;
+    model: string;
+    status: UsageStatus;
+    // bigint and numeric come back from pg as strings.
+    input_tokens: ColumnType<string, number, never>;
+    output_tokens: ColumnType<string, number, never>;
+    cache_read_tokens: ColumnType<string, number, never>;
+    cache_write_tokens: ColumnType<string, number, never>;
+    cost_usd: ColumnType<string, string, never>;
+    created_at: Generated<Date>;
+  };
 }
+
+export type UsageStatus = 'ok' | 'failed' | 'aborted' | 'timeout';
 
 export type Db = Kysely<Database>;
 

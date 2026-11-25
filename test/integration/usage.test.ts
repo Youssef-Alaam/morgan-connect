@@ -1,0 +1,197 @@
+import {
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxText,
+  fauxToolCall,
+} from '@earendil-works/pi-ai';
+import { sql } from 'kysely';
+import { afterAll, beforeAll, expect, it } from 'vitest';
+import { FAILURE_REPLY, STOPPED_REPLY, createReplier } from '../../src/core/index.js';
+import { createDb, migrateToLatest, type Db, type Turn } from '../../src/data/index.js';
+import { createLogger } from '../../src/ops/index.js';
+import {
+  EngineError,
+  createPiEngine,
+  type Engine,
+  type EngineCallUsage,
+  type EngineSession,
+} from '../../src/policy/index.js';
+import { FakeChannel } from '../helpers/fake-channel.js';
+import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
+
+let postgres: TestPostgres;
+let db: Db;
+let counter = 0;
+
+beforeAll(async () => {
+  postgres = await startPostgres();
+  db = createDb(postgres.url);
+  await migrateToLatest(db);
+}, 180_000);
+
+afterAll(async () => {
+  await db.destroy();
+  await postgres.stop();
+});
+
+/** What one scripted prompt does: report its model calls, then answer, fail, or wait for an abort. */
+interface Outcome {
+  calls: EngineCallUsage[];
+  end: 'text' | 'transient' | 'failed' | 'hang';
+}
+
+const call = (
+  inputTokens: number,
+  outputTokens: number,
+  costUsd: number,
+  { status = 'ok', cache = [0, 0] }: { status?: EngineCallUsage['status']; cache?: number[] } = {},
+): EngineCallUsage => ({
+  inputTokens,
+  outputTokens,
+  cacheReadTokens: cache[0] ?? 0,
+  cacheWriteTokens: cache[1] ?? 0,
+  costUsd,
+  status,
+});
+
+const billedEngine = (outcomes: Outcome[]): Engine => ({
+  open: ({ onUsage }): EngineSession => {
+    const outcome = outcomes.shift();
+    if (outcome === undefined) throw new Error('no outcome left');
+    const abort = new AbortController();
+    return {
+      prompt: async () => {
+        if (outcome.end === 'hang') {
+          await new Promise<void>((resolve) => {
+            abort.signal.addEventListener('abort', () => {
+              resolve();
+            });
+          });
+          outcome.calls.forEach((c) => onUsage?.({ ...c, status: 'aborted' }));
+          throw new EngineError('aborted', 'aborted');
+        }
+        outcome.calls.forEach((c) => onUsage?.(c));
+        if (outcome.end === 'text') return 'hi';
+        throw new EngineError(outcome.end, 'scripted');
+      },
+      steer: () => undefined,
+      abort: () => {
+        abort.abort();
+      },
+      usage: () => ({ inputTokens: 0, outputTokens: 0, costUsd: 0 }),
+    };
+  },
+});
+
+const turn = (chatId: string, text: string): Turn => ({
+  id: `u${String((counter += 1))}`,
+  channel: 'fake',
+  chatId,
+  text,
+  status: 'sending',
+});
+const replierWith = (engine: Engine, turnTimeoutMs = 5000) =>
+  createReplier({
+    db,
+    engine,
+    logger: createLogger('silent'),
+    model: 'claude-sonnet-5-5',
+    retryDelayMs: 0,
+    typingIntervalMs: 5,
+    turnTimeoutMs,
+  });
+const ledger = (chatId: string) =>
+  db
+    .selectFrom('usage_ledger')
+    .select([
+      'model',
+      'status',
+      'input_tokens',
+      'output_tokens',
+      'cache_read_tokens',
+      'cache_write_tokens',
+      'cost_usd',
+    ])
+    .where('chat_id', '=', chatId)
+    .orderBy('id')
+    .execute();
+
+it('writes one row per model call, not per prompt (a tool step then an answer is two rows)', async () => {
+  const faux = fauxProvider();
+  const models = createModels();
+  models.setProvider(faux.provider);
+  faux.setResponses([
+    fauxAssistantMessage(fauxToolCall('nothing', {}), { stopReason: 'toolUse' }),
+    fauxAssistantMessage(fauxText('done')),
+  ]);
+  const engine = createPiEngine({ models, model: faux.getModel(), apiKey: 'k' });
+  expect(await replierWith(engine)(turn('L1', 'hello'), new FakeChannel())).toBe('done');
+  const rows = await ledger('L1');
+  expect(rows).toHaveLength(2);
+  expect(rows.map((r) => r.status)).toEqual(['ok', 'ok']);
+  expect(rows.every((r) => Number(r.input_tokens) > 0)).toBe(true);
+});
+
+it('stores tokens, cache tokens and cost exactly, with the model id', async () => {
+  const engine = billedEngine([
+    { calls: [call(100, 20, 0.00123456789, { cache: [300, 40] })], end: 'text' },
+  ]);
+  await replierWith(engine)(turn('L2', 'hello'), new FakeChannel());
+  expect(await ledger('L2')).toEqual([
+    {
+      model: 'claude-sonnet-5-5',
+      status: 'ok',
+      input_tokens: '100',
+      output_tokens: '20',
+      cache_read_tokens: '300',
+      cache_write_tokens: '40',
+      cost_usd: '0.00123457',
+    },
+  ]);
+});
+
+it('records what a failed call was billed, and each retry as its own row', async () => {
+  const engine = billedEngine([
+    { calls: [call(50, 0, 0.0001, { status: 'failed' })], end: 'transient' },
+    { calls: [call(70, 5, 0.0002, { status: 'failed' })], end: 'failed' },
+  ]);
+  expect(await replierWith(engine)(turn('L3', 'hello'), new FakeChannel())).toBe(FAILURE_REPLY);
+  const rows = await ledger('L3');
+  expect(rows.map((r) => [r.status, r.input_tokens, r.output_tokens, r.cost_usd])).toEqual([
+    ['failed', '50', '0', '0.00010000'],
+    ['failed', '70', '5', '0.00020000'],
+  ]);
+});
+
+it('writes no row for a call that never reached the provider', async () => {
+  const engine = billedEngine([{ calls: [call(0, 0, 0, { status: 'failed' })], end: 'failed' }]);
+  await replierWith(engine)(turn('L4', 'hello'), new FakeChannel());
+  expect(await ledger('L4')).toEqual([]);
+});
+
+it('tells an owner /stop (aborted) from the time limit (timeout)', async () => {
+  const stopped = new AbortController();
+  const owner = replierWith(billedEngine([{ calls: [call(10, 0, 0.00001)], end: 'hang' }]))(
+    turn('L5', 'hello'),
+    new FakeChannel(),
+    stopped.signal,
+  );
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  stopped.abort();
+  expect(await owner).toBe(STOPPED_REPLY);
+  const slow = replierWith(billedEngine([{ calls: [call(10, 0, 0.00001)], end: 'hang' }]), 50);
+  expect(await slow(turn('L6', 'hello'), new FakeChannel())).toBe(FAILURE_REPLY);
+  expect((await ledger('L5')).map((r) => r.status)).toEqual(['aborted']);
+  expect((await ledger('L6')).map((r) => r.status)).toEqual(['timeout']);
+});
+
+it('still answers when the ledger cannot be written', async () => {
+  await sql`alter table usage_ledger rename to usage_ledger_off`.execute(db);
+  try {
+    const engine = billedEngine([{ calls: [call(1, 1, 0.1)], end: 'text' }]);
+    expect(await replierWith(engine)(turn('L7', 'hello'), new FakeChannel())).toBe('hi');
+  } finally {
+    await sql`alter table usage_ledger_off rename to usage_ledger`.execute(db);
+  }
+});

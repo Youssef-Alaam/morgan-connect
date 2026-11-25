@@ -19,6 +19,13 @@ export interface EngineUsage {
   costUsd: number;
 }
 
+/** What one model call used, reported as soon as the call returns (even a failed one is billed). */
+export interface EngineCallUsage extends EngineUsage {
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  status: 'ok' | 'failed' | 'aborted';
+}
+
 export interface EngineSession {
   /** Send one user message and run the model (and its tool calls) to a final text answer. */
   prompt: (text: string) => Promise<string>;
@@ -37,6 +44,8 @@ export interface Engine {
     tools?: readonly EngineTool[];
     /** Called when the model names a tool that is not in `tools`, so the caller can record it. */
     unknownTool?: (name: string, args: Record<string, unknown>) => Promise<string>;
+    /** Called once per model call, so a prompt with tool steps reports each call. */
+    onUsage?: (call: EngineCallUsage) => void;
   }) => EngineSession;
 }
 

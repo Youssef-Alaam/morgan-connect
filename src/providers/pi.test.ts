@@ -212,3 +212,20 @@ it('passes the turn signal to a tool', async () => {
   await engine.open({ history: [], tools: [peek] }).prompt('go');
   expect(signal?.aborted).toBe(false);
 });
+
+it('reports each model call as it returns, including a billed failure', async () => {
+  const { faux, models } = fauxModels();
+  faux.setResponses([
+    reply({ tool: 'none', args: {} }),
+    reply({ text: 'done' }),
+    reply({ error: 'failed' }),
+  ]);
+  const calls: string[] = [];
+  const engine = createPiEngine({ models, model: faux.getModel(), apiKey: 'k' });
+  const onUsage = (call: { status: string }): void => {
+    calls.push(call.status);
+  };
+  await engine.open({ history: [], onUsage }).prompt('go');
+  await expect(engine.open({ history: [], onUsage }).prompt('again')).rejects.toThrow();
+  expect(calls).toEqual(['ok', 'ok', 'failed']);
+});
