@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { sql } from 'kysely';
+import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import {
   FAILURE_REPLY,
   NEW_REPLY,
@@ -8,9 +9,11 @@ import {
   type Replier,
 } from '../../src/core/index.js';
 import {
+  appendHistory,
   createDb,
   getTurn,
   insertTurn,
+  loadHistory,
   migrateToLatest,
   type Db,
   type Turn,
@@ -29,6 +32,12 @@ beforeAll(async () => {
   postgres = await startPostgres();
   db = createDb(postgres.url);
   await migrateToLatest(db);
+  await sql`insert into users (id) values ('00000000-0000-0000-0000-000000000008')`.execute(db);
+  for (const chat of ['c8', 'c9']) {
+    await sql`insert into devices (user_id, channel, chat_id) values ('00000000-0000-0000-0000-000000000008', 'fake', ${chat})`.execute(
+      db,
+    );
+  }
 }, 180_000);
 
 afterAll(async () => {
@@ -43,10 +52,13 @@ const turn = (chatId: string, text: string): Turn => ({
   text,
   status: 'sending',
 });
-const replierFor = (script: Step[]): { reply: Replier; engine: ScriptedEngine } => {
+const replierFor = (
+  script: Step[],
+  retryDelayMs = 0,
+): { reply: Replier; engine: ScriptedEngine } => {
   const engine = new ScriptedEngine(script);
   const logger = createLogger('silent');
-  const timing = { retryDelayMs: 0, typingIntervalMs: 5, turnTimeoutMs: 5000 };
+  const timing = { retryDelayMs, typingIntervalMs: 5, turnTimeoutMs: 5000 };
   return { engine, reply: createReplier({ db, engine, logger, ...timing }) };
 };
 
@@ -97,14 +109,56 @@ it('does not retry a refused key', async () => {
   expect(engine.opened).toHaveLength(1);
 });
 
-it('an abort stops the turn', async () => {
+it('an abort stops the turn while the model is waiting', async () => {
   const { reply, engine } = replierFor([{ hang: true }]);
   const controller = new AbortController();
   const answer = reply(turn('c7', 'hi'), controller.signal);
+  await vi.waitFor(() => {
+    expect(engine.prompts).toEqual(['hi']);
+  });
+  controller.abort();
+  expect(await answer).toBe(STOPPED_REPLY);
+});
+
+it('an abort during the wait before a retry stops the turn at once', async () => {
+  const { reply, engine } = replierFor([{ error: 'transient' }, { text: 'never' }], 60_000);
+  const controller = new AbortController();
+  const answer = reply(turn('c7', 'hi'), controller.signal);
+  await vi.waitFor(() => {
+    expect(engine.opened).toHaveLength(1);
+  });
   controller.abort();
   expect(await answer).toBe(STOPPED_REPLY);
   expect(engine.opened).toHaveLength(1);
 });
+
+it('/new and /new@BotName both start over', async () => {
+  const { reply } = replierFor([]);
+  expect(await reply(turn('c10', '/new'))).toBe(NEW_REPLY);
+  expect(await reply(turn('c10', '/new@MorganBot'))).toBe(NEW_REPLY);
+});
+
+it('keeps recent history within the character budget and never starts on an answer', async () => {
+  const chat = { channel: 'fake', chatId: 'c11' };
+  await appendHistory(db, chat, [
+    { role: 'user', text: 'a'.repeat(50) },
+    { role: 'assistant', text: 'b'.repeat(50) },
+    { role: 'user', text: 'c'.repeat(50) },
+    { role: 'assistant', text: 'd'.repeat(50) },
+  ]);
+  const kept = await loadHistory(db, chat, 40, 120);
+  expect(kept.map((m) => m.text[0])).toEqual(['c', 'd']);
+  expect(await loadHistory(db, chat, 40, 160)).toHaveLength(2);
+  expect(await loadHistory(db, chat, 3, 1000)).toHaveLength(2);
+});
+
+const workerDeps = (channel: FakeChannel, reply: Replier) => {
+  const nothing = () => Promise.resolve();
+  const queue = { start: nothing, enqueue: nothing, work: nothing, stop: nothing };
+  const logger = createLogger('silent');
+  const identity = createIdentity(db);
+  return { db, queue, senders: [channel], logger, retryDelayMs: 0, identity, reply };
+};
 
 it('the worker sends the model answer as the reply', async () => {
   const { reply } = replierFor([{ text: 'from the model' }]);
@@ -115,12 +169,7 @@ it('the worker sends the model answer as the reply', async () => {
     chatId: 'c8',
     text: 'question',
   });
-  const nothing = () => Promise.resolve();
-  const queue = { start: nothing, enqueue: nothing, work: nothing, stop: nothing };
-  const logger = createLogger('silent');
-  const identity = createIdentity(db);
-  const deps = { db, queue, senders: [channel], logger, retryDelayMs: 0, identity, reply };
-  await processTurn(deps, created.id);
+  await processTurn(workerDeps(channel, reply), created.id);
   expect(channel.attempts).toEqual([{ chatId: 'c8', text: 'from the model' }]);
   expect((await getTurn(db, created.id))?.status).toBe('done');
 });

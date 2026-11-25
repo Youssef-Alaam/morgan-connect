@@ -10,8 +10,16 @@ export interface ChatKey {
   chatId: string;
 }
 
-/** The last `limit` messages of a chat, oldest first. */
-export async function loadHistory(db: Db, chat: ChatKey, limit: number): Promise<ChatMessage[]> {
+/**
+ * The last `limit` messages of a chat that fit in `maxChars`, oldest first. The newest messages
+ * are kept, and the list never starts with an answer (a conversation starts with the user).
+ */
+export async function loadHistory(
+  db: Db,
+  chat: ChatKey,
+  limit: number,
+  maxChars: number,
+): Promise<ChatMessage[]> {
   const rows = await db
     .selectFrom('chat_messages')
     .select(['role', 'text'])
@@ -20,7 +28,15 @@ export async function loadHistory(db: Db, chat: ChatKey, limit: number): Promise
     .orderBy('id', 'desc')
     .limit(limit)
     .execute();
-  return rows.reverse();
+  const kept: ChatMessage[] = [];
+  let used = 0;
+  for (const row of rows) {
+    used += row.text.length;
+    if (used > maxChars) break;
+    kept.unshift(row);
+  }
+  while (kept[0]?.role === 'assistant') kept.shift();
+  return kept;
 }
 
 /** Add messages in order, all or none. */
