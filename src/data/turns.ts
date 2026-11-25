@@ -79,6 +79,13 @@ export async function getTurn(db: Db, id: string): Promise<Turn | undefined> {
   return row === undefined ? undefined : toTurn(row);
 }
 
+/** Turn ids still queued: their job may have been lost between insert and enqueue. */
+export async function listQueuedTurnIds(db: Db): Promise<string[]> {
+  const rows = await db.selectFrom('turns').select('id').where('status', '=', 'queued').execute();
+  return rows.map((row) => row.id);
+}
+
+/** Record the outcome. Only a sending turn can finish, so a late writer cannot overwrite. */
 export async function finishTurn(
   db: Db,
   id: string,
@@ -88,5 +95,10 @@ export async function finishTurn(
     result.status === 'done'
       ? { status: result.status, reply_text: result.replyText }
       : { status: result.status, error: result.error };
-  await db.updateTable('turns').set(fields).where('id', '=', id).execute();
+  await db
+    .updateTable('turns')
+    .set(fields)
+    .where('id', '=', id)
+    .where('status', '=', 'sending')
+    .execute();
 }

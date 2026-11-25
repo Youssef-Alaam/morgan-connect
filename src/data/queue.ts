@@ -17,7 +17,13 @@ export function createTurnQueue(databaseUrl: string, onError: (error: Error) => 
   return {
     start: async () => {
       await boss.start();
-      await boss.createQueue(QUEUE, { retryLimit: 3, retryDelay: 5, expireInSeconds: 300 });
+      await boss.createQueue(QUEUE, {
+        // One redelivery is enough: a redelivered turn is claimed once and never re-sent, and
+        // failed sends already retry in-process. More job retries would only repeat that no-op.
+        retryLimit: 1,
+        retryDelay: 5,
+        expireInSeconds: 300,
+      });
     },
     enqueue: async (turnId) => {
       await boss.send(QUEUE, { turnId });

@@ -6,6 +6,7 @@ import {
   finishTurn,
   getTurn,
   insertTurn,
+  listQueuedTurnIds,
   migrateToLatest,
   type Db,
   type TurnQueue,
@@ -56,6 +57,15 @@ it('lets exactly one caller claim a turn, and records how it finished', async ()
   expect(await claimTurn(db, id)).toBeUndefined();
   await finishTurn(db, id, { status: 'done', replyText: 'hi' });
   expect((await getTurn(db, id))?.status).toBe('done');
+});
+
+it('finishes only a turn that is sending, and lists turns still queued', async () => {
+  const { id } = await insertTurn(db, newTurn('k3'));
+  await finishTurn(db, id, { status: 'done', replyText: 'hi' });
+  expect((await getTurn(db, id))?.status).toBe('queued');
+  expect(await listQueuedTurnIds(db)).toContain(id);
+  await claimTurn(db, id);
+  expect(await listQueuedTurnIds(db)).not.toContain(id);
 });
 
 it('delivers a queued turn id to the worker', async () => {
