@@ -19,7 +19,12 @@ import {
   type Db,
 } from './data/index.js';
 import { createApp } from './http/index.js';
-import { createAnthropicEngine, createGate, type Engine } from './policy/index.js';
+import {
+  createAnthropicEngine,
+  createGate,
+  createHttpEngine,
+  type Engine,
+} from './policy/index.js';
 import { type Config, createLogger, loadConfig, type Logger } from './ops/index.js';
 
 const TIMING = { retryDelayMs: 2000, typingIntervalMs: 4000, turnTimeoutMs: 120_000 };
@@ -35,23 +40,31 @@ async function announceSetupCode(identity: Identity, logger: Logger): Promise<vo
   if (code !== undefined) logger.info(`Setup code: send "/start ${code}" to the bot to claim it`);
 }
 
-/** The model that answers: the one passed in, else Claude when a key is set, else none (echo). */
+/** The engine that answers: the one passed in, else the one set by ENGINE, else none (echo). */
+function chooseEngine(config: Config): Engine | undefined {
+  const { ENGINE_URL: url, ENGINE_TOKEN: token } = config;
+  if (config.ENGINE === 'http' && url !== undefined && token !== undefined) {
+    return createHttpEngine({ url, token });
+  }
+  const { ANTHROPIC_API_KEY: apiKey, ANTHROPIC_MODEL: modelId } = config;
+  return apiKey === undefined ? undefined : createAnthropicEngine({ apiKey, modelId });
+}
+
+/** The model that answers: the one passed in, else the one the config names, else none (echo). */
 function buildReplier(
   config: Config,
   db: Db,
   logger: Logger,
   engine: Engine | undefined,
 ): Replier | undefined {
-  const { ANTHROPIC_API_KEY: apiKey, ANTHROPIC_MODEL: modelId } = config;
-  const model =
-    engine ?? (apiKey === undefined ? undefined : createAnthropicEngine({ apiKey, modelId }));
+  const model = engine ?? chooseEngine(config);
   return model === undefined
     ? undefined
     : createReplier({
         db,
         logger,
         engine: model,
-        model: modelId,
+        model: config.ENGINE === 'http' ? 'http-engine' : config.ANTHROPIC_MODEL,
         gate: createGate({ db, logger, timezone: config.TIMEZONE }),
         timezone: config.TIMEZONE,
         ...TIMING,
