@@ -19,7 +19,7 @@ import {
   type Db,
 } from './data/index.js';
 import { createApp } from './http/index.js';
-import { createAnthropicEngine, type Engine } from './policy/index.js';
+import { createAnthropicEngine, createGate, type Engine } from './policy/index.js';
 import { type Config, createLogger, loadConfig, type Logger } from './ops/index.js';
 
 const TIMING = { retryDelayMs: 2000, typingIntervalMs: 4000, turnTimeoutMs: 120_000 };
@@ -45,7 +45,9 @@ function buildReplier(
   const { ANTHROPIC_API_KEY: apiKey, ANTHROPIC_MODEL: modelId } = config;
   const model =
     engine ?? (apiKey === undefined ? undefined : createAnthropicEngine({ apiKey, modelId }));
-  return model === undefined ? undefined : createReplier({ db, logger, engine: model, ...TIMING });
+  return model === undefined
+    ? undefined
+    : createReplier({ db, logger, engine: model, gate: createGate({ db, logger }), ...TIMING });
 }
 
 /** With a Telegram token set, start the queue, the worker and the poller. Returns its stop. */

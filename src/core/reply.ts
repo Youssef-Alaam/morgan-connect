@@ -1,6 +1,6 @@
 import { appendHistory, clearHistory, loadHistory, type Db, type Turn } from '../data/index.js';
 import type { Logger } from '../ops/index.js';
-import { EngineError, type Engine } from '../policy/index.js';
+import { EngineError, type Caller, type Engine, type Gate } from '../policy/index.js';
 import { isCommand } from './commands.js';
 import type { ChannelSender } from './sender.js';
 
@@ -19,6 +19,8 @@ export interface ReplyDeps {
   engine: Engine;
   logger: Logger;
   system?: string;
+  /** The tools the model may call, each behind the policy gate. */
+  gate?: Gate;
   retryDelayMs: number;
   typingIntervalMs: number;
   /** The whole answer, retries included, must fit inside the queue's job expiry. */
@@ -66,6 +68,14 @@ function keepTyping(deps: ReplyDeps, turn: Turn, sender: ChannelSender): () => v
   };
 }
 
+function gateOptions(
+  gate: Gate | undefined,
+  caller: Caller,
+): Partial<Parameters<Engine['open']>[0]> {
+  if (gate === undefined) return {};
+  return { tools: gate.toolsFor(caller) };
+}
+
 async function ask(deps: ReplyDeps, turn: Turn, signal: AbortSignal): Promise<string> {
   const chat = { channel: turn.channel, chatId: turn.chatId };
   const history = await loadHistory(deps.db, chat, HISTORY_LIMIT, HISTORY_CHARS);
@@ -73,6 +83,7 @@ async function ask(deps: ReplyDeps, turn: Turn, signal: AbortSignal): Promise<st
     const session = deps.engine.open({
       history,
       ...(deps.system === undefined ? {} : { system: deps.system }),
+      ...gateOptions(deps.gate, { ...chat, turnId: turn.id }),
     });
     const stop = (): void => {
       session.abort();

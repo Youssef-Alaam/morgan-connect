@@ -9,3 +9,4 @@ export {
   type EngineTool,
   type EngineUsage,
 } from '../providers/index.js';
+export { createGate, type Caller, type Gate } from './gate.js';
