@@ -9,3 +9,11 @@ export {
   type PipelineDeps,
 } from './pipeline.js';
 export { sendWithRetry } from './retry.js';
+export {
+  FAILURE_REPLY,
+  NEW_REPLY,
+  STOPPED_REPLY,
+  createReplier,
+  type Replier,
+  type ReplyDeps,
+} from './reply.js';
