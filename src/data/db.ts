@@ -1,8 +1,23 @@
-import { Kysely, PostgresDialect, sql } from 'kysely';
+import { type Generated, Kysely, PostgresDialect, sql } from 'kysely';
 import pg from 'pg';
+
+export type TurnStatus = 'queued' | 'sending' | 'done' | 'failed';
 
 export interface Database {
   schema_info: { key: string; value: string };
+  turns: {
+    id: Generated<string>;
+    user_id: string | null;
+    workspace_id: string | null;
+    idempotency_key: string;
+    channel: string;
+    chat_id: string;
+    text: string;
+    status: Generated<TurnStatus>;
+    reply_text: string | null;
+    error: string | null;
+    created_at: Generated<Date>;
+  };
 }
 
 export type Db = Kysely<Database>;
