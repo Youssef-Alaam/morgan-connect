@@ -2,6 +2,7 @@ import { appendHistory, clearHistory, loadHistory, type Db, type Turn } from '..
 import type { Logger } from '../ops/index.js';
 import { EngineError, type Engine } from '../policy/index.js';
 import { isCommand } from './commands.js';
+import type { ChannelSender } from './sender.js';
 
 /** A model error that is only a hiccup is tried again this many times (rule G3 for models). */
 const MODEL_RETRIES = 2;
@@ -19,12 +20,24 @@ export interface ReplyDeps {
   logger: Logger;
   system?: string;
   retryDelayMs: number;
+  typingIntervalMs: number;
   /** The whole answer, retries included, must fit inside the queue's job expiry. */
   turnTimeoutMs: number;
 }
 
+/** The time limit plus the waits before model retries must end before the queue gives up the job. */
+export function assertFitsJobExpiry(
+  timing: Pick<ReplyDeps, 'turnTimeoutMs' | 'retryDelayMs'>,
+  expireSeconds: number,
+): void {
+  const waits = timing.retryDelayMs * ((MODEL_RETRIES * (MODEL_RETRIES + 1)) / 2);
+  if (timing.turnTimeoutMs + waits >= expireSeconds * 1000) {
+    throw new Error('The turn time limit does not fit inside the queue job expiry');
+  }
+}
+
 /** Turns a stored turn into the text to send back. */
-export type Replier = (turn: Turn, signal?: AbortSignal) => Promise<string>;
+export type Replier = (turn: Turn, sender: ChannelSender, signal?: AbortSignal) => Promise<string>;
 
 /** Wait, but wake at once when the turn is aborted. */
 const wait = (ms: number, signal: AbortSignal): Promise<void> =>
@@ -37,6 +50,21 @@ const wait = (ms: number, signal: AbortSignal): Promise<void> =>
     const timer = setTimeout(done, ms);
     signal.addEventListener('abort', done);
   });
+
+/** Keep the "typing" signal alive while the model thinks. Returns the stop function. */
+function keepTyping(deps: ReplyDeps, turn: Turn, sender: ChannelSender): () => void {
+  if (sender.typing === undefined) return () => undefined;
+  const ping = (): void => {
+    sender.typing?.(turn.chatId).catch(() => {
+      deps.logger.warn({ turnId: turn.id }, 'typing indicator failed');
+    });
+  };
+  ping();
+  const timer = setInterval(ping, deps.typingIntervalMs);
+  return () => {
+    clearInterval(timer);
+  };
+}
 
 async function ask(deps: ReplyDeps, turn: Turn, signal: AbortSignal): Promise<string> {
   const chat = { channel: turn.channel, chatId: turn.chatId };
@@ -71,19 +99,22 @@ async function ask(deps: ReplyDeps, turn: Turn, signal: AbortSignal): Promise<st
 
 /** Build the replier: `/new` clears the chat; anything else goes to the model with its history. */
 export function createReplier(deps: ReplyDeps): Replier {
-  return async (turn, signal) => {
+  return async (turn, sender, signal) => {
     if (isCommand(turn.text, 'new')) {
       await clearHistory(deps.db, { channel: turn.channel, chatId: turn.chatId });
       return NEW_REPLY;
     }
     const limit = AbortSignal.timeout(deps.turnTimeoutMs);
     const both = AbortSignal.any(signal === undefined ? [limit] : [signal, limit]);
+    const stopTyping = keepTyping(deps, turn, sender);
     try {
       return await ask(deps, turn, both);
     } catch (error) {
       const kind = error instanceof EngineError ? error.kind : 'failed';
       deps.logger.warn({ turnId: turn.id, kind }, 'model reply failed');
       return signal?.aborted === true ? STOPPED_REPLY : FAILURE_REPLY;
+    } finally {
+      stopTyping();
     }
   };
 }

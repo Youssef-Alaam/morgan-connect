@@ -4,15 +4,24 @@ export interface FakeTelegram {
   apiRoot: string;
   /** Bodies of every sendMessage call. */
   sent: unknown[];
+  /** Bodies of every sendChatAction call. */
+  actions: unknown[];
   stop: () => Promise<void>;
 }
 
 const chat = { id: 42, type: 'private' };
-const update = { update_id: 1, message: { message_id: 5, date: 1, chat, text: 'ping' } };
+const updateWith = (messageId: number): unknown => ({
+  update_id: messageId,
+  message: { message_id: messageId, date: 1, chat, text: 'ping' },
+});
 
 /** A tiny Telegram Bot API on localhost: serves one text update, records sends. */
-export async function startFakeTelegram(options: { rejectToken: boolean }): Promise<FakeTelegram> {
+export async function startFakeTelegram(options: {
+  rejectToken: boolean;
+  messageId?: number;
+}): Promise<FakeTelegram> {
   const sent: unknown[] = [];
+  const actions: unknown[] = [];
   let served = false;
   const server: Server = createServer((req, res) => {
     const chunks: Buffer[] = [];
@@ -28,13 +37,16 @@ export async function startFakeTelegram(options: { rejectToken: boolean }): Prom
       } else if (method === 'getMe')
         reply({ id: 1, is_bot: true, first_name: 'Fake', username: 'FakeBot' });
       else if (method === 'getUpdates') {
-        reply(served ? [] : [update], served ? 300 : 0);
+        reply(served ? [] : [updateWith(options.messageId ?? 5)], served ? 300 : 0);
         served = true;
       } else if (method === 'sendMessage') {
         const body: unknown = JSON.parse(Buffer.concat(chunks).toString());
         sent.push(body);
         reply({ message_id: 6, date: 1, chat, text: 'echo' });
-      } else reply(true);
+      } else {
+        if (method === 'sendChatAction') actions.push(JSON.parse(Buffer.concat(chunks).toString()));
+        reply(true);
+      }
     });
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -43,6 +55,7 @@ export async function startFakeTelegram(options: { rejectToken: boolean }): Prom
   return {
     apiRoot: `http://127.0.0.1:${String(port)}`,
     sent,
+    actions,
     stop: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections();
