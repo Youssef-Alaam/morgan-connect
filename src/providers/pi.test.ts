@@ -9,6 +9,7 @@ import {
 import { expect, it, vi } from 'vitest';
 import { describeEngineContract } from '../../test/helpers/engine-contract.js';
 import type { Step } from '../../test/helpers/fake-engine.js';
+import type { EngineMessage } from './engine.js';
 import { createAnthropicEngine, createAnthropicModels, createPiEngine, isTransient } from './pi.js';
 
 type Scripted = Exclude<Step, { hang: true }>;
@@ -228,4 +229,55 @@ it('reports each model call as it returns, including a billed failure', async ()
   await engine.open({ history: [], onUsage }).prompt('go');
   await expect(engine.open({ history: [], onUsage }).prompt('again')).rejects.toThrow();
   expect(calls).toEqual(['ok', 'ok', 'failed']);
+});
+
+it('shows the model an earlier tool call and its result as real tool blocks', async () => {
+  const { faux, models } = fauxModels();
+  let seen: unknown[] = [];
+  faux.setResponses([
+    (context) => {
+      seen = [...context.messages];
+      return fauxAssistantMessage(fauxText('ok'));
+    },
+  ]);
+  const history: EngineMessage[] = [
+    { role: 'user', text: 'time?' },
+    { role: 'assistant', text: '', toolCalls: [{ id: 'c1', name: 'clock_now', args: {} }] },
+    { role: 'tool', text: 'noon', id: 'c1', name: 'clock_now', isError: false },
+    { role: 'assistant', text: 'noon' },
+  ];
+  const session = createPiEngine({ models, model: faux.getModel(), apiKey: 'k' }).open({ history });
+  await session.prompt('thanks');
+  expect(seen).toMatchObject([
+    { role: 'user' },
+    { role: 'assistant', stopReason: 'toolUse', content: [{ type: 'toolCall', id: 'c1' }] },
+    { role: 'toolResult', toolCallId: 'c1', isError: false },
+    { role: 'assistant', stopReason: 'stop' },
+    { role: 'user', content: 'thanks' },
+  ]);
+  expect(session.transcript().map((m) => m.role)).toEqual(['user', 'assistant']);
+});
+
+it('records the whole turn: the user, the tool call, its result and the answer', async () => {
+  const { faux, models } = fauxModels();
+  faux.setResponses([
+    reply({ tool: 'echo', args: { a: 1 } }),
+    fauxAssistantMessage(fauxText('hi')),
+  ]);
+  const echo = {
+    name: 'echo',
+    description: 'd',
+    parameters: {},
+    run: () => Promise.resolve('out'),
+  };
+  const session = createPiEngine({ models, model: faux.getModel(), apiKey: 'k' }).open({
+    history: [],
+    tools: [echo],
+  });
+  await session.prompt('go');
+  const log = session.transcript();
+  expect(log.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant']);
+  expect(log[1]).toMatchObject({ toolCalls: [{ name: 'echo', args: { a: 1 } }] });
+  expect(log[2]).toMatchObject({ text: 'out', name: 'echo', isError: false });
+  expect(log[3]).toEqual({ role: 'assistant', text: 'hi' });
 });

@@ -22,6 +22,7 @@ import {
 } from '../../src/data/index.js';
 import { createIdentity } from '../../src/identity/index.js';
 import { createLogger } from '../../src/ops/index.js';
+import { createGate } from '../../src/policy/index.js';
 import { FakeChannel } from '../helpers/fake-channel.js';
 import { ScriptedEngine, type Step } from '../helpers/fake-engine.js';
 import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
@@ -57,13 +58,22 @@ const turn = (chatId: string, text: string): Turn => ({
 const replierFor = (
   script: Step[],
   retryDelayMs = 0,
+  extra: Partial<Parameters<typeof createReplier>[0]> = {},
 ): { reply: Replier; engine: ScriptedEngine } => {
   const engine = new ScriptedEngine(script);
   const logger = createLogger('silent');
   const timing = { retryDelayMs, typingIntervalMs: 5, turnTimeoutMs: 5000 };
   return {
     engine,
-    reply: createReplier({ db, engine, logger, model: 'test', timezone: 'UTC', ...timing }),
+    reply: createReplier({
+      db,
+      engine,
+      logger,
+      model: 'test',
+      timezone: 'UTC',
+      ...timing,
+      ...extra,
+    }),
   };
 };
 
@@ -158,6 +168,58 @@ it('keeps recent history within the character budget and never starts on an answ
   expect(kept.map((m) => m.text[0])).toEqual(['c', 'd']);
   expect(await loadHistory(db, chat, 40, 160)).toHaveLength(2);
   expect(await loadHistory(db, chat, 3, 1000)).toHaveLength(2);
+});
+
+const clockReplier = (script: Step[]) => {
+  const logger = createLogger('silent');
+  const gate = createGate({ db, logger });
+  return replierFor(script, 0, { gate, logger });
+};
+
+it('replays an earlier tool call and its result to the model on the next turn', async () => {
+  const { reply, engine } = clockReplier([
+    { tool: 'clock_now', args: {} },
+    { text: 'It is 13:30' },
+    { text: 'Fine' },
+  ]);
+  await reply(turn('c12', 'time?'), new FakeChannel());
+  await reply(turn('c12', 'thanks'), new FakeChannel());
+  const history = engine.opened[1]?.history ?? [];
+  expect(history.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant']);
+  expect(history[1]).toMatchObject({ toolCalls: [{ id: 'call-1', name: 'clock_now', args: {} }] });
+  expect(history[2]).toMatchObject({ id: 'call-1', name: 'clock_now', isError: false });
+  expect(history[2]?.text).toContain('(UTC)');
+  expect(history[3]).toEqual({ role: 'assistant', text: 'It is 13:30' });
+});
+
+it('trims only between user turns, so a tool call keeps its result', async () => {
+  const chat = { channel: 'fake', chatId: 'c14' };
+  const call = { id: 'x', name: 'clock_now', args: {} };
+  await appendHistory(db, chat, [
+    { role: 'user', text: 'old' },
+    { role: 'assistant', text: '', toolCalls: [call] },
+    { role: 'tool', text: 'noon', id: 'x', name: 'clock_now', isError: false },
+    { role: 'assistant', text: 'done' },
+    { role: 'user', text: 'new' },
+    { role: 'assistant', text: 'ok' },
+  ]);
+  for (const limit of [2, 3, 4, 5]) {
+    const kept = await loadHistory(db, chat, limit, 10_000);
+    expect(kept.map((m) => m.role)).toEqual(['user', 'assistant']);
+  }
+  expect(await loadHistory(db, chat, 6, 10_000)).toHaveLength(6);
+  const budget = await loadHistory(db, chat, 6, 'new'.length + 'ok'.length + 'done'.length);
+  expect(budget.map((m) => m.text)).toEqual(['new', 'ok']);
+});
+
+it('still loads rows saved before tool calls were kept', async () => {
+  await sql`insert into chat_messages (channel, chat_id, role, text) values ('fake', 'c15', 'user', 'q'), ('fake', 'c15', 'assistant', 'a')`.execute(
+    db,
+  );
+  expect(await loadHistory(db, { channel: 'fake', chatId: 'c15' }, 40, 24_000)).toEqual([
+    { role: 'user', text: 'q' },
+    { role: 'assistant', text: 'a' },
+  ]);
 });
 
 const workerDeps = (channel: FakeChannel, reply: Replier) => {
