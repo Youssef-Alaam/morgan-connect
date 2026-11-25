@@ -7,7 +7,14 @@ const schema = z.object({
   // Optional until the tickets that use them land.
   TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
   // A self-hosted Bot API server, or a test double. Default: api.telegram.org.
-  TELEGRAM_API_ROOT: z.url().optional(),
+  // This host receives the bot token, so it must be https unless it is the local machine.
+  TELEGRAM_API_ROOT: z
+    .url()
+    .refine((value) => {
+      const { protocol, hostname } = new URL(value);
+      return protocol === 'https:' || hostname === 'localhost' || hostname === '127.0.0.1';
+    }, 'must be https unless the host is localhost or 127.0.0.1')
+    .optional(),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
 });
 
