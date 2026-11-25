@@ -32,6 +32,14 @@ export interface Database {
     created_at: Generated<Date>;
     claimed_at: Date | null;
   };
+  chat_messages: {
+    id: Generated<string>;
+    channel: string;
+    chat_id: string;
+    role: 'user' | 'assistant';
+    text: string;
+    created_at: Generated<Date>;
+  };
 }
 
 export type Db = Kysely<Database>;

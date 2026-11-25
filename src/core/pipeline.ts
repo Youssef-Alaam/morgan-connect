@@ -12,6 +12,7 @@ import type { Logger } from '../ops/index.js';
 import { PipelineError } from './errors.js';
 import { admit } from './gate.js';
 import { idempotencyKey, parseInbound } from './message.js';
+import type { Replier } from './reply.js';
 import { sendWithRetry } from './retry.js';
 
 export interface ChannelSender {
@@ -26,6 +27,8 @@ export interface PipelineDeps {
   logger: Logger;
   retryDelayMs: number;
   identity: Identity;
+  /** Makes the reply text. Without one, the turn echoes its text. */
+  reply?: Replier | undefined;
 }
 
 /** An incoming channel payload becomes one turn row and one queued job. Safe to call twice. */
@@ -57,7 +60,7 @@ export async function requeueStuckTurns(deps: PipelineDeps): Promise<number> {
   return ids.length;
 }
 
-/** Run one turn: echo the text back. Claimed before the send, so a redelivery never resends. */
+/** Run one turn: reply with the model's answer (or echo the text when no model is set). Claimed before the send, so a redelivery never resends. */
 export async function processTurn(deps: PipelineDeps, turnId: string): Promise<void> {
   const turn = await claimTurn(deps.db, turnId);
   if (turn === undefined) {
@@ -74,8 +77,9 @@ export async function processTurn(deps: PipelineDeps, turnId: string): Promise<v
     }
     const sender = deps.senders.find((s) => s.channel === turn.channel);
     if (sender === undefined) throw new PipelineError('unknown_channel', 'No sender for channel');
-    await sendWithRetry(() => sender.send(turn.chatId, turn.text), deps.retryDelayMs);
-    await finishTurn(deps.db, turnId, { status: 'done', replyText: turn.text });
+    const text = deps.reply === undefined ? turn.text : await deps.reply(turn);
+    await sendWithRetry(() => sender.send(turn.chatId, text), deps.retryDelayMs);
+    await finishTurn(deps.db, turnId, { status: 'done', replyText: text });
   } catch (error) {
     const kind = error instanceof PipelineError ? error.kind : 'send_failed';
     await finishTurn(deps.db, turnId, { status: 'failed', error: kind });

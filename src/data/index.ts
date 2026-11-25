@@ -11,3 +11,10 @@ export {
   type NewTurn,
   type Turn,
 } from './turns.js';
+export {
+  appendHistory,
+  clearHistory,
+  loadHistory,
+  type ChatKey,
+  type ChatMessage,
+} from './history.js';
