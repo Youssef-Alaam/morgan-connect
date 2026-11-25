@@ -1,5 +1,6 @@
 export interface ChangedFile {
   filename: string;
+  status?: string;
   additions: number;
   deletions: number;
 }
@@ -20,5 +21,5 @@ export function hasTicketId(title: string): boolean;
 export function changedLineCount(files: ChangedFile[]): number;
 export function srcChangedWithoutTest(files: ChangedFile[]): boolean;
 export function addedDependencies(base: PackageJson, head: PackageJson): string[];
-export function hasDependencyLine(body: string): boolean;
+export function missingDependencyLines(body: string, names: string[]): string[];
 export function evaluatePr(input: PrInput): string[];

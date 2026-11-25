@@ -8,7 +8,7 @@ const ISOLATION_DIR = 'test/integration';
 
 export function findTables(sqlSources) {
   const tables = new Set();
-  const pattern = /create\s+table\s+(?:if\s+not\s+exists\s+)?(?:\w+\.)?"?(\w+)"?/gi;
+  const pattern = /create\s+table\s+(?:if\s+not\s+exists\s+)?(?:"?\w+"?\.)?"?(\w+)"?/gi;
   for (const sql of sqlSources) {
     for (const match of sql.matchAll(pattern)) tables.add(match[1]);
   }
@@ -16,7 +16,10 @@ export function findTables(sqlSources) {
 }
 
 export function findUntestedTables(tables, testSources) {
-  return tables.filter((table) => !testSources.some((source) => source.includes(table)));
+  return tables.filter((table) => {
+    const whole = new RegExp(`(?<!\\w)${table}(?!\\w)`);
+    return !testSources.some((source) => whole.test(source));
+  });
 }
 
 function readFilesWithSuffix(dir, suffix) {
