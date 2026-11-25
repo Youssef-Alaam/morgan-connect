@@ -18,7 +18,13 @@ import {
 
 /** Model calls in one prompt, so a model stuck calling tools cannot run forever. */
 const MAX_STEPS = 10;
-const AUTH_FAILURE = /\b(401|403)\b|authentication|invalid x-api-key|permission/i;
+/** Only a busy or unreachable service is worth a retry; any other 4xx (bad request, key) is not. */
+const TRANSIENT =
+  /(?:^|status[:\s]+|error[:\s]+)(?:429|5\d\d)\b|overloaded|rate.?limit|timed? ?out|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|fetch failed|network|socket/i;
+
+export function isTransient(message: string): boolean {
+  return TRANSIENT.test(message);
+}
 
 export interface PiEngineOptions {
   models: Models;
@@ -71,7 +77,11 @@ class PiSession implements EngineSession {
       if (calls.length === 0) {
         return reply.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
       }
-      for (const call of calls) await this.runTool(call.id, call.name, call.arguments);
+      for (const call of calls) {
+        if (this.controller.signal.aborted)
+          throw new EngineError('aborted', 'The turn was aborted');
+        await this.runTool(call.id, call.name, call.arguments);
+      }
       for (const note of this.steered.splice(0)) {
         this.context.messages.push({ role: 'user', content: note, timestamp: Date.now() });
       }
@@ -90,15 +100,17 @@ class PiSession implements EngineSession {
     this.used.costUsd += reply.usage.cost.total;
     if (reply.stopReason === 'aborted') throw new EngineError('aborted', 'The turn was aborted');
     if (reply.stopReason === 'error') {
-      const kind = AUTH_FAILURE.test(reply.errorMessage ?? '') ? 'failed' : 'transient';
-      throw new EngineError(kind, 'The model call failed');
+      throw new EngineError(
+        isTransient(reply.errorMessage ?? '') ? 'transient' : 'failed',
+        'The model call failed',
+      );
     }
     return reply;
   }
 
   private async runTool(id: string, name: string, args: Record<string, unknown>): Promise<void> {
     const tool = this.tools.find((t) => t.name === name);
-    const output = tool === undefined ? `Unknown tool ${name}` : await tool.run(args);
+    const output = tool === undefined ? `Unknown tool ${name}` : await this.run(tool, args);
     this.context.messages.push({
       role: 'toolResult',
       toolCallId: id,
@@ -107,6 +119,14 @@ class PiSession implements EngineSession {
       isError: tool === undefined,
       timestamp: Date.now(),
     });
+  }
+
+  private async run(tool: EngineTool, args: Record<string, unknown>): Promise<string> {
+    try {
+      return await tool.run(args);
+    } catch (error) {
+      throw new EngineError('failed', 'A tool failed', { cause: error });
+    }
   }
 
   steer(text: string): void {
@@ -130,14 +150,28 @@ export function createPiEngine(options: PiEngineOptions): Engine {
   };
 }
 
+/**
+ * Pi reads ANTHROPIC_AUTH_TOKEN and ANTHROPIC_OAUTH_TOKEN from the environment. Here the only
+ * credential Pi can see is the configured key, so an ambient token can never replace it.
+ */
+export function createAnthropicModels(apiKey: string): Models {
+  const models = createModels({
+    authContext: {
+      env: (name) => Promise.resolve(name === 'ANTHROPIC_API_KEY' ? apiKey : undefined),
+      fileExists: () => Promise.resolve(false),
+    },
+  });
+  models.setProvider(anthropicProvider());
+  return models;
+}
+
 /** Claude through Pi on an Anthropic API key. The key is passed per call and never logged. */
 export function createAnthropicEngine(options: {
   apiKey: string;
   modelId: string;
   system?: string;
 }): Engine {
-  const models = createModels();
-  models.setProvider(anthropicProvider());
+  const models = createAnthropicModels(options.apiKey);
   const model = models.getModel('anthropic', options.modelId);
   if (model === undefined) throw new EngineError('failed', 'Unknown Anthropic model id');
   const { apiKey, system } = options;
