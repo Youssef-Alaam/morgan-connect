@@ -55,6 +55,8 @@ const turn = (chatId: string, text: string): Turn => ({
   text,
   status: 'sending',
 });
+/** What the model sees before each message when the zone is UTC and the clock is fixed. */
+const STAMP = '[Now: Wed 25 Nov 2026 10:30 (UTC, UTC+00:00)] ';
 const replierFor = (
   script: Step[],
   retryDelayMs = 0,
@@ -71,6 +73,7 @@ const replierFor = (
       logger,
       model: 'test',
       timezone: 'UTC',
+      now: () => new Date('2026-11-25T10:30:00Z'),
       ...timing,
       ...extra,
     }),
@@ -84,7 +87,7 @@ it('shows typing, answers, and gives the next message the conversation so far', 
   expect(channel.typings).toContain('c1');
   expect(await reply(turn('c1', 'second'), channel)).toBe('two');
   expect(engine.opened[1]?.history).toEqual([
-    { role: 'user', text: 'first' },
+    { role: 'user', text: `${STAMP}first` },
     { role: 'assistant', text: 'one' },
   ]);
 });
@@ -132,7 +135,7 @@ it('an abort stops the turn while the model is waiting', async () => {
   const controller = new AbortController();
   const answer = reply(turn('c7', 'hi'), new FakeChannel(), controller.signal);
   await vi.waitFor(() => {
-    expect(engine.prompts).toEqual(['hi']);
+    expect(engine.prompts).toEqual([`${STAMP}hi`]);
   });
   controller.abort();
   expect(await answer).toBe(STOPPED_REPLY);
@@ -172,8 +175,10 @@ it('keeps recent history within the character budget and never starts on an answ
 
 const clockReplier = (script: Step[]) => {
   const logger = createLogger('silent');
-  const gate = createGate({ db, logger });
-  return replierFor(script, 0, { gate, logger });
+  const timezone = 'Asia/Riyadh';
+  const now = () => new Date('2026-11-25T10:30:00Z');
+  const gate = createGate({ db, logger, timezone });
+  return replierFor(script, 0, { gate, timezone, now, logger });
 };
 
 it('replays an earlier tool call and its result to the model on the next turn', async () => {
@@ -188,8 +193,30 @@ it('replays an earlier tool call and its result to the model on the next turn', 
   expect(history.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant']);
   expect(history[1]).toMatchObject({ toolCalls: [{ id: 'call-1', name: 'clock_now', args: {} }] });
   expect(history[2]).toMatchObject({ id: 'call-1', name: 'clock_now', isError: false });
-  expect(history[2]?.text).toContain('(UTC)');
+  expect(history[2]?.text).toContain('(Asia/Riyadh, UTC+03:00)');
   expect(history[3]).toEqual({ role: 'assistant', text: 'It is 13:30' });
+});
+
+it('keeps the system prompt static and puts the local time in front of each message', async () => {
+  const { reply, engine } = clockReplier([{ text: 'ok' }, { text: 'again' }]);
+  await reply(turn('c13', 'hi'), new FakeChannel());
+  await reply(turn('c13', 'more'), new FakeChannel());
+  expect(engine.opened[0]?.system).toBe(engine.opened[1]?.system);
+  expect(engine.opened[0]?.system).toContain('given at the start of each user message');
+  expect(engine.prompts[0]).toBe('[Now: Wed 25 Nov 2026 13:30 (Asia/Riyadh, UTC+03:00)] hi');
+  expect(engine.opened[1]?.history[0]).toEqual({
+    role: 'user',
+    text: '[Now: Wed 25 Nov 2026 13:30 (Asia/Riyadh, UTC+03:00)] hi',
+  });
+});
+
+it('falls back to UTC for the time stamp when the zone is not valid', async () => {
+  const { reply, engine } = replierFor([{ text: 'ok' }], 0, {
+    timezone: 'Mars/Base',
+    now: () => new Date('2026-11-25T10:30:00Z'),
+  });
+  await reply(turn('c21', 'hi'), new FakeChannel());
+  expect(engine.prompts[0]).toBe('[Now: Wed 25 Nov 2026 10:30 (UTC, UTC+00:00)] hi');
 });
 
 it('trims only between user turns, so a tool call keeps its result', async () => {
@@ -237,7 +264,7 @@ it('remembers a stopped turn: the open tool call is closed as aborted, then a no
   const controller = new AbortController();
   const answer = reply(turn('c16', 'wait'), new FakeChannel(), controller.signal);
   await vi.waitFor(() => {
-    expect(engine.prompts).toEqual(['wait']);
+    expect(engine.prompts).toEqual([`${STAMP}wait`]);
   });
   controller.abort();
   expect(await answer).toBe(STOPPED_REPLY);
@@ -361,7 +388,7 @@ it('/stop from the same chat aborts the running turn; /stop with nothing running
   });
   const running = processTurn(deps, created.id);
   await vi.waitFor(() => {
-    expect(engine.prompts).toEqual(['a long question']);
+    expect(engine.prompts).toEqual([`${STAMP}a long question`]);
   });
   await ingest(deps, { ...stop('3'), chatId: 'c8' });
   await ingest(deps, stop('3'));

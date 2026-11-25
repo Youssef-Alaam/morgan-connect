@@ -10,6 +10,8 @@ export type { Caller };
 
 export interface GateOptions {
   db: Db;
+  /** The zone the clock tool answers in (the TIMEZONE setting). */
+  timezone?: string;
   tools?: readonly ToolDefinition[];
   profile?: Profile;
   logger?: Pick<Logger, 'error'>;
@@ -52,7 +54,13 @@ const refusalFor = (mode: Mode): string => (mode === 'ask' ? ASK_REFUSAL : OFF_R
  * exactly one audit row, after the run, so the row records how it went.
  */
 export function createGate(options: GateOptions): Gate {
-  const { db, tools = [createClockTool()], profile = OWNER_PROFILE, logger } = options;
+  const {
+    db,
+    timezone,
+    tools = [createClockTool({ ...(timezone === undefined ? {} : { timezone }) })],
+    profile = OWNER_PROFILE,
+    logger,
+  } = options;
   const timeoutMs = options.toolTimeoutMs ?? 30_000;
   checkTools(tools);
   const { record, recordAfterRun } = createRecorder(db, logger);
