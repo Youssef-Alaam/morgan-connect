@@ -7,12 +7,26 @@ export interface TurnQueue {
   enqueue: (turnId: string) => Promise<void>;
   /** Run `handler` for each queued turn id. A thrown error makes the queue redeliver the job. */
   work: (handler: (turnId: string) => Promise<void>) => Promise<void>;
-  stop: () => Promise<void>;
+  /** Graceful waits for running jobs; otherwise the process is treated as killed mid-job. */
+  stop: (options?: { graceful: boolean }) => Promise<void>;
+}
+
+/** Tests shorten both to see a killed worker's job redelivered. */
+export interface QueueTuning {
+  expireInSeconds: number;
+  superviseIntervalSeconds: number;
 }
 
 /** The job queue (pg-boss) on the same Postgres, in its own `pgboss` schema. */
-export function createTurnQueue(databaseUrl: string, onError: (error: Error) => void): TurnQueue {
-  const boss = new PgBoss(databaseUrl);
+export function createTurnQueue(
+  databaseUrl: string,
+  onError: (error: Error) => void,
+  tuning?: QueueTuning,
+): TurnQueue {
+  const boss = new PgBoss({
+    connectionString: databaseUrl,
+    ...(tuning === undefined ? {} : { superviseIntervalSeconds: tuning.superviseIntervalSeconds }),
+  });
   boss.on('error', onError);
   return {
     start: async () => {
@@ -22,7 +36,7 @@ export function createTurnQueue(databaseUrl: string, onError: (error: Error) => 
         // failed sends already retry in-process. More job retries would only repeat that no-op.
         retryLimit: 1,
         retryDelay: 5,
-        expireInSeconds: 300,
+        expireInSeconds: tuning?.expireInSeconds ?? 300,
       });
     },
     enqueue: async (turnId) => {
@@ -33,6 +47,6 @@ export function createTurnQueue(databaseUrl: string, onError: (error: Error) => 
         for (const job of jobs) await handler(job.data.turnId);
       });
     },
-    stop: () => boss.stop({ graceful: true, timeout: 10_000 }),
+    stop: (options) => boss.stop({ graceful: options?.graceful ?? true, timeout: 10_000 }),
   };
 }
