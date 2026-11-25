@@ -1,0 +1,28 @@
+# Loop Engine: What Runs the Agent
+
+The loop engine sends the conversation to the model, receives tool calls, runs the tools, feeds results back, and repeats until the answer is done. Everything else (channels, users, approvals) sits around it.
+
+Licences and versions were checked on npm on 2026-11-24.
+
+| | Pi harness (what Nod uses) | Vercel AI SDK | Claude Agent SDK | Two engines behind one port |
+|---|---|---|---|---|
+| Package | `@earendil-works/pi-ai` + `pi-coding-agent` 1.6.0 | `ai` 7.0 | `@anthropic-ai/claude-agent-sdk` 0.3 | Pi or AI SDK, plus the Claude Agent SDK |
+| Licence | MIT | Apache 2.0 | Anthropic's own terms (a usable dependency, but not open source; we can't fork or modify it) | Mixed |
+| Providers | ~40 (Claude, OpenAI, Gemini, OpenRouter, Bedrock, local...) | ~30 via provider packages | Claude only (API key, Bedrock/Vertex, or the user's own Claude login on their machine) | All |
+| Uses a Claude subscription | No (Nod blocks it) | No | Yes, only through the person's own Claude Code login | Yes, for that person |
+| Built-in agent tools | Coding-agent set (bash, read, edit, write, find, grep), sessions, compaction | None built in; you write every tool and the loop policy (it has an agent helper) | Claude Code's full set: bash, files, web, subagents, hooks, MCP, skills, compaction | Both |
+| Fit with Nod modules | Direct: Nod's runtime, trust guard and cost ledger are written around Pi (12 files import it) | Modules must be adapted to AI SDK messages and tools | Trust check becomes a PreToolUse hook; ledger reads SDK usage | Pi side direct, Claude side adapted |
+| Scale (stateless workers, many users) | Library in-process; sessions saved to storage, so it works on any worker | Library in-process; you own state, so it scales cleanly | Spawns a Claude Code process per session (heavier: ~100-300 MB each), needs the CLI binary on the worker | Mixed: API users scale light, subscription users heavy |
+| Maturity / community | Small project, one main maintainer; Nod pins and patches it (`patches/`) | Very large, Vercel-backed, the industry default for TS agents; Matt Pocock teaches it | Anthropic-backed, moves fast, Claude-only | |
+| Lock-in | Low | Lowest | High (Claude) | Low |
+| Effort for us | Low to start (copy Nod's runtime), medium to own (patched dependency) | Medium (write the tool loop and the tools) | Low for Claude users | Highest: two paths to test and keep equal (approvals, costs, memory must work the same on both) |
+
+## Update (2026-11-24, after the "as many direct subscriptions as possible" requirement)
+`@earendil-works/pi-ai` 1.6.0 already ships subscription logins for Anthropic, OpenAI ChatGPT/Codex, GitHub Copilot, Kimi Coding, xAI and OpenRouter (`dist/auth/oauth/`). That makes **Pi + the Claude Agent SDK** the stronger pick. See `system-design-layers.md` L3. The original recommendation below is kept for the record.
+
+## Recommendation (original)
+**Two engines behind one port, with the Vercel AI SDK as the provider-neutral engine.**
+- The AI SDK is the safest long-term base for "any provider, unlimited users": Apache 2.0, stateless, huge community, and it's what your TS learning path teaches.
+- The Claude Agent SDK is the second engine, only for a person using their own Claude login. It gives you Claude Code's tools on your subscription.
+- One internal interface (`open / prompt / steer / abort / usage`) hides which engine runs. Approvals, cost tracking and memory are written once, against that interface.
+- Pi is the fallback if we want to lift Nod's runtime code with fewer changes. It's MIT and the closest to Nod, but it's a small project that Nod already has to patch.
