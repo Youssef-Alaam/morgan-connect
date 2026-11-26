@@ -19,7 +19,8 @@ const callbackSchema = z.object({
   update_id: z.number(),
   callback_query: z.object({
     data: z.string(),
-    message: z.object({ chat: z.object({ id: z.number() }) }),
+    from: z.object({ id: z.number() }),
+    message: z.object({ chat: z.object({ id: z.number(), type: z.string() }) }),
   }),
 });
 /** `ap:y:<id>` approves, `ap:n:<id>` denies; the id is a UUID. Fits Telegram's 64-byte limit. */
@@ -29,9 +30,12 @@ const APPROVAL_DATA = /^ap:([yn]):([0-9a-f-]{36})$/;
 export function parseApprovalCallback(update: unknown): ApprovalAnswer | undefined {
   const result = callbackSchema.safeParse(update);
   if (!result.success) return undefined;
-  const { data, message } = result.data.callback_query;
+  const { data, message, from } = result.data.callback_query;
   const match = APPROVAL_DATA.exec(data);
-  if (match === null) return undefined;
+  // Only the person in their own private chat: in a group, anyone could tap the buttons.
+  if (match === null || message.chat.type !== 'private' || from.id !== message.chat.id) {
+    return undefined;
+  }
   return {
     id: match[2] ?? '',
     decision: match[1] === 'y' ? 'approved' : 'denied',
@@ -59,13 +63,17 @@ async function answerTap(
   onApproval: ((answer: ApprovalAnswer) => Promise<boolean>) | undefined,
 ): Promise<void> {
   const answer = parseApprovalCallback(ctx.update);
-  const counted = answer !== undefined && (await onApproval?.(answer)) === true;
-  const shown = counted
-    ? answer.decision === 'approved'
-      ? 'Approved'
-      : 'Denied'
-    : 'No longer valid';
-  await ctx.answerCallbackQuery({ text: shown });
+  let shown = 'No longer valid';
+  let counted = false;
+  try {
+    if (answer !== undefined && (await onApproval?.(answer)) === true) {
+      counted = true;
+      shown = answer.decision === 'approved' ? 'Approved' : 'Denied';
+    }
+  } finally {
+    // The spinner on the button must stop even when handling the tap failed.
+    await ctx.answerCallbackQuery({ text: shown });
+  }
   // So they cannot be tapped twice; failing to is harmless.
   if (counted) await ctx.editMessageReplyMarkup().catch(() => undefined);
 }
@@ -92,6 +100,7 @@ export function createTelegramAdapter(
     send: async (chatId, text) => {
       await withTimeout(bot.api.sendMessage(chatId, text));
     },
+    // If this times out the buttons may still appear; a later tap just answers "No longer valid".
     askApproval: async (chatId, text, approvalId) => {
       const buttons = new InlineKeyboard()
         .text('Approve', `ap:y:${approvalId}`)
