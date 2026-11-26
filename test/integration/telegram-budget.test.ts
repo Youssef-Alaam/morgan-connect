@@ -13,7 +13,17 @@ beforeAll(async () => {
   postgres = await startPostgres();
   db = createDb(postgres.url);
   await migrateToLatest(db);
-  await linkChats(db, ['42'], 'telegram');
+  const admin = await linkChats(db, ['1'], 'telegram');
+  // Telegram chat 42 belongs to a member: the admin is never limited.
+  const member = await db
+    .insertInto('users')
+    .values({ role: 'member', workspace_id: admin.workspaceId })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  await db
+    .insertInto('devices')
+    .values({ user_id: member.id, channel: 'telegram', chat_id: '42' })
+    .execute();
 }, 180_000);
 afterAll(async () => {
   await db.destroy();

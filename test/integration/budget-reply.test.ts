@@ -17,6 +17,7 @@ import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
 let db: Db;
+let admin: Owner;
 let who: Owner;
 let counter = 0;
 
@@ -24,7 +25,17 @@ beforeAll(async () => {
   postgres = await startPostgres();
   db = createDb(postgres.url);
   await migrateToLatest(db);
-  who = await linkChats(db, ['G1']);
+  admin = await linkChats(db, ['G0']);
+  const member = await db
+    .insertInto('users')
+    .values({ role: 'member', workspace_id: admin.workspaceId })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  who = { userId: member.id, workspaceId: admin.workspaceId };
+  await db
+    .insertInto('devices')
+    .values({ user_id: who.userId, channel: 'fake', chat_id: 'G1' })
+    .execute();
 }, 180_000);
 afterAll(async () => {
   await db.destroy();
@@ -55,12 +66,12 @@ const audits = () =>
   db
     .selectFrom('audit_log')
     .select(['tool', 'action_type', 'decision', 'outcome', 'arg_names'])
-    .where('tool', '=', 'model.call')
+    .where('tool', '=', 'budget.monthly')
     .execute();
 const calls = async () => (await db.selectFrom('usage_ledger').select('id').execute()).length;
 
 it('lets a running turn finish, then refuses the next one before any model call', async () => {
-  await setBudget(db, who, '0.005');
+  await setBudget(db, admin, who.userId, '0.005');
   const engine = new ScriptedEngine([{ text: 'first', tokens: 5 }, { text: 'never' }]);
   const reply = replier(engine, { keySource: 'admin' });
   expect(await reply(turn('one'), new FakeChannel())).toBe('first');
@@ -74,13 +85,22 @@ it('lets a running turn finish, then refuses the next one before any model call'
   expect(await calls()).toBe(1);
   expect(await audits()).toEqual([
     {
-      tool: 'model.call',
+      tool: 'budget.monthly',
       action_type: 'model',
       decision: 'off',
       outcome: 'refused',
       arg_names: [],
     },
   ]);
+});
+
+it('never refuses the admin: a default of 0 still reaches the model', async () => {
+  const engine = new ScriptedEngine([{ text: 'admin answer' }]);
+  const reply = replier(engine, { keySource: 'admin', defaultLimitUsd: '0' });
+  expect(await reply({ ...turn('hi'), ...admin, chatId: 'G0' }, new FakeChannel())).toBe(
+    'admin answer',
+  );
+  expect(engine.opened).toHaveLength(1);
 });
 
 it('does not limit commands, a person own key, or an install with no limit', async () => {

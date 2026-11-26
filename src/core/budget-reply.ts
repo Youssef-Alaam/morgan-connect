@@ -42,7 +42,7 @@ export async function refusedForBudget(
       turnId: turn.id,
       channel: turn.channel,
       chatId: turn.chatId,
-      tool: 'model.call',
+      tool: 'budget.monthly',
       actionType: 'model',
       changesState: false,
       argNames: [],
