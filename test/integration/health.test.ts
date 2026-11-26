@@ -2,7 +2,7 @@ import { sql } from 'kysely';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { start } from '../../src/boot.js';
 import { createDb, migrateToLatest } from '../../src/data/index.js';
-import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
+import { roleUrls, startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
 
@@ -21,7 +21,7 @@ it('migrates an empty database and answers /health with the server version', asy
   }>`select to_regclass('public.schema_info')::text as name`;
   expect((await probe.execute(db)).rows[0]?.name).toBeNull();
 
-  const running = await start({ DATABASE_URL: postgres.url, PORT: '0', LOG_LEVEL: 'silent' });
+  const running = await start({ ...roleUrls(postgres.url), PORT: '0', LOG_LEVEL: 'silent' });
   try {
     expect((await probe.execute(db)).rows[0]?.name).toBe('schema_info');
     expect(await migrateToLatest(db)).toEqual([]);
@@ -34,4 +34,10 @@ it('migrates an empty database and answers /health with the server version', asy
     await running.stop();
     await db.destroy();
   }
+});
+
+it('refuses to start as a superuser, since row-level security would be off', async () => {
+  await expect(
+    start({ DATABASE_URL: postgres.url, PORT: '0', LOG_LEVEL: 'silent' }),
+  ).rejects.toThrow('BYPASSRLS');
 });

@@ -85,7 +85,7 @@ const userIds = async (db: Db, table: string): Promise<string[]> =>
     (r) => r.user_id,
   );
 
-it.each(USER_TABLES)('shows the app role only the set person’s rows in %s', async (table) => {
+it.each(USER_TABLES)('shows the app role only the set person rows in %s', async (table) => {
   const seen = await withOwner(app, alice, (trx) => userIds(trx, table));
   expect(seen.length).toBeGreaterThan(0);
   expect(new Set(seen)).toEqual(new Set([alice.userId]));
@@ -101,7 +101,7 @@ it.each([...USER_TABLES, 'users', 'devices', 'approvals', 'audit_log'])(
   },
 );
 
-it('refuses an insert carrying another person�s user_id', async () => {
+it('refuses an insert carrying the user_id of another person', async () => {
   const write = withOwner(app, alice, (trx) =>
     trx
       .insertInto('chat_messages')
@@ -117,6 +117,37 @@ it('refuses an insert carrying another person�s user_id', async () => {
       .execute(),
   );
   await expect(write).rejects.toThrow('row-level security');
+});
+
+it('takes audit rows for strangers or the set person only, and no user updates', async () => {
+  const row = {
+    channel: 'fake',
+    chat_id: 'x',
+    workspace_id: alice.workspaceId,
+    tool: 't',
+    action_type: 'read',
+    changes_state: false,
+    arg_names: [],
+    extra_args: 0,
+    args_sha256: 'a',
+    decision: 'auto' as const,
+    outcome: 'refused' as const,
+  };
+  await app
+    .insertInto('audit_log')
+    .values({ ...row, user_id: null })
+    .execute();
+  const forged = withOwner(app, alice, (trx) =>
+    trx
+      .insertInto('audit_log')
+      .values({ ...row, user_id: bob.userId })
+      .execute(),
+  );
+  await expect(forged).rejects.toThrow('row-level security');
+  const promote = withOwner(app, bob, (trx) =>
+    trx.updateTable('users').set({ role: 'admin' }).where('id', '=', bob.userId).execute(),
+  );
+  await expect(promote).rejects.toThrow('permission denied');
 });
 
 it('lets a person see only their own user row and devices', async () => {

@@ -29,14 +29,17 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     using (id = ${ME} and workspace_id = ${WS})
     with check (id = ${ME} and workspace_id = ${WS})`.execute(db);
   await lock(db, 'devices');
+  // devices has no workspace column: the users subquery runs under users' own policy, so it adds
+  // "and the device's user is in the set workspace".
   await sql`create policy own_rows on devices
     using (user_id = ${ME} and exists (select 1 from users u where u.id = devices.user_id))
     with check (user_id = ${ME} and exists (select 1 from users u where u.id = devices.user_id))`.execute(
     db,
   );
-  // Read only your own audit rows; writing stays open, since a refused stranger has no person.
+  // Read only your own audit rows. A stranger's row (no person) may still be written.
   await lock(db, 'audit_log');
   await sql`create policy own_rows on audit_log for select
     using (user_id = ${ME} and workspace_id = ${WS})`.execute(db);
-  await sql`create policy anyone_appends on audit_log for insert with check (true)`.execute(db);
+  await sql`create policy append_own_or_stranger on audit_log for insert
+    with check (user_id is null or (user_id = ${ME} and workspace_id = ${WS}))`.execute(db);
 }

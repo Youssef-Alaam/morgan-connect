@@ -4,7 +4,7 @@ import { createDb, migrateToLatest, type Db } from '../../src/data/index.js';
 import { ScriptedEngine, type Step } from '../helpers/fake-engine.js';
 import { startFakeTelegram, type FakeTelegram } from '../helpers/fake-telegram.js';
 import { linkChats } from '../helpers/link-chats.js';
-import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
+import { roleUrls, startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
 let db: Db;
@@ -48,7 +48,7 @@ async function run(steps: Step[], messageId: number) {
   const telegram = await startFakeTelegram({ rejectToken: false, messageId });
   const running = await start(
     {
-      DATABASE_URL: postgres.url,
+      ...roleUrls(postgres.url),
       PORT: '0',
       LOG_LEVEL: 'silent',
       TELEGRAM_BOT_TOKEN: '123:fake-token',

@@ -18,6 +18,7 @@ import {
   createTurnQueue,
   dbVersion,
   closeOrphanedApprovals,
+  assertRlsApplies,
   ensureAppRole,
   installQueueSchema,
   migrateToLatest,
@@ -181,6 +182,7 @@ function ownerUrl(config: Config): string | undefined {
  * Migrate the database, then open the app's connection. With MIGRATION_DATABASE_URL the owner role
  * migrates and sets up the app role, and the app never holds owner rights; without it one role
  * does both, which leaves the audit log guarded by triggers only (docs/adr/0008-audit-log-guards.md).
+ * Either way the app refuses to run as a superuser or BYPASSRLS role: row-level security would be off.
  */
 async function openDatabase(config: Config, logger: Logger): Promise<Db> {
   const separateUrl = ownerUrl(config);
@@ -197,9 +199,15 @@ async function openDatabase(config: Config, logger: Logger): Promise<Db> {
     await owner.destroy();
     throw error;
   }
-  if (!separate) return owner;
-  await owner.destroy();
-  return createDb(config.DATABASE_URL);
+  const app = separate ? createDb(config.DATABASE_URL) : owner;
+  if (separate) await owner.destroy();
+  try {
+    await assertRlsApplies(app);
+  } catch (error) {
+    await app.destroy();
+    throw error;
+  }
+  return app;
 }
 
 /** Load config, migrate the database, then serve HTTP. Tests may pass their own engine. */
