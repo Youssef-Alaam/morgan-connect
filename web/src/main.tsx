@@ -5,6 +5,7 @@ import { App } from './App.tsx';
 import { directionFromSearch } from './direction.ts';
 import { i18n } from './i18n.ts';
 import { buildCss } from './tokens.ts';
+import './styles/fonts.css';
 import './styles/app.css';
 
 const style = document.createElement('style');
