@@ -1,9 +1,12 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import {
   budgetOf,
+  createAccount,
   createDb,
+  createInvite,
   migrateToLatest,
   recordUsage,
+  redeemInvite,
   setBudget,
   type Db,
   type Owner,
@@ -123,4 +126,28 @@ it('lets only an admin set a limit, and audits every attempt', async () => {
     { user_id: who.userId, subject_user_id: admin.userId, outcome: 'refused' },
     { user_id: who.userId, subject_user_id: who.userId, outcome: 'refused' },
   ]);
+});
+
+it('holds an invited member to the limit set on the invite, and an account to its own', async () => {
+  expect(
+    await createInvite(db, admin, { tokenHash: 'inv1', ttlSeconds: 600, monthlyLimitUsd: 1 }),
+  ).toBe(true);
+  const joined = await redeemInvite(db, {
+    tokenHash: 'inv1',
+    email: 'i@x.test',
+    passwordHash: 'p',
+  });
+  if (joined === undefined) throw new Error('the invite was not accepted');
+  expect(await budgetOf(db, joined)).toBe('1.00000000');
+  expect(await check({}, joined)).toEqual({ allowed: true });
+  await spend(joined, 1);
+  expect(await check({}, joined)).toMatchObject({ allowed: false, limitUsd: '1.00000000' });
+  const id = await createAccount(db, admin, {
+    email: 'a@x.test',
+    passwordHash: 'p',
+    monthlyLimitUsd: 2.5,
+  });
+  expect(await budgetOf(db, { userId: id ?? '', workspaceId: admin.workspaceId })).toBe(
+    '2.50000000',
+  );
 });
