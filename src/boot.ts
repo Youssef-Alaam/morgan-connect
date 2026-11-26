@@ -131,7 +131,7 @@ const approvalsFor = (db: Db, telegram: ChannelAdapter | undefined): Approvals =
 
 interface Chat {
   /** The web chat's way into the pipeline, the same one Telegram uses. */
-  chat: Pick<ChatDeps, 'events' | 'ingest'>;
+  chat: Omit<ChatDeps, 'logger'>;
   stop: () => Promise<void>;
 }
 
@@ -256,7 +256,7 @@ export async function start(
     dbVersion: () => dbVersion(db),
     logger,
     auth: { db },
-    chat: { db, ...chat.chat },
+    chat: chat.chat,
   });
   const server = await listen(app, config.PORT);
   const address = server.address();
