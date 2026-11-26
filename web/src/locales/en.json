@@ -89,6 +89,23 @@
       "dismiss": "Dismiss",
       "show": "Show toast",
       "saved": "Chat saved."
+    },
+    "layout": {
+      "title": "Page layout with side navigation",
+      "nav": "Main",
+      "chat": "Chat",
+      "users": "Users",
+      "usage": "Usage",
+      "content": "The page content sits beside the navigation."
+    },
+    "approval": {
+      "title": "Approval card",
+      "heading": "Send this email?",
+      "details": "To Narimane: \"Dinner is at eight.\"",
+      "approve": "Approve",
+      "deny": "Deny",
+      "approved": "Approved",
+      "denied": "Denied"
     }
   }
 }
