@@ -44,6 +44,35 @@
       "auto": "Auto",
       "risk": "Auto sends without asking you first. Use it only for things you can undo.",
       "labelRisky": "Delete files"
+    },
+    "badge": {
+      "title": "Badge",
+      "owner": "Owner",
+      "suspended": "Suspended"
+    },
+    "banner": {
+      "title": "Banner",
+      "info": "Info",
+      "infoText": "Backups run every night.",
+      "warning": "Warning",
+      "warningText": "Your spending limit is almost reached.",
+      "danger": "Problem",
+      "dangerText": "Morgan cannot reach Telegram."
+    },
+    "table": {
+      "title": "Table",
+      "caption": "People in this install",
+      "name": "Name",
+      "role": "Role",
+      "youssef": "Youssef",
+      "narimane": "Narimane",
+      "member": "Member"
+    },
+    "empty": {
+      "title": "Empty state",
+      "heading": "No chats yet",
+      "text": "Send Morgan a message and it shows up here.",
+      "action": "Start a chat"
     }
   }
 }
