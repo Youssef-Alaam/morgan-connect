@@ -45,6 +45,13 @@ const rawWrites = [
 const rawWriteMessage =
   'Write files with atomicWrite from src/ops/atomic-write.ts (temp, then rename).';
 
+// Raw colour, length and font values belong in web/src/tokens.ts (unanchored, so "1px solid #fff" fails).
+const rawPattern = '#[0-9a-fA-F]{3,8}|(rgb|hsl)a?[(]|[0-9](px|rem|em|%|vh|vw)|font-family';
+const rawValues = ['Literal[value', 'TemplateElement[value.raw'].map((selector) => ({
+  selector: `${selector}=/${rawPattern}/]`,
+  message: 'Raw colour, spacing and font values live in web/src/tokens.ts only.',
+}));
+
 export default tseslint.config(
   { ignores: ['node_modules/**', 'coverage/**', 'dist/**', 'web/dist/**', '.claude/**'] },
   eslint.configs.recommended,
@@ -120,22 +127,16 @@ export default tseslint.config(
   },
   {
     files: ['web/src/**/*.{ts,tsx}'],
-    ignores: ['web/src/tokens.ts', '**/*.test.ts'],
+    ignores: ['web/src/tokens.ts', '**/*.test.{ts,tsx}'],
     rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: 'Literal[value=/^(#[0-9a-fA-F]{3,8}|(rgb|hsl)a?[(].*|-?[0-9.]+(px|rem|em))$/]',
-          message: 'Raw colour and spacing values live in web/src/tokens.ts only.',
-        },
-      ],
+      'no-restricted-syntax': ['error', ...rawValues],
     },
   },
   {
     files: ['web/src/**/*.tsx'],
-    ignores: ['**/*.test.ts'],
+    ignores: ['**/*.test.{ts,tsx}'],
     extends: [i18next.configs['flat/recommended']],
-    rules: { 'i18next/no-literal-string': ['error', { mode: 'jsx-text-only' }] },
+    rules: { 'i18next/no-literal-string': ['error', { mode: 'jsx-only' }] },
   },
   {
     files: ['scripts/**/*.mjs'],
