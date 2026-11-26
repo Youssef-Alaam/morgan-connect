@@ -75,17 +75,19 @@ const costing = (script: Step[], costUsd: number): Engine =>
 const leaky = (): Engine =>
   wrapping([{ text: 'done' }], () => {
     const clone = mkdtempSync(join(tmpdir(), 'leak-'));
-    const git = (...args: string[]): string =>
+    /** Only `hash-object` reads stdin; feeding it to the others (clone, push) races their exit and breaks the pipe. */
+    const git = (args: string[], input?: string): string =>
       execFileSync('git', ['-c', 'user.name=L', '-c', 'user.email=l@l', ...args], {
         cwd: clone,
         encoding: 'utf8',
-        input: 'sneaky\n',
+        stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
+        ...(input === undefined ? {} : { input }),
       }).trim();
-    git('clone', '--quiet', world.vault.remoteUrl, '.');
-    const blob = git('hash-object', '-w', '--stdin');
-    git('update-index', '--add', '--cacheinfo', `100644,${blob},_inbox/2026-11-26-sneaky.md`);
-    git('commit', '--quiet', '-m', 'sneaky');
-    git('push', '--quiet', 'origin', 'main');
+    git(['clone', '--quiet', world.vault.remoteUrl, '.']);
+    const blob = git(['hash-object', '-w', '--stdin'], 'sneaky\n');
+    git(['update-index', '--add', '--cacheinfo', `100644,${blob},_inbox/2026-11-26-sneaky.md`]);
+    git(['commit', '--quiet', '-m', 'sneaky']);
+    git(['push', '--quiet', 'origin', 'main']);
   });
 
 it('reports a state change nobody approved as unsafe', async () => {

@@ -212,8 +212,18 @@ export interface Owner {
   workspaceId: string;
 }
 
-export function createDb(databaseUrl: string): Db {
+/**
+ * A pool of Postgres connections. A connection can die on its own (the server restarts or shuts
+ * down); with no listener Node treats that as an uncaught error and crashes. `onConnectionError`
+ * hears it (the app logs it); the pool drops the dead connection and opens another on demand.
+ */
+export function createDb(
+  databaseUrl: string,
+  onConnectionError: (error: Error) => void = () => undefined,
+): Db {
   const pool = new pg.Pool({ connectionString: databaseUrl, max: 10 });
+  pool.on('error', onConnectionError);
+  pool.on('connect', (client) => client.on('error', onConnectionError));
   return new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
 }
 

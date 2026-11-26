@@ -42,6 +42,8 @@ afterAll(async () => {
 interface Outcome {
   calls: EngineCallUsage[];
   end: 'text' | 'transient' | 'failed' | 'hang';
+  /** Called when a hanging prompt starts waiting, so a test aborts only once the abort can land. */
+  waiting?: () => void;
 }
 
 const call = (
@@ -70,6 +72,7 @@ const billedEngine = (outcomes: Outcome[]): Engine => ({
       ],
       prompt: async () => {
         if (outcome.end === 'hang') {
+          outcome.waiting?.();
           await new Promise<void>((resolve) => {
             abort.signal.addEventListener('abort', () => {
               resolve();
@@ -181,12 +184,17 @@ it('writes no row for a call that never reached the provider', async () => {
 
 it('tells an owner /stop (aborted) from the time limit (timeout)', async () => {
   const stopped = new AbortController();
-  const owner = replierWith(billedEngine([{ calls: [call(10, 0, 0.00001)], end: 'hang' }]))(
+  let waiting: () => void = () => undefined;
+  const entered = new Promise<void>((resolve) => {
+    waiting = resolve;
+  });
+  const hang: Outcome = { calls: [call(10, 0, 0.00001)], end: 'hang', waiting };
+  const owner = replierWith(billedEngine([hang]))(
     turn('L5', 'hello'),
     new FakeChannel(),
     stopped.signal,
   );
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  await entered;
   stopped.abort();
   expect(await owner).toBe(STOPPED_REPLY);
   const slow = replierWith(billedEngine([{ calls: [call(10, 0, 0.00001)], end: 'hang' }]), 50);
