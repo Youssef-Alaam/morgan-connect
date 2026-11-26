@@ -18,6 +18,7 @@ import { up as invites } from './0017-invites.js';
 import { up as webEvents } from './0018-web-events.js';
 import { up as linkCodes } from './0019-link-codes.js';
 import { up as unlinkDevice } from './0020-unlink-device.js';
+import { up as secondFactor } from './0021-second-factor.js';
 
 /** Applied in key order. Add new migrations here with the next number. */
 export const migrations: Record<string, Migration> = {
@@ -40,4 +41,5 @@ export const migrations: Record<string, Migration> = {
   '0018-web-events': { up: webEvents },
   '0019-link-codes': { up: linkCodes },
   '0020-unlink-device': { up: unlinkDevice },
+  '0021-second-factor': { up: secondFactor },
 };

@@ -151,6 +151,8 @@ export const COVERED: readonly string[] = [
   'invites',
   'web_events',
   'link_codes',
+  'totp_factors',
+  'backup_codes',
 ];
 
 /** Grants the app role is deliberately without (src/data/roles.ts); everything else is granted. */

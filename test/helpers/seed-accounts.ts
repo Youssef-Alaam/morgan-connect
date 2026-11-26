@@ -1,6 +1,6 @@
 import type { Db, Owner } from '../../src/data/index.js';
 
-/** A login, a session, a password link, an invite, a link code and a web event for this person. */
+/** A login, a session, a password link, an invite, a link code, a web event and a second factor for this person. */
 export async function seedAccounts(owner: Db, who: Owner, chatId: string): Promise<void> {
   const person = { user_id: who.userId, workspace_id: who.workspaceId };
   await owner
@@ -27,5 +27,14 @@ export async function seedAccounts(owner: Db, who: Owner, chatId: string): Promi
   await owner
     .insertInto('web_events')
     .values({ ...person, chat_id: chatId, kind: 'message', text: `hello ${chatId}` })
+    .execute();
+  // Unconfirmed, so it never turns a sign-in into two steps.
+  await owner
+    .insertInto('totp_factors')
+    .values({ ...person, secret_sealed: 'sealed' })
+    .execute();
+  await owner
+    .insertInto('backup_codes')
+    .values({ ...person, code_hash: `h-${chatId}` })
     .execute();
 }
