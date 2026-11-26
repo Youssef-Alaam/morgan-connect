@@ -81,6 +81,23 @@ export interface Database {
     expires_at: Date;
     used_at: Date | null;
   };
+  totp_factors: {
+    user_id: string;
+    workspace_id: string;
+    secret_sealed: string;
+    confirmed_at: Date | null;
+    // bigint comes back from pg as a string.
+    last_step: ColumnType<string, number | undefined, number>;
+    created_at: Generated<Date>;
+  };
+  backup_codes: {
+    id: Generated<string>;
+    user_id: string;
+    workspace_id: string;
+    code_hash: string;
+    created_at: Generated<Date>;
+    used_at: Date | null;
+  };
   setup_codes: {
     id: Generated<string>;
     code_hash: string;

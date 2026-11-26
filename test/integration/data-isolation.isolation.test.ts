@@ -149,6 +149,14 @@ describe('user-data tables', () => {
     expect(await webEventsAfter(ctx.app, ctx.bob, 'b', '0')).toMatchObject([{ text: 'hello b' }]);
   });
 
+  it('totp_factors', async () => {
+    await expectIsolated('totp_factors', ctx);
+  });
+
+  it('backup_codes', async () => {
+    await expectIsolated('backup_codes', ctx);
+  });
+
   it('has run for every table in COVERED', () => {
     expect(isolatedSoFar()).toEqual([...COVERED].sort());
   });

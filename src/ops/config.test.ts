@@ -131,3 +131,12 @@ it('keeps the vault token off http hosts and out of the URL', () => {
     loadConfig({ ...env, VAULT_REMOTE_URL: 'https://h/v.git', VAULT_BRANCH: '-x' }),
   ).toThrow(/VAULT_BRANCH/);
 });
+
+it('takes TWO_FACTOR_KEY as 32 base64 bytes and refuses anything else, without echoing it', () => {
+  const key = Buffer.alloc(32, 7).toString('base64');
+  expect(loadConfig({ DATABASE_URL: URL, TWO_FACTOR_KEY: key }).TWO_FACTOR_KEY).toBe(key);
+  const short = Buffer.alloc(16, 7).toString('base64');
+  const failure = (): unknown => loadConfig({ DATABASE_URL: URL, TWO_FACTOR_KEY: short });
+  expect(failure).toThrow(/TWO_FACTOR_KEY/);
+  expect(failure).not.toThrow(short);
+});

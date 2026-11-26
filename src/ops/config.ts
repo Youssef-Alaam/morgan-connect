@@ -8,6 +8,11 @@ const schema = z
     MIGRATION_DATABASE_URL: z.url().optional(),
     // Where people reach this install in a browser; the first-password link starts with it. Default: http://localhost:PORT.
     PUBLIC_URL: z.url().optional(),
+    // Encrypts authenticator secrets and keys the backup-code hashes: 32 random bytes, base64. Unset: no second factor. Never logged.
+    TWO_FACTOR_KEY: z
+      .string()
+      .refine((value) => Buffer.from(value, 'base64').length === 32, 'must be 32 bytes, base64')
+      .optional(),
     PORT: z.coerce.number().int().min(0).max(65535).default(3000),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
