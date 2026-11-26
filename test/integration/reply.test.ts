@@ -25,6 +25,7 @@ import { createLogger } from '../../src/ops/index.js';
 import { createGate } from '../../src/policy/index.js';
 import { FakeChannel } from '../helpers/fake-channel.js';
 import { ScriptedEngine, type Step } from '../helpers/fake-engine.js';
+import { linkChats } from '../helpers/link-chats.js';
 import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
@@ -36,6 +37,12 @@ beforeAll(async () => {
   db = createDb(postgres.url);
   await migrateToLatest(db);
   await sql`insert into users (id) values ('00000000-0000-0000-0000-000000000008')`.execute(db);
+  await linkChats(
+    db,
+    Array.from({ length: 30 }, (_, i) => `c${String(i + 1)}`).filter(
+      (c) => c !== 'c8' && c !== 'c9',
+    ),
+  );
   for (const chat of ['c8', 'c9']) {
     await sql`insert into devices (user_id, channel, chat_id) values ('00000000-0000-0000-0000-000000000008', 'fake', ${chat})`.execute(
       db,
@@ -264,9 +271,10 @@ it('trims only between user turns, so a tool call keeps its result', async () =>
 });
 
 it('still loads rows saved before tool calls were kept', async () => {
-  await sql`insert into chat_messages (channel, chat_id, role, text) values ('fake', 'c15', 'user', 'q'), ('fake', 'c15', 'assistant', 'a')`.execute(
-    db,
-  );
+  await sql`insert into chat_messages (user_id, workspace_id, channel, chat_id, role, text)
+    select u.id, u.workspace_id, 'fake', 'c15', m.role, m.text from devices d join users u on u.id = d.user_id
+    cross join (values ('user', 'q'), ('assistant', 'a')) as m (role, text)
+    where d.chat_id = 'c15'`.execute(db);
   expect(await loadHistory(db, { channel: 'fake', chatId: 'c15' }, 40, 24_000)).toEqual([
     { role: 'user', text: 'q' },
     { role: 'assistant', text: 'a' },

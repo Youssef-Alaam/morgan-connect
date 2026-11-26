@@ -11,6 +11,7 @@ import {
 import { createLogger } from '../../src/ops/index.js';
 import type { Engine } from '../../src/policy/index.js';
 import { FakeChannel } from '../helpers/fake-channel.js';
+import { linkChats } from '../helpers/link-chats.js';
 import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
@@ -20,6 +21,7 @@ beforeAll(async () => {
   postgres = await startPostgres();
   db = createDb(postgres.url);
   await migrateToLatest(db);
+  await linkChats(db, ['T', 'c']);
 }, 180_000);
 
 afterAll(async () => {

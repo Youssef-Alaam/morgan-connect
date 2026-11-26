@@ -1,11 +1,18 @@
 import type { ChatKey } from './history.js';
 import type { Db } from './db.js';
+import { requireOwner } from './tenancy.js';
 
 /** The id of this chat's current conversation. It stays the same until `/new`. */
 export async function conversationFor(db: Db, chat: ChatKey): Promise<string> {
+  const owner = await requireOwner(db, chat);
   await db
     .insertInto('chat_conversations')
-    .values({ channel: chat.channel, chat_id: chat.chatId })
+    .values({
+      user_id: owner.userId,
+      workspace_id: owner.workspaceId,
+      channel: chat.channel,
+      chat_id: chat.chatId,
+    })
     .onConflict((conflict) => conflict.columns(['channel', 'chat_id']).doNothing())
     .execute();
   const row = await db

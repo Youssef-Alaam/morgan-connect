@@ -1,5 +1,6 @@
 import { sql } from 'kysely';
 import type { Db, UsageStatus } from './db.js';
+import { requireOwner } from './tenancy.js';
 
 export interface UsageEntry {
   channel: string;
@@ -15,9 +16,12 @@ export interface UsageEntry {
 
 /** Add one ledger row. A call that failed is recorded too, with what was billed. */
 export async function recordUsage(db: Db, entry: UsageEntry): Promise<void> {
+  const owner = await requireOwner(db, entry);
   await db
     .insertInto('usage_ledger')
     .values({
+      user_id: owner.userId,
+      workspace_id: owner.workspaceId,
       channel: entry.channel,
       chat_id: entry.chatId,
       model: entry.model,

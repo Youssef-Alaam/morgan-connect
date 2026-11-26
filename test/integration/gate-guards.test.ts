@@ -7,6 +7,7 @@ import { createGate, type Caller } from '../../src/policy/gate.js';
 import { createClockTool, type ToolDefinition } from '../../src/tools/index.js';
 import { FakeChannel } from '../helpers/fake-channel.js';
 import { ScriptedEngine } from '../helpers/fake-engine.js';
+import { linkChats } from '../helpers/link-chats.js';
 import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 const caller: Caller = { channel: 'fake', chatId: 'guard-chat', turnId: 'turn-g' };
@@ -17,6 +18,7 @@ beforeAll(async () => {
   postgres = await startPostgres();
   db = createDb(postgres.url);
   await migrateToLatest(db);
+  await linkChats(db, ['guard-chat']);
 }, 180_000);
 
 afterAll(async () => {

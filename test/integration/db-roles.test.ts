@@ -13,6 +13,7 @@ import {
   migrateToLatest,
   type Db,
 } from '../../src/data/index.js';
+import { linkChats } from '../helpers/link-chats.js';
 import { startFakeTelegram } from '../helpers/fake-telegram.js';
 import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
@@ -33,6 +34,7 @@ beforeAll(async () => {
   postgres = await startPostgres();
   owner = createDb(postgres.url);
   await migrateToLatest(owner);
+  await linkChats(owner, ['c1']);
   await ensureAppRole(owner, appUrl());
   app = createDb(appUrl());
 });
@@ -139,10 +141,7 @@ it('refuses to set up the owner role as the app role', async () => {
 });
 
 it('boots with both connection strings and answers a Telegram message as the app role', async () => {
-  await sql`insert into users (id) values ('00000000-0000-0000-0000-000000000042')`.execute(owner);
-  await sql`insert into devices (user_id, channel, chat_id) values ('00000000-0000-0000-0000-000000000042', 'telegram', '42')`.execute(
-    owner,
-  );
+  await linkChats(owner, ['42'], 'telegram');
   const telegram = await startFakeTelegram({ rejectToken: false });
   const running = await start({
     DATABASE_URL: appUrl(),

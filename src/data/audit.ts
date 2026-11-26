@@ -1,4 +1,5 @@
 import type { AuditOutcome, Db } from './db.js';
+import { DEFAULT_WORKSPACE_ID, ownerOf } from './tenancy.js';
 
 export interface AuditEntry {
   turnId?: string | undefined;
@@ -15,21 +16,20 @@ export interface AuditEntry {
   outcome: AuditOutcome;
 }
 
-/** Add one row. The person is looked up from the linked device of the chat. */
+/**
+ * Add one row. The person is looked up from the linked device of the chat; a stranger has no user
+ * and their row goes to the default workspace.
+ */
 export async function appendAudit(db: Db, entry: AuditEntry): Promise<void> {
-  const device = await db
-    .selectFrom('devices')
-    .select('user_id')
-    .where('channel', '=', entry.channel)
-    .where('chat_id', '=', entry.chatId)
-    .executeTakeFirst();
+  const owner = await ownerOf(db, entry);
   await db
     .insertInto('audit_log')
     .values({
       turn_id: entry.turnId ?? null,
       channel: entry.channel,
       chat_id: entry.chatId,
-      user_id: device?.user_id ?? null,
+      user_id: owner?.userId ?? null,
+      workspace_id: owner?.workspaceId ?? DEFAULT_WORKSPACE_ID,
       tool: entry.tool,
       action_type: entry.actionType,
       changes_state: entry.changesState,
