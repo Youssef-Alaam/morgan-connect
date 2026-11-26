@@ -55,12 +55,15 @@ jobs:
       - name: 7b. Web build
         run: npm run build:web
       # Pinned Chromium, cached by Playwright version (see web/package.json).
+      - name: 7c. Playwright version
+        id: playwright-version
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+        working-directory: web
       - name: 7c. Cache Playwright browser
-        id: playwright-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ hashFiles('package-lock.json') }}
+          key: playwright-chromium-${{ steps.playwright-version.outputs.version }}
       - name: 7d. Install Chromium
         run: npx playwright install --with-deps chromium
         working-directory: web
