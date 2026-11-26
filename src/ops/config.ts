@@ -39,6 +39,8 @@ const schema = z
       .optional(),
     // Shared secret for the HTTP engine, sent in a header. Never logged.
     ENGINE_TOKEN: z.string().min(1).optional(),
+    // Adds a harmless `demo.gated` tool that always asks for approval, to try the Approve and Deny buttons.
+    DEMO_TOOLS: z.stringbool().default(false),
     // Where "today" and "this month" start in /usage. An IANA name such as UTC or Asia/Riyadh.
     TIMEZONE: z
       .string()
