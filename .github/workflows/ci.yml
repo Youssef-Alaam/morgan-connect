@@ -50,8 +50,10 @@ jobs:
         run: npx prettier --check .
       - name: 6. Lint
         run: npx eslint . --max-warnings 0
-      - name: 7. Types
-        run: npx tsc --noEmit
+      - name: 7. Types (backend and web)
+        run: npm run typecheck
+      - name: 7b. Web build
+        run: npm run build:web
       - name: 8. Boundaries
         run: npm run depcruise
       - name: 9. Unused code and dependencies
