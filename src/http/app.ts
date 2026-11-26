@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Logger } from '../ops/index.js';
-import { authRoutes, type AuthDeps } from './auth.js';
+import { authRoutes } from './auth.js';
+import type { AuthDeps } from './session.js';
 
 export interface AppDeps {
   /** Resolves to the database server version, or rejects when the database is unreachable. */
