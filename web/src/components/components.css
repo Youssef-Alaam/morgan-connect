@@ -310,12 +310,27 @@
 
 .approval {
   display: grid;
+  justify-self: stretch;
   gap: var(--space-2);
   justify-items: start;
   padding: var(--space-3);
   border: var(--border-width) solid var(--card-border);
   border-radius: var(--radius);
   background: var(--card-background);
+}
+
+.approval-args {
+  justify-self: stretch;
+  min-inline-size: 0;
+  margin: 0;
+  padding: var(--space-2);
+  border: var(--border-width) solid var(--card-border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .approval h3 {

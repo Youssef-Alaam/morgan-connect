@@ -24,6 +24,14 @@ describe('ApprovalCard', () => {
     expect(markup).toContain('To: Narimane');
   });
 
+  it('shows long arguments whole, unchanged, in a code block', () => {
+    const args = JSON.stringify({ body: 'b'.repeat(500), note: 'say "hi"' }, null, 2);
+    const markup = render(createElement(ApprovalCard, { ...base, args }));
+    const open = '<pre class="approval-args" dir="ltr"><code>';
+    const code = markup.slice(markup.indexOf(open) + open.length, markup.indexOf('</code></pre>'));
+    expect(code.replaceAll('&quot;', '"')).toBe(args);
+  });
+
   it('shows the outcome instead of the buttons once decided', () => {
     const markup = render(createElement(ApprovalCard, { ...base, outcome: 'Approved' }));
     expect(markup).toContain('Approved');

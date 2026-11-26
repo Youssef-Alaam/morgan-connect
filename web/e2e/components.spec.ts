@@ -163,6 +163,27 @@ test('an approval is decided from the keyboard and then shows the outcome', asyn
   await expect(card.getByRole('button')).toHaveCount(0);
 });
 
+test('approval arguments are shown whole and never clipped', async ({ page }) => {
+  const blocks = page.locator('.approval-args');
+  await expect(blocks).toHaveCount(2);
+  for (const block of await blocks.all()) {
+    const text = (await block.textContent()) ?? '';
+    expect(text).toContain('a'.repeat(240));
+    await expect(block).toBeVisible();
+    const clipped = await block.evaluate((el) => el.scrollWidth > el.clientWidth);
+    expect(clipped).toBe(false);
+    const inside = await block.evaluate((el) => {
+      const card = el.closest('.approval')?.getBoundingClientRect();
+      return (
+        card !== undefined &&
+        el.getBoundingClientRect().right <= card.right + 1 &&
+        el.getBoundingClientRect().left >= card.left - 1
+      );
+    });
+    expect(inside).toBe(true);
+  }
+});
+
 test('the side navigation marks the current page', async ({ page }) => {
   const nav = page.getByRole('navigation', { name: 'Main' });
   await expect(nav.getByRole('link', { name: 'Chat' })).toHaveAttribute('aria-current', 'page');

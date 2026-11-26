@@ -6,6 +6,13 @@ import { GallerySection } from './GallerySection.tsx';
 
 const LAYOUT = 'layout';
 const APPROVAL = 'approval-card';
+const noop = () => undefined;
+const LONG_WORD = 'a'.repeat(240);
+const JSON_ARGS = JSON.stringify(
+  { to: 'narimane@example.com', subject: 'Dinner', body: `Dinner is at eight. ${LONG_WORD}` },
+  null,
+  2,
+);
 
 export function LayoutSection() {
   const { t } = useTranslation();
@@ -38,9 +45,20 @@ export function ApprovalSection() {
         onDeny={() => {
           setOutcome(t('gallery.approval.denied'));
         }}
+        args={JSON_ARGS}
         {...(outcome === undefined ? {} : { outcome })}
       >
         {t('gallery.approval.details')}
+      </ApprovalCard>
+      <ApprovalCard
+        title={t('gallery.approval.headingLong')}
+        approveLabel={t('gallery.approval.approve')}
+        denyLabel={t('gallery.approval.deny')}
+        onApprove={noop}
+        onDeny={noop}
+        args={LONG_WORD}
+      >
+        {t('gallery.approval.detailsLong')}
       </ApprovalCard>
     </GallerySection>
   );
