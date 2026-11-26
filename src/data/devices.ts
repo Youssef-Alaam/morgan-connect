@@ -3,7 +3,10 @@ import type { Db, Owner } from './db.js';
 import { withOwner } from './tenancy.js';
 
 /** The device paths (migration 0019); the app role may execute exactly these by name. */
-export const DEVICE_FUNCTIONS: readonly string[] = ['system_redeem_link_code(text, text, text)'];
+export const DEVICE_FUNCTIONS: readonly string[] = [
+  'system_redeem_link_code(text, text, text)',
+  'member_unlink_device(uuid)',
+];
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -47,4 +50,35 @@ export async function redeemLinkCode(
     if ((error as { code?: string }).code === UNIQUE_VIOLATION) return undefined;
     throw error;
   }
+}
+
+export interface LinkedDevice {
+  id: string;
+  channel: string;
+  createdAt: Date;
+}
+
+/** This person's linked chats (not their browser sessions). */
+export function listDevices(db: Db, owner: Owner): Promise<LinkedDevice[]> {
+  return withOwner(db, owner, async (trx) => {
+    const rows = await trx
+      .selectFrom('devices')
+      .select(['id', 'channel', 'created_at'])
+      .where('channel', '<>', 'web')
+      .orderBy('created_at')
+      .execute();
+    return rows.map((row) => ({ id: row.id, channel: row.channel, createdAt: row.created_at }));
+  });
+}
+
+/**
+ * Unlink a chat: the person's own, or any in their workspace when the caller is the admin. Returns
+ * whose device it was, or undefined when there is no such device or the caller may not remove it.
+ */
+export function unlinkDevice(db: Db, caller: Owner, deviceId: string): Promise<string | undefined> {
+  return withOwner(db, caller, async (trx) => {
+    const { rows } = await sql<{ owner: string | null }>`
+      select member_unlink_device(${deviceId}::uuid) as owner`.execute(trx);
+    return rows[0]?.owner ?? undefined;
+  });
 }

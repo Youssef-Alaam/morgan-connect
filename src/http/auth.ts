@@ -7,6 +7,7 @@ import { sha256 } from '../identity/admin-link.js';
 import { createFailureLimiter } from '../identity/limiter.js';
 import { chatRoutes, type ChatDeps } from './chat.js';
 import { createPasswordHasher } from '../identity/password.js';
+import { deviceRoutes } from './devices.js';
 import { memberRoutes } from './members.js';
 import {
   addressOf,
@@ -112,6 +113,7 @@ export function authRoutes(deps: AuthDeps, chat?: Omit<ChatDeps, 'db'>): Hono<Si
   routes.use(sessionGate(db));
   memberRoutes(routes, deps, shared);
   if (chat !== undefined) chatRoutes(routes, { ...chat, db });
+  deviceRoutes(routes, deps);
 
   routes.get('/me', async (c) => c.json(await accountOf(db, c.get('session'))));
 
