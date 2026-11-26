@@ -20,6 +20,8 @@ export const SYSTEM_FUNCTIONS: readonly string[] = [
   'system_redeem_link(text, text, text)',
   'system_sweep_sessions()',
   'system_link_live(text)',
+  'system_invite_live(text)',
+  'system_redeem_invite(text, text, text)',
 ];
 
 interface OwnerRow {
@@ -101,14 +103,15 @@ export async function credentialsByEmail(
 export async function sessionOwner(
   db: Db,
   tokenHash: string,
-): Promise<(Owner & { sessionId: string }) | undefined> {
-  const { rows } = await sql<OwnerRow & { session_id: string }>`
-    select user_id, workspace_id, session_id from system_session_owner(${tokenHash})`.execute(db);
+): Promise<(Owner & { sessionId: string; mustChange: boolean }) | undefined> {
+  const { rows } = await sql<OwnerRow & { session_id: string; must_change: boolean }>`
+    select user_id, workspace_id, session_id, must_change
+    from system_session_owner(${tokenHash})`.execute(db);
   const row = rows[0];
   const owner = toOwner(row);
   return row === undefined || owner === undefined
     ? undefined
-    : { ...owner, sessionId: row.session_id };
+    : { ...owner, sessionId: row.session_id, mustChange: row.must_change };
 }
 
 /** The admin's first-password link, if the admin has no password yet. False when none is needed. */
@@ -145,4 +148,24 @@ export async function linkLive(db: Db, tokenHash: string): Promise<boolean> {
     db,
   );
   return rows[0]?.ok === true;
+}
+
+/** True while an invite is unspent and unexpired (asking does not spend it). */
+export async function inviteLive(db: Db, tokenHash: string): Promise<boolean> {
+  const { rows } = await sql<{ ok: boolean }>`
+    select system_invite_live(${tokenHash}) as ok`.execute(db);
+  return rows[0]?.ok === true;
+}
+
+/** Spend an invite and create the person and their login in one step; undefined if it is not live. */
+export async function redeemInvite(
+  db: Db,
+  invite: { tokenHash: string; email: string; passwordHash: string },
+): Promise<Owner | undefined> {
+  const { rows } = await sql<OwnerRow>`
+    select user_id, workspace_id
+    from system_redeem_invite(${invite.tokenHash}, ${invite.email}, ${invite.passwordHash})`.execute(
+    db,
+  );
+  return toOwner(rows[0]);
 }
