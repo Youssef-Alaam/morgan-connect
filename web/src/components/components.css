@@ -276,3 +276,76 @@
   background: var(--card-background);
   color: var(--text);
 }
+
+.layout {
+  display: grid;
+  grid-template-columns: var(--nav-width) 1fr;
+  gap: var(--space-3);
+  justify-self: stretch;
+}
+
+.layout-nav ul {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.layout-nav a {
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  min-block-size: var(--target);
+  padding-inline: var(--space-2);
+  border-radius: var(--radius);
+  color: var(--text);
+}
+
+.layout-nav a[aria-current='page'] {
+  background: var(--accent);
+  color: var(--onAccent);
+  font-weight: 700;
+}
+
+.approval {
+  display: grid;
+  justify-self: stretch;
+  gap: var(--space-2);
+  justify-items: start;
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--card-border);
+  border-radius: var(--radius);
+  background: var(--card-background);
+}
+
+.approval-args {
+  justify-self: stretch;
+  min-inline-size: 0;
+  margin: 0;
+  padding: var(--space-2);
+  border: var(--border-width) solid var(--card-border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.approval-args code {
+  font: inherit;
+}
+
+.approval h3 {
+  margin: 0;
+}
+
+.page .approval p {
+  color: var(--text);
+}
+
+.approval-actions {
+  display: flex;
+  gap: var(--space-2);
+}
