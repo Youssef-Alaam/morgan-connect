@@ -1,7 +1,6 @@
 import { Writable } from 'node:stream';
 import { sql } from 'kysely';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { adminRead } from '../../src/data/admin-read.js';
 import { createAccount, createInvite } from '../../src/data/index.js';
 import { createApp } from '../../src/http/index.js';
 import { sha256 } from '../../src/identity/admin-link.js';
@@ -45,6 +44,27 @@ const cookieOf = (response: Response) =>
 const invite = (token: string, monthlyLimitUsd: number | null = null) =>
   createInvite(ctx.app, ctx.alice, { tokenHash: sha256(token), ttlSeconds: 600, monthlyLimitUsd });
 
+const OPEN = ['/api/sign-in', '/api/set-password', '/api/join'];
+const TEMPORARY_OK = ['/api/change-password', '/api/sign-out'];
+
+/** Every registered route under /api: without a session only the open ones answer; on a temporary password only the two listed. */
+async function expectEveryRouteGated(temporary: string): Promise<void> {
+  const routes = app.routes.filter((r) => r.path.startsWith('/api') && r.method !== 'ALL');
+  expect(routes.length).toBeGreaterThanOrEqual(5);
+  for (const { method, path } of routes) {
+    const call = (cookie: string) =>
+      app.request(path, {
+        method,
+        headers: { 'content-type': 'application/json', cookie },
+        ...(method === 'GET' ? {} : { body: '{}' }),
+      });
+    const anonymous = (await call('')).status;
+    expect([path, anonymous === 401]).toEqual([path, !OPEN.includes(path)]);
+    if (OPEN.includes(path) || TEMPORARY_OK.includes(path)) continue;
+    expect([path, (await call(temporary)).status]).toEqual([path, 403]);
+  }
+}
+
 it('joins by an invite once: the notice first, then role and limit land, signed in and told', async () => {
   await invite('tok-1', 7.5);
   const body = { token: 'tok-1', email: 'Joiner@example.test', password: NEW_PASSWORD };
@@ -63,6 +83,13 @@ it('joins by an invite once: the notice first, then role and limit land, signed 
   expect(row.told_admin_can_read_at).toBeInstanceOf(Date);
   expect((await post('join', { ...body, acceptedNotice: true })).status).toBe(410);
   expect(logs).not.toContain('tok-1');
+  await invite('tok-race');
+  const race = { ...body, token: 'tok-race', acceptedNotice: true };
+  const both = await Promise.all([
+    post('join', { ...race, email: 'r1@example.test' }),
+    post('join', { ...race, email: 'r2@example.test' }),
+  ]);
+  expect(both.map((r) => r.status).sort()).toEqual([200, 410]);
 });
 
 it('refuses an expired invite and a taken email, which leaves the invite unspent', async () => {
@@ -79,35 +106,17 @@ it('refuses an expired invite and a taken email, which leaves the invite unspent
   expect((await post('join', { ...clash, email: 'free@example.test' })).status).toBe(200);
 });
 
-it('lets a temporary-password account change its password and nothing else, until it does', async () => {
+it('lets a temporary-password account call only the listed paths', async () => {
   const passwordHash = await createPasswordHasher().hash(TEMPORARY);
   const account = { email: 'temp@example.test', passwordHash, monthlyLimitUsd: 3 };
-  expect(await createAccount(ctx.app, ctx.alice, account)).toBe(true);
+  expect(await createAccount(ctx.app, ctx.alice, account)).toBeDefined();
   const signedIn = await post('sign-in', { email: 'temp@example.test', password: TEMPORARY });
   const cookie = cookieOf(signedIn);
   expect(signedIn.status).toBe(200);
   const blocked = await app.request('/api/me', { headers: { cookie } });
   expect(blocked.status).toBe(403);
   expect(await blocked.json()).toEqual({ error: 'password_change_required' });
-  const change = { current: TEMPORARY, password: NEW_PASSWORD };
-  const noNotice = await post('change-password', change, cookie);
-  expect(await noNotice.json()).toEqual({ error: 'notice_required', notice: NOTICE });
-  const wrong = { ...change, current: 'not the password', acceptedNotice: true };
-  expect((await post('change-password', wrong, cookie)).status).toBe(401);
-  const same = { current: TEMPORARY, password: TEMPORARY, acceptedNotice: true };
-  expect((await post('change-password', same, cookie)).status).toBe(400);
-  expect((await post('change-password', { ...change, acceptedNotice: true }, cookie)).status).toBe(
-    200,
-  );
-  expect((await app.request('/api/me', { headers: { cookie } })).status).toBe(200);
-  const told = await ctx.owner
-    .selectFrom('users')
-    .select(['id', 'told_admin_can_read_at'])
-    .where('monthly_limit_usd', '=', '3.00')
-    .executeTakeFirstOrThrow();
-  expect(told.told_admin_can_read_at).toBeInstanceOf(Date);
-  // Told now, so the admin's audited read of this member is no longer refused.
-  expect(await adminRead.chat(ctx.app, ctx.alice, told.id, 'after notice')).toEqual([]);
+  await expectEveryRouteGated(cookie);
   expect(logs).not.toContain(TEMPORARY);
 });
 

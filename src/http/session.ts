@@ -51,16 +51,22 @@ export async function openSession(
   setCookie(c, COOKIE, token, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge });
 }
 
-/**
- * The session cookie names a live session, or the request is refused. A person still on a
- * temporary password may pass only where `allowTemporary` is set (change password, sign out).
- */
-export function signedIn(db: Db, options: { allowTemporary?: boolean } = {}) {
+/** Where `authRoutes` is mounted; the gate below matches paths after it. */
+export const API_PREFIX = '/api';
+/** The only paths open without a session; every other path under the prefix is refused by default. */
+const PUBLIC = ['/sign-in', '/set-password', '/join'];
+/** The only paths a person still on a temporary password may call. */
+const TEMPORARY_OK = ['/change-password', '/sign-out'];
+
+/** One gate for every route: a live session cookie, and a changed password, unless the path is listed. */
+export function sessionGate(db: Db) {
   return createMiddleware<Signed>(async (c, next) => {
+    const path = c.req.path.slice(API_PREFIX.length);
+    if (PUBLIC.includes(path)) return next();
     const token = getCookie(c, COOKIE);
     const session = token === undefined ? undefined : await sessionOwner(db, sha256(token));
     if (session === undefined) return c.json({ error: 'unauthorized' }, 401);
-    if (session.mustChange && options.allowTemporary !== true) {
+    if (session.mustChange && !TEMPORARY_OK.includes(path)) {
       return c.json({ error: 'password_change_required' }, 403);
     }
     c.set('session', session);

@@ -11,7 +11,7 @@ import {
   addressOf,
   COOKIE,
   openSession,
-  signedIn,
+  sessionGate,
   UNIQUE_VIOLATION,
   type AuthDeps,
   type Shared,
@@ -108,11 +108,12 @@ export function authRoutes(deps: AuthDeps): Hono<Signed> {
   signInRoute(routes, deps, shared);
   setPasswordRoute(routes, deps, shared);
 
+  routes.use(sessionGate(db));
   memberRoutes(routes, deps, shared);
 
-  routes.get('/me', signedIn(db), async (c) => c.json(await accountOf(db, c.get('session'))));
+  routes.get('/me', async (c) => c.json(await accountOf(db, c.get('session'))));
 
-  routes.post('/sign-out', signedIn(db, { allowTemporary: true }), async (c) => {
+  routes.post('/sign-out', async (c) => {
     const session = c.get('session');
     await endSession(db, session, session.sessionId);
     deleteCookie(c, COOKIE, { path: '/' });
