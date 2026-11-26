@@ -32,6 +32,7 @@ export {
   activeTotp,
   confirmTotp,
   pendingTotp,
+  removeTotp,
   spendBackupCode,
   spendTotpStep,
   startTotp,

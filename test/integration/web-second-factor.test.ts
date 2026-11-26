@@ -115,6 +115,15 @@ it('refuses a code used twice in its window, and accepts the next one', async ()
   expect((await twoStep(email, codeFor(secret))).status).toBe(200);
 });
 
+it('opens one sign-in per challenge, even with a fresh valid code', async () => {
+  const { email, secret } = await enrolled();
+  const { challenge } = await body(await signIn(email));
+  const second = (code: string) => post('sign-in/second-factor', { challenge, code });
+  expect((await second(codeFor(secret))).status).toBe(200);
+  clock += 30_000;
+  expect((await second(codeFor(secret))).status).toBe(401);
+});
+
 it('takes a backup code once, in any case and with or without the dash', async () => {
   const { email, backupCodes } = await enrolled();
   const [first = '', second = ''] = backupCodes;
@@ -146,6 +155,23 @@ it('refuses an old, altered or foreign challenge, and a chat code', async () => 
   expect((await twoStep(email, 'a-chat-setup-code')).status).toBe(401);
   clock += 6 * 60_000;
   expect(await attempt(challenge)).toBe(401);
+});
+
+it('turns off only with a current code, and then sign-in is one step again', async () => {
+  const { email, secret, backupCodes, cookie } = await enrolled();
+  expect((await post('two-factor/disable', { code: wrongFor(secret) }, cookie)).status).toBe(401);
+  expect((await post('two-factor/disable', { code: 'not-a-code' }, cookie)).status).toBe(401);
+  expect((await post('two-factor/disable', { nope: 1 }, cookie)).status).toBe(400);
+  const other = cookieOf(await twoStep(email, codeFor(secret)));
+  expect((await post('two-factor/disable', { code: backupCodes[0] }, cookie)).status).toBe(200);
+  expect((await app.request('/api/me', { headers: { cookie: other } })).status).toBe(401);
+  const single = await signIn(email);
+  expect([single.status, cookieOf(single) === '']).toEqual([200, false]);
+  const left = await ctx.owner.selectFrom('backup_codes').select('code_hash').execute();
+  expect(left.some((row) => row.code_hash === 'h-a')).toBe(true);
+  expect((await post('two-factor/setup', {}, cookie)).status).toBe(200);
+  app = serve(null);
+  expect((await post('two-factor/disable', { code: '123456' }, cookie)).status).toBe(501);
 });
 
 it('keeps no secret in the log, and without a key a wrong password is a plain 401', async () => {

@@ -129,3 +129,12 @@ export function spendBackupCode(db: Db, owner: Owner, codeHash: string): Promise
     return row !== undefined;
   });
 }
+
+/** Turn the second factor off: the authenticator, every backup code and the other sessions go. */
+export function removeTotp(db: Db, owner: Owner, keepSessionId: string): Promise<void> {
+  return withOwner(db, owner, async (trx) => {
+    await trx.deleteFrom('backup_codes').execute();
+    await trx.deleteFrom('totp_factors').execute();
+    await endOtherSessions(trx, keepSessionId);
+  });
+}
