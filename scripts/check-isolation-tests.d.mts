@@ -14,3 +14,7 @@ export function checkIsolation(input: {
   tests: IsolationTest[];
   exempt: readonly string[];
 }): { rows: TableCoverage[]; missing: string[] };
+export function findUnauditedAdminReads(
+  tables: readonly string[],
+  tests: IsolationTest[],
+): string[];

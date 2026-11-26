@@ -12,6 +12,7 @@ import {
   type Db,
   type Owner,
 } from '../../src/data/index.js';
+import { adminRead, AdminReadRefused } from '../../src/data/admin-read.js';
 import { linkChats } from './link-chats.js';
 import { startPostgres } from './postgres.js';
 
@@ -277,4 +278,49 @@ async function expectWrites(ctx: Isolation, table: string): Promise<void> {
   const remove = run(sql`delete from ${from} where ${who} = ${bob.userId}`);
   if (grants.delete) expect((await remove).numAffectedRows).toBe(0n);
   else await expect(remove).rejects.toThrow(DENIED);
+}
+
+/** Admin-readable tables `expectAuditedAdminRead` has run for in this file. */
+const audited = new Set<string>();
+export const auditedSoFar = (): string[] => [...audited].sort();
+
+/** What the admin reads of Bob's rows in this table comes back as, by the table's own kind. */
+const READERS = {
+  chat_messages: (ctx: Isolation, reason: string) =>
+    adminRead.chat(ctx.app, ctx.alice, ctx.bob.userId, reason),
+  usage_ledger: (ctx: Isolation, reason: string) =>
+    adminRead.usage(ctx.app, ctx.alice, ctx.bob.userId, reason),
+} as const;
+
+/**
+ * The admin rule for an admin-readable table: Alice (admin) reads exactly Bob's rows, and an
+ * `admin.read` audit row naming who, whose and why exists in the same step; Bob (a member) calling
+ * the same path is refused with a typed error and an audited refusal, and sees none of Alice's rows.
+ */
+export async function expectAuditedAdminRead(
+  table: keyof typeof READERS,
+  ctx: Isolation,
+): Promise<void> {
+  audited.add(table);
+  const trail = (outcome: string) =>
+    sql<{ user_id: string; subject_user_id: string; reason: string }>`
+      select user_id, subject_user_id, reason from audit_log
+      where action_type = 'admin.read' and tool = ${`admin.read.${table === 'usage_ledger' ? 'usage' : 'chat'}`}
+        and outcome = ${outcome} and reason = ${`why ${table}`}`.execute(ctx.owner);
+  const rows = await READERS[table](ctx, `why ${table}`);
+  expect(rows.length).toBeGreaterThan(0);
+  expect(rows.every((row) => row.chatId === 'b')).toBe(true);
+  expect((await trail('ok')).rows).toEqual([
+    { user_id: ctx.alice.userId, subject_user_id: ctx.bob.userId, reason: `why ${table}` },
+  ]);
+  const asMember = adminRead[table === 'usage_ledger' ? 'usage' : 'chat'](
+    ctx.app,
+    ctx.bob,
+    ctx.alice.userId,
+    `why ${table}`,
+  );
+  await expect(asMember).rejects.toBeInstanceOf(AdminReadRefused);
+  expect((await trail('refused')).rows).toEqual([
+    { user_id: ctx.bob.userId, subject_user_id: ctx.alice.userId, reason: `why ${table}` },
+  ]);
 }

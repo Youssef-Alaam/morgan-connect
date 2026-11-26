@@ -3,6 +3,7 @@ import {
   checkIsolation,
   coverage,
   findTables,
+  findUnauditedAdminReads,
   findUntestedTables,
 } from '../../scripts/check-isolation-tests.mjs';
 
@@ -85,5 +86,20 @@ describe('checkIsolation', () => {
   it('passes when every user-data table is covered', () => {
     const both = [...tests, { name: 'z.isolation.test.ts', source: covered('notes') }];
     expect(checkIsolation({ migrations, tests: both, exempt: ['workspaces'] }).missing).toEqual([]);
+  });
+});
+
+describe('findUnauditedAdminReads', () => {
+  const audited = (table: string): string =>
+    `it('${table}', () => expectAuditedAdminRead('${table}', ctx));`;
+  it('reports an admin-readable table with no audited-read test', () => {
+    const tests = [{ name: 'a', source: audited('chat_messages') }];
+    expect(findUnauditedAdminReads(['chat_messages', 'usage_ledger'], tests)).toEqual([
+      'usage_ledger',
+    ]);
+  });
+  it('does not count expectIsolated as the admin rule', () => {
+    const tests = [{ name: 'a', source: covered('usage_ledger') }];
+    expect(findUnauditedAdminReads(['usage_ledger'], tests)).toEqual(['usage_ledger']);
   });
 });
