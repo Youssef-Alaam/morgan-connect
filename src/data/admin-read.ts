@@ -30,7 +30,7 @@ interface AdminChatMessage {
   id: string;
   channel: string;
   chatId: string;
-  role: 'user' | 'assistant' | 'tool';
+  role: 'user' | 'assistant' | 'tool' | 'summary';
   text: string;
   data: unknown;
   createdAt: Date;
