@@ -1,3 +1,4 @@
+import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { assignProfile, PRESETS, profileFor, type Preset } from '../../src/policy/index.js';
 import type { Mode } from '../../src/policy/profile.js';
@@ -123,5 +124,10 @@ it('refuses an admin setting their own profile to Restricted, so they cannot loc
   const own = { userId: ctx.alice.userId, preset: 'restricted' } as const;
   expect(await assignProfile(ctx.app, ctx.alice, own)).toBeUndefined();
   expect((await profileFor(ctx.app, ctx.alice)).preset).toBe('standard');
+  const { rows } = await sql<{ n: string }>`
+    select count(*) as n from audit_log where tool = 'admin.profile.assign'
+      and outcome = 'refused' and user_id = ${ctx.alice.userId}
+      and reason = 'restricted for person'`.execute(ctx.owner);
+  expect(rows[0]?.n).toBe('1');
   expect(await assignProfile(ctx.app, ctx.alice, { ...own, preset: 'trusted' })).toBeDefined();
 });
