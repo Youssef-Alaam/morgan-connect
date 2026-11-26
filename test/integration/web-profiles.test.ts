@@ -108,3 +108,17 @@ it('refuses a bad id or preset, and a call without a session', async () => {
   expect((await call('GET', 'members/nope/profiles', cookie)).status).toBe(404);
   expect((await call('GET', `members/${ctx.bob.userId}/profiles`, '')).status).toBe(401);
 });
+
+it('refuses the admin setting their own profile to restricted, with a refused audit row', async () => {
+  const cookie = await cookieFor(ctx.alice);
+  const own = `members/${ctx.alice.userId}/profile`;
+  expect((await call('PUT', own, cookie, { preset: 'restricted' })).status).toBe(403);
+  const { rows } = await sql<{ n: string }>`
+    select count(*) as n from audit_log
+    where tool = 'admin.profile.assign' and outcome = 'refused' and user_id = ${ctx.alice.userId}
+      and subject_user_id = ${ctx.alice.userId} and reason = 'restricted for person'`.execute(
+    ctx.owner,
+  );
+  expect(rows[0]?.n).toBe('1');
+  expect((await call('PUT', own, cookie, { preset: 'trusted' })).status).toBe(200);
+});
