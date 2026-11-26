@@ -145,7 +145,7 @@ it('still refuses when the audit row cannot be written', async () => {
 });
 
 it('holds a member who joined by invite to the invite limit: answered, then refused', async () => {
-  const invited = { tokenHash: 'inv-e2e', ttlSeconds: 600, monthlyLimitUsd: 0.005 };
+  const invited = { tokenHash: 'inv-e2e', ttlSeconds: 600, monthlyLimitUsd: 0.01 };
   expect(await createInvite(db, admin, invited)).toBe(true);
   const joined = await redeemInvite(db, {
     tokenHash: 'inv-e2e',
