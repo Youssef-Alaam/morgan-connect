@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { ButtonSection } from './ButtonSection.tsx';
 import { BadgeSection, BannerSection, EmptyStateSection, TableSection } from './DataSection.tsx';
 import { DialogSection, ToastSection } from './OverlaySection.tsx';
+import { ChatSection } from './ChatSection.tsx';
 import { ApprovalSection, LayoutSection } from './LayoutSection.tsx';
 import { CodeSection, ThreeWaySection } from './ControlSection.tsx';
 import { ChoicesSection, InputsSection } from './FormSection.tsx';
@@ -24,6 +25,7 @@ export function Gallery() {
       <DialogSection />
       <ToastSection />
       <LayoutSection />
+      <ChatSection />
       <ApprovalSection />
     </main>
   );
