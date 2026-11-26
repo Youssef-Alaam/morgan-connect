@@ -20,7 +20,7 @@ export function shownArgs(question: string): Approved | undefined {
 }
 
 /** The note exactly as vault.capture writes it (src/tools/vault-capture.ts), so a changed byte is caught. */
-export function expectedNote({ path, text }: Approved): string {
+function expectedNote({ path, text }: Approved): string {
   const created = /^_inbox\/(\d{4}-\d{2}-\d{2})-/.exec(path)?.[1] ?? '';
   return `---\ntype: capture\nstatus: inbox\ncreated: ${created}\n---\n\n${text.trim()}\n`;
 }
