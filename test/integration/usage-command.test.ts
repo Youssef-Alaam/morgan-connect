@@ -59,19 +59,19 @@ it('splits days and months at local midnight, not UTC midnight', async () => {
   await put('2026-11-30T20:00:00Z', 2, 20, 2);
   await put('2026-11-30T21:30:00Z', 4.25, 40, 4);
   const now = new Date('2026-11-30T22:30:00Z');
-  const utc = await usageSince(db, now, 'UTC');
+  const utc = await usageSince(db, who, now, 'UTC');
   expect(utc.today).toMatchObject({ calls: 3, costUsd: '7.25000000', inputTokens: 70 });
   expect(utc.month).toMatchObject({ calls: 3, costUsd: '7.25000000' });
   // Riyadh is UTC+3: it is 01:30 on 1 December there.
-  const riyadh = await usageSince(db, now, 'Asia/Riyadh');
+  const riyadh = await usageSince(db, who, now, 'Asia/Riyadh');
   expect(riyadh.today).toMatchObject({ calls: 1, costUsd: '4.25000000', inputTokens: 40 });
   expect(riyadh.month).toMatchObject({ calls: 1, costUsd: '4.25000000' });
   await clear();
   // 31 October 22:00 UTC is already 1 November in Riyadh, but still October in UTC.
   await put('2026-10-31T22:00:00Z', 8);
   const mid = new Date('2026-11-15T12:00:00Z');
-  expect((await usageSince(db, mid, 'Asia/Riyadh')).month.calls).toBe(1);
-  expect((await usageSince(db, mid, 'UTC')).month.calls).toBe(0);
+  expect((await usageSince(db, who, mid, 'Asia/Riyadh')).month.calls).toBe(1);
+  expect((await usageSince(db, who, mid, 'UTC')).month.calls).toBe(0);
 });
 
 it('keeps a 25 hour day (clock change) as one day and ignores other days and months', async () => {
@@ -83,7 +83,7 @@ it('keeps a 25 hour day (clock change) as one day and ignores other days and mon
   await put('2026-11-02T05:00:00Z', 8); // 2 November, 00:00 local
   await put('2026-12-01T05:00:00Z', 16); // next month
   const now = new Date('2026-11-01T12:00:00Z');
-  const ny = await usageSince(db, now, 'America/New_York');
+  const ny = await usageSince(db, who, now, 'America/New_York');
   expect(ny.today).toMatchObject({ calls: 2, costUsd: '6.00000000' });
   expect(ny.month).toMatchObject({ calls: 3, costUsd: '14.00000000' });
 });
