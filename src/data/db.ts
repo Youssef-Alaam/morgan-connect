@@ -25,6 +25,7 @@ export interface Database {
     id: Generated<string>;
     role: Generated<string>;
     workspace_id: Generated<string>;
+    told_admin_can_read_at: Date | null;
     created_at: Generated<Date>;
   };
   devices: {
@@ -79,6 +80,9 @@ export interface Database {
     args_sha256: string;
     decision: 'auto' | 'ask' | 'off';
     outcome: AuditOutcome;
+    /** For an admin read: whose rows were read, and why. Null on every other row. */
+    subject_user_id: string | null;
+    reason: string | null;
   };
   approvals: {
     id: Generated<string>;

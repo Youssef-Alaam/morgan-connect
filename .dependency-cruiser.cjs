@@ -89,6 +89,14 @@ module.exports = {
       to: { path: 'node_modules/pg-mem/' },
     },
     {
+      name: 'admin-read-path-is-closed',
+      severity: 'error',
+      comment:
+        'The admin read path (D59) is opened only by the admin console (src/http), the role grant and tests. Nothing else may import it, so no other code can read another persons rows.',
+      from: { path: '^(src|web|test)/', pathNot: '^(src/http/|src/data/roles\\.ts$|test/)' },
+      to: { path: '^src/data/admin-read\\.ts$' },
+    },
+    {
       name: 'pg-only-in-data',
       severity: 'error',
       from: { path: '^src/', pathNot: '^src/data/' },
