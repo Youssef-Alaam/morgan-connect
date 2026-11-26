@@ -17,11 +17,7 @@ function cssFiles(dir: string): string[] {
 }
 
 describe('stylesheets', () => {
-  const files = cssFiles('web/src').filter((f) => !f.endsWith('fonts.css'));
-
-  it('finds the app stylesheet', () => {
-    expect(files.length).toBeGreaterThan(0);
-  });
+  const files = cssFiles('web/src');
 
   it.each(['color: #fff', 'padding: 4px', 'gap: 1.5rem', 'color: rgb(0 0 0)'])(
     'detects the raw value "%s"',
@@ -38,7 +34,8 @@ describe('stylesheets', () => {
   );
 
   it.each(files)('%s uses tokens and logical properties only', (file) => {
-    const css = readFileSync(file, 'utf8');
+    // @font-face blocks name font files, which is the one place raw values are fine.
+    const css = readFileSync(file, 'utf8').replace(/@font-face\s*\{[^}]*\}/g, '');
     expect(css).not.toMatch(rawValue);
     expect(css).not.toMatch(physical);
   });

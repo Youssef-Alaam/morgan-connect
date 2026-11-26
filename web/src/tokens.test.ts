@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCss, modes } from './tokens.ts';
+import { buildCss, component, modes } from './tokens.ts';
 
 function luminance(hex: string): number {
   const channels = [1, 3, 5].map((i) => {
@@ -26,12 +26,24 @@ const pairs = [
   ['focus', 'raised', 3],
   ['danger', 'surface', 3],
   ['danger', 'raised', 3],
+  ['dangerText', 'surface', 4.5],
+  ['dangerText', 'raised', 4.5],
+  ['brand', 'raised', 3],
 ] as const;
 
 describe.each(Object.keys(modes) as (keyof typeof modes)[])('%s mode', (mode) => {
   it.each(pairs)('%s on %s is at least %d:1', (fg, bg, min) => {
     expect(contrast(modes[mode][fg], modes[mode][bg])).toBeGreaterThanOrEqual(min);
   });
+});
+
+describe.each(Object.keys(modes) as (keyof typeof modes)[])('%s component borders', (mode) => {
+  it.each(Object.entries(component).filter(([name]) => name.endsWith('-border')))(
+    '%s is at least 3:1 on the surface',
+    (_name, target) => {
+      expect(contrast(modes[mode][target], modes[mode].surface)).toBeGreaterThanOrEqual(3);
+    },
+  );
 });
 
 describe('buildCss', () => {

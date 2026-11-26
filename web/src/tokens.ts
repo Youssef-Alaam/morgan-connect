@@ -6,6 +6,8 @@ const primitive = {
   amber: '#F0B429',
   ochre: '#8A5A00',
   crimson: '#D0667A',
+  crimsonDeep: '#B03A52',
+  crimsonSoft: '#DC7487',
   paper: '#FAF8F4',
   ink: '#1B1C1F',
   stone: '#5E5B55',
@@ -27,6 +29,7 @@ export const modes = {
     onAccent: primitive.paper,
     brand: primitive.ochre,
     danger: primitive.crimson,
+    dangerText: primitive.crimsonDeep,
     focus: primitive.ochre,
   },
   dark: {
@@ -39,6 +42,7 @@ export const modes = {
     onAccent: primitive.charcoal,
     brand: primitive.amber,
     danger: primitive.crimson,
+    dangerText: primitive.crimsonSoft,
     focus: primitive.amber,
   },
 } as const;
@@ -56,12 +60,12 @@ const scale = {
 } as const;
 
 // Layer 3: component tokens point at semantic names, never at raw values.
-const component = {
+export const component = {
   'button-background': 'accent',
   'button-color': 'onAccent',
-  'input-border': 'border',
+  'input-border': 'muted',
   'card-background': 'raised',
-  'card-border': 'border',
+  'card-border': 'muted',
 } as const;
 
 const declarations = (values: Record<string, string>, indent: string): string =>
