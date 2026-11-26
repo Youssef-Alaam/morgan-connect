@@ -122,3 +122,32 @@ test('the code input keeps six digits and the three-way control moves with arrow
   await expect(group.getByRole('radio', { name: 'Off' })).toBeChecked();
   await expect(page.getByText('Auto sends without asking')).toHaveCount(1);
 });
+
+test('the dialog traps focus, closes with Escape and gives focus back', async ({ page }) => {
+  const opener = page.getByRole('button', { name: 'Open dialog' });
+  await opener.focus();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Delete this chat?' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await expect(dialog).toHaveScreenshot('dialog-open.png');
+
+  const result = await new AxeBuilder({ page }).include('dialog').analyze();
+  expect(result.violations).toEqual([]);
+
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(opener).toBeFocused();
+});
+
+test('a toast is announced and can be dismissed from the keyboard', async ({ page }) => {
+  await page.getByRole('button', { name: 'Show toast' }).press('Enter');
+  const live = page.locator('[aria-live=polite]');
+  await expect(live).toContainText('Chat saved');
+  await live.getByRole('button', { name: 'Dismiss' }).press('Enter');
+  await expect(live).not.toContainText('Chat saved');
+});
