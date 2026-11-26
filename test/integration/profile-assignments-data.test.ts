@@ -77,7 +77,14 @@ it('writes an audit row for a change and for a refused one', async () => {
   ]);
 });
 
-it('refuses a device that is not the person’s, and a member writing straight to the table', async () => {
+it('a member cannot assign themselves a profile', async () => {
+  await assignPreset(ctx.app, ctx.alice, { userId: ctx.bob.userId, preset: 'restricted' });
+  const own = { userId: ctx.bob.userId, preset: 'trusted' };
+  expect(await assignPreset(ctx.app, ctx.bob, own)).toBeUndefined();
+  expect((await assignedTo(ctx.app, ctx.bob, undefined)).personPreset).toBe('restricted');
+});
+
+it('refuses a web device, a device that is not the person’s, and a member writing straight to the table', async () => {
   const alicesDevice = await ctx.owner
     .selectFrom('devices')
     .select('id')
@@ -85,6 +92,12 @@ it('refuses a device that is not the person’s, and a member writing straight t
     .executeTakeFirstOrThrow();
   const wrong = { userId: ctx.bob.userId, deviceId: alicesDevice.id, preset: 'trusted' };
   expect(await assignPreset(ctx.app, ctx.alice, wrong)).toBeUndefined();
+  const web = await ctx.owner
+    .insertInto('devices')
+    .values({ user_id: ctx.bob.userId, channel: 'web', chat_id: 'session-x' })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  expect(await assignPreset(ctx.app, ctx.alice, { ...wrong, deviceId: web.id })).toBeUndefined();
   const self = withOwner(ctx.app, ctx.bob, (trx) =>
     trx
       .insertInto('profile_assignments')

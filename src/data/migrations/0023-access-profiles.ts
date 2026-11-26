@@ -30,7 +30,7 @@ const PRESETS = {
     execute: 'off',
   },
   standard: ALL_ASK,
-  trusted: { ...ALL_ASK, create: 'auto', overwrite: 'auto' },
+  trusted: { ...ALL_ASK, create: 'auto' },
 };
 
 async function presets(db: Kysely<unknown>): Promise<void> {
@@ -82,7 +82,13 @@ async function assignFunction(db: Kysely<unknown>): Promise<void> {
       v_ok := v_role is not null and exists (select 1 from public.users a
         where a.id = v_me and a.role = 'admin' and a.workspace_id = v_ws)
         and (p_device is null or exists (select 1 from public.devices d
-          where d.id = p_device and d.user_id = p_user));
+          where d.id = p_device and d.user_id = p_user and d.channel <> 'web'));
+      insert into public.audit_log (channel, chat_id, user_id, workspace_id, tool, action_type,
+        changes_state, arg_names, extra_args, args_sha256, decision, outcome, subject_user_id, reason)
+        values ('web', 'profile', v_me, v_ws, 'admin.profile.assign', 'admin.profile.assign', true,
+        '{}', 0, encode(sha256(''::bytea), 'hex'), 'auto',
+        case when v_ok then 'ok' else 'refused' end,
+        p_user, p_preset || ' for ' || coalesce(p_device::text, 'person'));
       if v_ok then
         select a.preset into v_person from public.profile_assignments a
           where a.user_id = p_user and a.device_id is null;
@@ -98,12 +104,6 @@ async function assignFunction(db: Kysely<unknown>): Promise<void> {
             do update set preset = excluded.preset;
         end if;
       end if;
-      insert into public.audit_log (channel, chat_id, user_id, workspace_id, tool, action_type,
-        changes_state, arg_names, extra_args, args_sha256, decision, outcome, subject_user_id, reason)
-        values ('web', 'profile', v_me, v_ws, 'admin.profile.assign', 'admin.profile.assign', true,
-        '{}', 0, encode(sha256(''::bytea), 'hex'), 'auto',
-        case when v_ok then 'ok' else 'refused' end,
-        p_user, p_preset || ' for ' || coalesce(p_device::text, 'person'));
       if v_ok then return query select v_role, v_person, v_device; end if;
     end $$`.execute(db);
   await sql`revoke execute on function public.admin_assign_profile(uuid, uuid, text) from public`.execute(
