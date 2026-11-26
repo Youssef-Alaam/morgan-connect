@@ -11,7 +11,7 @@ import {
   requeueStuckTurns,
   startWorker,
 } from './core/index.js';
-import { createIdentity, type Identity } from './identity/index.js';
+import { announceAdminLink, createIdentity, type Identity } from './identity/index.js';
 import {
   TURN_EXPIRE_SECONDS,
   createDb,
@@ -131,7 +131,7 @@ async function startTelegram(
   config: Config,
   db: Db,
   logger: Logger,
-  engine: Engine | undefined,
+  { engine, onClaimed }: { engine: Engine | undefined; onClaimed: () => Promise<void> },
 ): Promise<() => Promise<void>> {
   if (config.TELEGRAM_BOT_TOKEN === undefined) return () => Promise.resolve();
   assertFitsJobExpiry(TIMING, TURN_EXPIRE_SECONDS);
@@ -141,7 +141,7 @@ async function startTelegram(
     logger,
     config.TELEGRAM_API_ROOT,
   );
-  const identity = createIdentity(db);
+  const identity = createIdentity(db, { onClaimed });
   const approvals = telegramApprovals(db, telegram);
   const reply = buildReplier(config, { db, logger, engine, approvals });
   const aborts = createTurnAborts();
@@ -220,13 +220,22 @@ export async function start(
   const config = loadConfig(env);
   const logger = createLogger(config.LOG_LEVEL);
   const db = await openDatabase(config, logger);
-  const stopTelegram = await startTelegram(config, db, logger, options.engine).catch(
-    async (error: unknown) => {
-      await db.destroy();
-      throw error;
-    },
-  );
-  const app = createApp({ dbVersion: () => dbVersion(db), logger });
+  let listening = config.PORT;
+  const announce = async (): Promise<void> => {
+    await announceAdminLink(
+      db,
+      logger,
+      config.PUBLIC_URL ?? `http://localhost:${String(listening)}`,
+    );
+  };
+  const stopTelegram = await startTelegram(config, db, logger, {
+    engine: options.engine,
+    onClaimed: announce,
+  }).catch(async (error: unknown) => {
+    await db.destroy();
+    throw error;
+  });
+  const app = createApp({ dbVersion: () => dbVersion(db), logger, auth: { db } });
   const server = await new Promise<ReturnType<typeof serve>>((resolve) => {
     const listening = serve({ fetch: app.fetch, port: config.PORT }, () => {
       resolve(listening);
@@ -234,7 +243,9 @@ export async function start(
   });
   const address = server.address();
   const port = typeof address === 'object' && address !== null ? address.port : config.PORT;
+  listening = port;
   logger.info({ port }, 'listening');
+  await announce();
   return {
     port,
     stop: async () => {

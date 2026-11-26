@@ -17,7 +17,10 @@ const WINDOW_MS = 15 * 60 * 1000;
 
 const hashCode = (code: string): string => createHash('sha256').update(code).digest('hex');
 
-export function createIdentity(db: Db, options: { now?: () => number } = {}): Identity {
+export function createIdentity(
+  db: Db,
+  options: { now?: () => number; onClaimed?: () => Promise<void> } = {},
+): Identity {
   /** Once an admin exists nothing can be claimed, so skip the database. */
   let closed = false;
   const limiter = createFailureLimiter({
@@ -41,8 +44,10 @@ export function createIdentity(db: Db, options: { now?: () => number } = {}): Id
       if (!(await claimSetupCode(db, hashCode(code), channel, chatId))) return 'refused';
       limiter.reset(key);
       closed = true;
+      await options.onClaimed?.();
       return 'claimed';
     },
     isLinked: (channel, chatId) => isDeviceLinked(db, channel, chatId),
   };
 }
+export { announceAdminLink } from './admin-link.js';
