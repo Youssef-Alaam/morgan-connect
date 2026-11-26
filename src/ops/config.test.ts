@@ -15,6 +15,7 @@ it('applies defaults and treats empty values as unset', () => {
     VAULT_BRANCH: 'main',
     TIMEZONE: 'UTC',
     IDLE_GAP_MINUTES: 360,
+    COMPACT_AT_TOKENS: 8000,
   });
 });
 
@@ -37,6 +38,15 @@ it('reads IDLE_GAP_MINUTES (default 6 hours) and refuses under 5 minutes', () =>
   );
   expect(() => loadConfig({ DATABASE_URL: URL, IDLE_GAP_MINUTES: 'soon' })).toThrow(
     /IDLE_GAP_MINUTES/,
+  );
+});
+
+it('reads COMPACT_AT_TOKENS (default 8000) and refuses under 1000', () => {
+  expect(loadConfig({ DATABASE_URL: URL, COMPACT_AT_TOKENS: '50000' }).COMPACT_AT_TOKENS).toBe(
+    50000,
+  );
+  expect(() => loadConfig({ DATABASE_URL: URL, COMPACT_AT_TOKENS: '999' })).toThrow(
+    /COMPACT_AT_TOKENS/,
   );
 });
 

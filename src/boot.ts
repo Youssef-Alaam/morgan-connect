@@ -100,6 +100,7 @@ function buildReplier(
         }),
         timezone: config.TIMEZONE,
         idleGapMs: config.IDLE_GAP_MINUTES * 60_000,
+        compactAtTokens: config.COMPACT_AT_TOKENS,
         ...TIMING,
       });
 }
