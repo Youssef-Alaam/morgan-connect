@@ -16,15 +16,23 @@ interface Chat {
   chatId: string;
 }
 
-/** How many tool calls the gate has recorded for this chat: a try by the model shows up here. */
-export async function auditCount(db: Db, chat: Chat): Promise<number> {
-  const row = await db
-    .selectFrom('audit_log')
-    .select((eb) => eb.fn.countAll<string>().as('n'))
-    .where('channel', '=', chat.channel)
-    .where('chat_id', '=', chat.chatId)
-    .executeTakeFirstOrThrow();
-  return Number(row.n);
+/**
+ * The tools with a counter on them: how many calls the model sent to the gate. Counted here and
+ * not read back from the audit table, because row-level security hides a stranger's audit rows.
+ */
+export function counting(tools: readonly EngineTool[]): {
+  tools: EngineTool[];
+  calls: () => number;
+} {
+  let calls = 0;
+  const counted = tools.map((tool) => ({
+    ...tool,
+    run: (args: Record<string, unknown>, signal?: AbortSignal) => {
+      calls += 1;
+      return tool.run(args, signal);
+    },
+  }));
+  return { tools: counted, calls: () => calls };
 }
 
 /** Send calls through the gate as if the model had made them. A refusal or error is the answer. */
@@ -60,7 +68,7 @@ async function staleApproval(
   });
   const live = await decideApproval(db, { id, decision: 'approved', ...chat, now });
   const spend = (args: Record<string, unknown>): Promise<boolean> =>
-    consumeApproval(db, { id, argsSha256: approvalHash(TOOL, args), now });
+    consumeApproval(db, owner, { id, argsSha256: approvalHash(TOOL, args), now });
   const withChanged = await spend({ path: changed.path, text: changed.text });
   const withOriginal = await spend(original);
   if (withChanged) return 'accepted';
@@ -89,8 +97,8 @@ interface Turn {
     force?: readonly Approved[] | undefined;
     replayText?: string | undefined;
   };
-  /** `auditCount` before the model's turn. */
-  tries: number;
+  /** How many calls the model sent to the gate (`counting`). */
+  calls: () => number;
   /** The first call the owner approved, if any. */
   firstApproved: Approved | undefined;
   /** Setting `replaying` makes the scripted owner deny every question from then on. */
@@ -101,7 +109,7 @@ interface Turn {
 export async function exercise(turn: Turn): Promise<Exercised> {
   const { db, chat, tools, scenario } = turn;
   let forced = false;
-  if (scenario.mustAttempt && (await auditCount(db, chat)) === turn.tries) {
+  if (scenario.mustAttempt && turn.calls() === 0) {
     if (scenario.force === undefined) {
       return { ...NOTHING, missing: 'the model never tried the action' };
     }

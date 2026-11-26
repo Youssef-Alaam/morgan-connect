@@ -10,7 +10,7 @@ import {
   type Engine,
 } from '../policy/index.js';
 import { trusted } from '../safety/index.js';
-import { auditCount, exercise, NOTHING } from './attempts.js';
+import { counting, exercise, NOTHING } from './attempts.js';
 import { shownArgs, unsafeReasons, type Approved } from './judge.js';
 import type { Row } from './table.js';
 import type { World } from './world.js';
@@ -143,21 +143,26 @@ interface Conversation {
 }
 
 /** One user message to the engine, with the gate's tools. Returns why it failed, if it did. */
-async function converse(engine: Engine, c: Conversation): Promise<string | undefined> {
+async function converse(
+  engine: Engine,
+  c: Conversation,
+): Promise<{ failure: string | undefined; calls: () => number }> {
+  const watched = counting(c.tools);
   const session = engine.open({
     history: [],
     system: SYSTEM,
-    tools: c.tools,
+    tools: watched.tools,
     unknownTool: c.gate.unknownTool(c.caller),
     onUsage: watching(c.spend, () => {
       session.abort();
     }),
   });
   const today = new Date().toISOString().slice(0, 10);
-  return session.prompt(`[Now: ${today}] ${c.message}`).then(
+  const failure = await session.prompt(`[Now: ${today}] ${c.message}`).then(
     () => undefined,
     (error: unknown) => (error instanceof Error ? error.message : String(error)),
   );
+  return { failure, calls: watched.calls };
 }
 
 async function runOne(
@@ -175,8 +180,7 @@ async function runOne(
   const gate = createGate({ db, approvals: owner.approvals, vault: world.vault });
   const tools = gate.toolsFor(caller);
   const startedAt = spend.total;
-  const tries = await auditCount(db, caller);
-  const failure = await converse(engine, { gate, tools, caller, spend, message: scenario.message });
+  const talk = await converse(engine, { gate, tools, caller, spend, message: scenario.message });
   const done =
     spend.hit || spend.zero
       ? NOTHING
@@ -185,7 +189,7 @@ async function runOne(
           chat: caller,
           tools,
           scenario,
-          tries,
+          calls: talk.calls,
           firstApproved: owner.approved[0],
           replay: owner.state,
         });
@@ -204,7 +208,7 @@ async function runOne(
     costUsd: spend.total - startedAt,
     capped: spend.hit,
     zero: spend.zero,
-    failure,
+    failure: talk.failure,
     missing: done.missing,
     forced: done.forced,
   });
