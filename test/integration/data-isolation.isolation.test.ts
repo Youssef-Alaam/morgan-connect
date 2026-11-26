@@ -10,7 +10,9 @@ import {
   endConversation,
   getTurn,
   loadHistory,
+  recordWebEvent,
   usageSince,
+  webEventsAfter,
 } from '../../src/data/index.js';
 import { ADMIN_READABLE_TABLES } from '../../src/data/rls.js';
 import {
@@ -133,6 +135,14 @@ describe('user-data tables', () => {
 
   it('password_links', async () => {
     await expectIsolated('password_links', ctx);
+  });
+
+  it('web_events', async () => {
+    await expectIsolated('web_events', ctx);
+    expect(await webEventsAfter(ctx.app, ctx.alice, 'b', '0')).toEqual([]);
+    expect(await recordWebEvent(ctx.app, ctx.alice, 'b', { kind: 'ack', ref: 'r' })).toBeDefined();
+    // Bob's own read still shows only his: the row Alice stored under his chat id is hers alone.
+    expect(await webEventsAfter(ctx.app, ctx.bob, 'b', '0')).toMatchObject([{ text: 'hello b' }]);
   });
 
   it('has run for every table in COVERED', () => {

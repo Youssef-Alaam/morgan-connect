@@ -1,0 +1,57 @@
+import type { Db, Owner } from './db.js';
+import { withOwner } from './tenancy.js';
+
+/** The most events one read returns; a caller that gets this many asks again. */
+export const WEB_EVENT_PAGE = 100;
+
+export interface WebEvent {
+  /** Its place in the stream; grows with every event, so "after this id" has no duplicates. */
+  id: string;
+  kind: 'ack' | 'message';
+  ref: string | null;
+  text: string;
+}
+
+/** Store one event on this person's session. A second `ack` for the same `ref` stores nothing. */
+export function recordWebEvent(
+  db: Db,
+  owner: Owner,
+  chatId: string,
+  event: { kind: WebEvent['kind']; ref?: string; text?: string },
+): Promise<string | undefined> {
+  return withOwner(db, owner, async (trx) => {
+    const row = await trx
+      .insertInto('web_events')
+      .values({
+        user_id: owner.userId,
+        workspace_id: owner.workspaceId,
+        chat_id: chatId,
+        kind: event.kind,
+        ref: event.ref ?? null,
+        text: event.text ?? '',
+      })
+      .onConflict((conflict) => conflict.doNothing())
+      .returning('id')
+      .executeTakeFirst();
+    return row?.id;
+  });
+}
+
+/** This person's events on one session after `afterId` ("0" for all), oldest first. */
+export function webEventsAfter(
+  db: Db,
+  owner: Owner,
+  chatId: string,
+  afterId: string,
+): Promise<WebEvent[]> {
+  return withOwner(db, owner, (trx) =>
+    trx
+      .selectFrom('web_events')
+      .select(['id', 'kind', 'ref', 'text'])
+      .where('chat_id', '=', chatId)
+      .where('id', '>', afterId)
+      .orderBy('id')
+      .limit(WEB_EVENT_PAGE)
+      .execute(),
+  );
+}

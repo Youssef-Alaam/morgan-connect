@@ -28,7 +28,7 @@ export async function createSession(
   });
 }
 
-/** Sign out: the session and its device go together. */
+/** Sign out: the session, its device and its events go together. */
 export function endSession(db: Db, owner: Owner, sessionId: string): Promise<void> {
   return withOwner(db, owner, async (trx) => {
     await trx
@@ -36,6 +36,7 @@ export function endSession(db: Db, owner: Owner, sessionId: string): Promise<voi
       .where('channel', '=', 'web')
       .where('chat_id', '=', sessionId)
       .execute();
+    await trx.deleteFrom('web_events').where('chat_id', '=', sessionId).execute();
     await trx.deleteFrom('sessions').where('id', '=', sessionId).execute();
   });
 }

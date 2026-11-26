@@ -14,6 +14,7 @@ import {
 } from '../../src/data/index.js';
 import { adminRead, AdminReadRefused } from '../../src/data/admin-read.js';
 import { linkChats } from './link-chats.js';
+import { seedAccounts } from './seed-accounts.js';
 import { startPostgres } from './postgres.js';
 
 /** Two people in two chats, one row of theirs in every user-data table, and the two database roles. */
@@ -38,28 +39,6 @@ const ids = (who: Owner, chatId: string) => ({
   channel: 'fake',
   chat_id: chatId,
 });
-
-/** A login, a session, a password link and an invite for this person. */
-async function seedAccounts(owner: Db, who: Owner, chatId: string): Promise<void> {
-  const person = { user_id: who.userId, workspace_id: who.workspaceId };
-  await owner
-    .insertInto('credentials')
-    .values({ ...person, email: `${chatId}@example.test`, password_hash: 'h' })
-    .execute();
-  const hashes = { token_hash: `t-${chatId}`, expires_at: new Date(Date.now() + 3_600_000) };
-  await owner
-    .insertInto('sessions')
-    .values({ ...person, ...hashes })
-    .execute();
-  await owner
-    .insertInto('password_links')
-    .values({ ...person, ...hashes })
-    .execute();
-  await owner
-    .insertInto('invites')
-    .values({ ...person, ...hashes, role: 'member' })
-    .execute();
-}
 
 /** One row of this person's in each table that has no seed of its own, as the owner role. */
 async function seedRows(
@@ -170,6 +149,7 @@ export const COVERED: readonly string[] = [
   'sessions',
   'password_links',
   'invites',
+  'web_events',
 ];
 
 /** Grants the app role is deliberately without (src/data/roles.ts); everything else is granted. */
