@@ -30,11 +30,31 @@ describe('TextInput', () => {
 describe('PasswordInput', () => {
   it('starts hidden with a button that shows it', () => {
     const markup = render(
-      createElement(PasswordInput, { label: 'Password', showLabel: 'Show', hideLabel: 'Hide' }),
+      createElement(PasswordInput, {
+        label: 'Password',
+        showLabel: 'Show',
+        hideLabel: 'Hide',
+        autoComplete: 'new-password',
+      }),
     );
     expect(markup).toContain('type="password"');
     expect(markup).toContain('aria-pressed="false"');
     expect(markup).toContain('Show');
+  });
+
+  it('tells password managers and keyboards to leave it alone', () => {
+    const markup = render(
+      createElement(PasswordInput, {
+        label: 'Password',
+        showLabel: 'Show',
+        hideLabel: 'Hide',
+        autoComplete: 'new-password',
+      }),
+    );
+    expect(markup).toContain('autoComplete="new-password"');
+    expect(markup).toContain('spellCheck="false"');
+    expect(markup).toContain('autoCapitalize="off"');
+    expect(markup).toContain('autoCorrect="off"');
   });
 });
 
@@ -59,6 +79,14 @@ describe('Checkbox and Switch', () => {
     const markup = render(createElement(Checkbox, { label: 'Agree' }));
     expect(markup).toContain('type="checkbox"');
     expect(markup).toContain('Agree');
+  });
+
+  it('switch is named by a label that wraps it, so the text is clickable', () => {
+    const markup = render(
+      createElement(Switch, { label: 'On', checked: true, onChange: () => undefined }),
+    );
+    expect(markup.startsWith('<label')).toBe(true);
+    expect(markup).toContain('<span>On</span></label>');
   });
 
   it.each([true, false])('switch reports checked=%s to assistive tech', (checked) => {

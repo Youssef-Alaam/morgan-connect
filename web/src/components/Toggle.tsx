@@ -21,18 +21,17 @@ interface SwitchProps {
 
 export function Switch({ label, checked, onChange }: SwitchProps) {
   return (
-    <div className="choice">
+    <label className="choice">
       <button
         type="button"
         role="switch"
         className="switch"
         aria-checked={checked}
-        aria-label={label}
         onClick={() => {
           onChange(!checked);
         }}
       />
-      <span aria-hidden="true">{label}</span>
-    </div>
+      <span>{label}</span>
+    </label>
   );
 }

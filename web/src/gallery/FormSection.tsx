@@ -19,6 +19,7 @@ export function InputsSection() {
       <TextInput label={t('gallery.inputs.name')} hint={t('gallery.inputs.nameHint')} />
       <TextInput label={t('gallery.inputs.email')} error={t('gallery.inputs.emailError')} />
       <PasswordInput
+        autoComplete="current-password"
         label={t('gallery.inputs.password')}
         showLabel={t('gallery.inputs.show')}
         hideLabel={t('gallery.inputs.hide')}

@@ -73,6 +73,10 @@ test('inputs, select, checkbox and switch work from the keyboard', async ({ page
   await expect(password).toHaveAttribute('type', 'password');
   await page.getByRole('button', { name: 'Show password' }).press('Enter');
   await expect(password).toHaveAttribute('type', 'text');
+  await expect(password).toHaveAttribute('autocomplete', 'current-password');
+  await expect(password).toHaveAttribute('spellcheck', 'false');
+  await expect(password).toHaveAttribute('autocapitalize', 'off');
+  await expect(password).toHaveAttribute('autocorrect', 'off');
 
   await page.getByLabel('Language').selectOption('ar');
   await expect(page.getByLabel('Language')).toHaveValue('ar');
@@ -86,4 +90,6 @@ test('inputs, select, checkbox and switch work from the keyboard', async ({ page
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await toggle.press('Enter');
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await page.getByText('Notifications', { exact: true }).click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
 });

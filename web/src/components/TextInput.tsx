@@ -1,6 +1,8 @@
 import { useId, useState } from 'react';
 import type { InputHTMLAttributes } from 'react';
 
+const OFF = 'off';
+
 interface TextInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'id'> {
   label: string;
   hint?: string;
@@ -38,7 +40,9 @@ export function TextInput({ label, hint, error, className, ...rest }: TextInputP
   );
 }
 
-interface PasswordInputProps extends Omit<TextInputProps, 'type'> {
+interface PasswordInputProps extends Omit<TextInputProps, 'type' | 'autoComplete'> {
+  // Required so the password manager knows whether to fill or to suggest a new one.
+  autoComplete: 'current-password' | 'new-password';
   showLabel: string;
   hideLabel: string;
 }
@@ -47,7 +51,13 @@ export function PasswordInput({ showLabel, hideLabel, ...rest }: PasswordInputPr
   const [shown, setShown] = useState(false);
   return (
     <div className="password">
-      <TextInput {...rest} type={shown ? 'text' : 'password'} />
+      <TextInput
+        {...rest}
+        type={shown ? 'text' : 'password'}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect={OFF}
+      />
       <button
         type="button"
         className="btn btn-secondary password-toggle"
