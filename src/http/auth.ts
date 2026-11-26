@@ -2,7 +2,14 @@ import { randomBytes } from 'node:crypto';
 import { Hono } from 'hono';
 import { deleteCookie } from 'hono/cookie';
 import { z } from 'zod';
-import { accountOf, credentialsByEmail, endSession, linkLive, redeemLink } from '../data/index.js';
+import {
+  accountOf,
+  credentialsByEmail,
+  endSession,
+  linkLive,
+  redeemLink,
+  type Owner,
+} from '../data/index.js';
 import { sha256 } from '../identity/admin-link.js';
 import { createFailureLimiter } from '../identity/limiter.js';
 import { chatRoutes, type ChatDeps } from './chat.js';
@@ -19,7 +26,13 @@ import {
   type Shared,
   type Signed,
 } from './session.js';
-import { createTwoFactor, twoFactorRoutes } from './two-factor.js';
+import {
+  challengeIfNeeded,
+  createTwoFactor,
+  secondStepRoute,
+  twoFactorRoutes,
+  type TwoFactor,
+} from './two-factor.js';
 
 const MAX_WRONG_TRIES = 5;
 // One address may fail more often than one email (a shared office), but not without end.
@@ -33,12 +46,18 @@ const signIn = z.object({ email, password: z.string().max(200) });
 const setPassword = z.object({ token: z.string().min(1).max(200), email, password });
 
 /** Sign-in with two limiters (email, address) and a decoy: wrong email and wrong password look the same. */
-function signInRoute(routes: Hono<Signed>, deps: AuthDeps, shared: Shared): void {
+function signInRoute(routes: Hono<Signed>, deps: AuthDeps, shared: Shared, two: TwoFactor): void {
   const { db, logger, now = Date.now } = deps;
   const { byAddress, hasher } = shared;
   const limiter = createFailureLimiter({ max: MAX_WRONG_TRIES, windowMs: WINDOW_MS, now });
   // A wrong email costs the same time as a wrong password.
   const decoy = hasher.hash(randomBytes(16).toString('hex'));
+  /** The person behind this email if the password is right, else undefined (a decoy hash keeps the time equal). */
+  const rightPassword = async (email: string, given: string): Promise<Owner | undefined> => {
+    const found = await credentialsByEmail(db, email);
+    const ok = await hasher.verify(given, found?.passwordHash ?? (await decoy));
+    return ok ? found : undefined;
+  };
   routes.post('/sign-in', async (c) => {
     const parsed = signIn.safeParse(await c.req.json().catch(() => undefined));
     if (!parsed.success) return c.json({ error: 'invalid_request' }, 400);
@@ -49,16 +68,16 @@ function signInRoute(routes: Hono<Signed>, deps: AuthDeps, shared: Shared): void
     }
     // Counted before the check, so concurrent tries cannot skip the limit.
     limiter.fail(key);
-    const found = await credentialsByEmail(db, key);
-    const ok = await hasher.verify(parsed.data.password, found?.passwordHash ?? (await decoy));
-    if (found === undefined || !ok) {
+    const owner = await rightPassword(key, parsed.data.password);
+    if (owner === undefined) {
       byAddress.fail(address);
       logger.warn('web sign-in refused');
-      return c.json({ error: 'invalid_credentials' }, 401);
-    }
-    limiter.reset(key);
-    await openSession(c, { db, now }, found);
-    logger.info({ userId: found.userId }, 'web sign-in');
+    } else limiter.reset(key);
+    const challenge = await challengeIfNeeded(deps, two, owner, now());
+    if (challenge !== undefined) return c.json(challenge);
+    if (owner === undefined) return c.json({ error: 'invalid_credentials' }, 401);
+    await openSession(c, { db, now }, owner);
+    logger.info({ userId: owner.userId }, 'web sign-in');
     return c.json({ ok: true });
   });
 }
@@ -108,14 +127,16 @@ export function authRoutes(deps: AuthDeps, chat?: Omit<ChatDeps, 'db'>): Hono<Si
     return next();
   });
   const shared = { byAddress, hasher: createPasswordHasher() };
-  signInRoute(routes, deps, shared);
+  const two = createTwoFactor(deps);
+  signInRoute(routes, deps, shared, two);
+  secondStepRoute(routes, deps, shared, two);
   setPasswordRoute(routes, deps, shared);
 
   routes.use(sessionGate(db));
   memberRoutes(routes, deps, shared);
   if (chat !== undefined) chatRoutes(routes, { ...chat, db });
   deviceRoutes(routes, deps);
-  twoFactorRoutes(routes, deps, createTwoFactor(deps));
+  twoFactorRoutes(routes, deps, two);
 
   routes.get('/me', async (c) => c.json(await accountOf(db, c.get('session'))));
 

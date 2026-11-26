@@ -56,7 +56,7 @@ export async function openSession(
 /** Where `authRoutes` is mounted; the gate below matches paths after it. */
 export const API_PREFIX = '/api';
 /** The only paths open without a session; every other path under the prefix is refused by default. */
-const PUBLIC = ['/sign-in', '/set-password', '/join'];
+const PUBLIC = ['/sign-in', '/sign-in/second-factor', '/set-password', '/join'];
 /** The only paths a person still on a temporary password may call. */
 const TEMPORARY_OK = ['/change-password', '/sign-out'];
 
