@@ -1,5 +1,6 @@
 import eslint from '@eslint/js';
 import comments from '@eslint-community/eslint-plugin-eslint-comments/configs';
+import i18next from 'eslint-plugin-i18next';
 import tseslint from 'typescript-eslint';
 
 const jsonParseCast = {
@@ -45,7 +46,7 @@ const rawWriteMessage =
   'Write files with atomicWrite from src/ops/atomic-write.ts (temp, then rename).';
 
 export default tseslint.config(
-  { ignores: ['node_modules/**', 'coverage/**', 'dist/**', '.claude/**'] },
+  { ignores: ['node_modules/**', 'coverage/**', 'dist/**', 'web/dist/**', '.claude/**'] },
   eslint.configs.recommended,
   tseslint.configs.strictTypeChecked,
   tseslint.configs.stylisticTypeChecked,
@@ -116,6 +117,25 @@ export default tseslint.config(
       'max-lines-per-function': 'off',
       'no-restricted-syntax': ['error', jsonParseCast, bodyCast, mockOwnModule, mockPg],
     },
+  },
+  {
+    files: ['web/src/**/*.{ts,tsx}'],
+    ignores: ['web/src/tokens.ts', '**/*.test.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Literal[value=/^(#[0-9a-fA-F]{3,8}|(rgb|hsl)a?[(].*|-?[0-9.]+(px|rem|em))$/]',
+          message: 'Raw colour and spacing values live in web/src/tokens.ts only.',
+        },
+      ],
+    },
+  },
+  {
+    files: ['web/src/**/*.tsx'],
+    ignores: ['**/*.test.ts'],
+    extends: [i18next.configs['flat/recommended']],
+    rules: { 'i18next/no-literal-string': ['error', { mode: 'jsx-text-only' }] },
   },
   {
     files: ['scripts/**/*.mjs'],

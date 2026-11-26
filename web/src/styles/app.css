@@ -1,0 +1,28 @@
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+.page {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  padding-block: var(--space-5);
+  padding-inline: var(--space-4);
+}
+
+.page h1 {
+  margin: 0;
+}
+
+.page p {
+  margin: 0;
+  color: var(--muted);
+}
+
+:focus-visible {
+  outline: var(--border-width) solid var(--focus);
+  outline-offset: var(--space-1);
+}
