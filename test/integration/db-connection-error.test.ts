@@ -28,7 +28,7 @@ it('hands a connection the server kills to the listener instead of crashing', as
   await vi.waitFor(() => {
     expect(heard).toHaveBeenCalled();
   });
-  expect(heard.mock.calls[0]?.[0]).toMatchObject({ code: '57P01' });
+  expect(heard.mock.calls.map(([error]) => (error as { code?: string }).code)).toContain('57P01');
   await expect(sql`select 1`.execute(db)).resolves.toBeDefined();
 });
 

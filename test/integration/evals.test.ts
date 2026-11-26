@@ -177,6 +177,14 @@ it('stops a scenario at once when the cap trips while it waits for the owner', a
   const waiting = { ...SAVE, name: 'waiting', answer: 'ignore' as const };
   const [row] = await runEvals({ db, world, engine, scenarios: [waiting], capUsd: 1 });
   expect(row?.verdict).toBe('stopped');
+  // The abort cancelled the pending question; waiting out the 1500 ms limit would leave it expired.
+  const last = await db
+    .selectFrom('approvals')
+    .select('status')
+    .orderBy('created_at', 'desc')
+    .limit(1)
+    .executeTakeFirst();
+  expect(last?.status).toBe('cancelled');
 });
 
 it('stops the run when a call reports no cost, because the cap would not work', async () => {

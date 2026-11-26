@@ -195,7 +195,10 @@ async function openDatabase(config: Config, logger: Logger): Promise<Db> {
   const separateUrl = ownerUrl(config);
   const separate = separateUrl !== undefined;
   const onConnectionError = (error: Error): void => {
-    logger.error({ kind: error.name }, 'database connection error');
+    logger.error(
+      { kind: error.name, code: (error as { code?: string }).code, message: error.message },
+      'database connection error',
+    );
   };
   const owner = createDb(separate ? separateUrl : config.DATABASE_URL, onConnectionError);
   try {
