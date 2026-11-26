@@ -18,6 +18,7 @@ import {
   verifyAuthentication,
   verifyRegistration,
 } from '../identity/passkeys.js';
+import { secondFactorGate, type TwoFactor } from './two-factor.js';
 import {
   addressOf,
   openSession,
@@ -54,6 +55,7 @@ const assertion = z.object({
     clientExtensionResults: extensions,
   }),
 });
+const optionsBody = z.object({ code: z.string().max(32).optional() });
 const passkeyId = z.uuid();
 const unavailable = { error: 'passkeys_unavailable' } as const;
 
@@ -68,6 +70,7 @@ export function passkeySignInRoutes(routes: Hono<Signed>, deps: AuthDeps, shared
 
   routes.post('/sign-in/passkey/options', async (c) => {
     if (rp === undefined) return c.json(unavailable, 501);
+    if (shared.byAddress.blocked(addressOf(c))) return c.json({ error: 'too_many_attempts' }, 429);
     const options = await authenticationOptions(rp);
     challenges.put(options.challenge);
     return c.json(options);
@@ -141,13 +144,23 @@ function addRoute(
 }
 
 /** The signed-in half: ask to add a passkey, store it, list and remove. */
-export function passkeyAccountRoutes(routes: Hono<Signed>, deps: AuthDeps, shared: Shared): void {
+export function passkeyAccountRoutes(
+  routes: Hono<Signed>,
+  deps: AuthDeps,
+  shared: Shared,
+  two: TwoFactor,
+): void {
   const { db, now = Date.now, passkeys: rp } = deps;
   const challenges = createChallenges(now);
 
   routes.post('/passkeys/options', async (c) => {
     if (rp === undefined) return c.json(unavailable, 501);
     const session = c.get('session');
+    // A challenge is only given after the code, so no later step needs it again.
+    const parsed = optionsBody.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ error: 'invalid_request' }, 400);
+    const refused = await secondFactorGate(deps, two, session, parsed.data.code);
+    if (refused !== undefined) return c.json({ error: refused.error }, refused.status);
     const account = await accountOf(db, session);
     const person = { userId: session.userId, label: account.user.email ?? 'account' };
     const options = await registrationOptions(rp, person, await listPasskeys(db, session));

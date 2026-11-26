@@ -180,6 +180,24 @@ const refusal = (status: 401 | 429) => ({
   error: status === 429 ? 'too_many_attempts' : 'invalid_code',
 });
 
+/**
+ * For a step a stolen session must not take alone: open when the person has no authenticator on,
+ * else a current authenticator or backup code (the same check, limit and refusal as turning it off).
+ */
+export async function secondFactorGate(
+  { db }: AuthDeps,
+  two: TwoFactor,
+  session: Owner,
+  given: string | undefined,
+): Promise<{ error: string; status: 401 | 429 } | undefined> {
+  if ((await activeTotp(db, session)) === undefined) return undefined;
+  const status =
+    given === undefined
+      ? 401
+      : await tried(two.limiter, session.userId, () => two.verify(session, given));
+  return status === 200 ? undefined : { ...refusal(status), status };
+}
+
 /** Turning it off takes a current code (authenticator or backup), so a stolen session cannot do it. */
 function disableRoute(routes: Hono<Signed>, { db }: AuthDeps, two: TwoFactor): void {
   routes.post('/two-factor/disable', async (c) => {
