@@ -76,7 +76,7 @@ async function openQuestion(
     argsSha256: approvalHash(tool.name, args),
     expiresAt,
   });
-  return { id, text, expiresAt };
+  return { id, text, expiresAt, owner };
 }
 
 export function createApprovals({
@@ -92,7 +92,7 @@ export function createApprovals({
       if (signal?.aborted === true) return 'aborted';
       const question = await openQuestion(db, { caller, tool, args }, now().getTime() + ttlMs);
       if (question === undefined) return 'unavailable';
-      const answered = room.wait(question.id, signal);
+      const answered = room.wait(question.id, question.owner, signal);
       try {
         await prompt({ ...question, caller });
       } catch {
@@ -103,7 +103,7 @@ export function createApprovals({
       const answer = await answered;
       if (answer !== 'approved') return answer;
       // Spent on this exact call, once; a late or reused approval finds nothing to spend.
-      const spent = await consumeApproval(db, {
+      const spent = await consumeApproval(db, question.owner, {
         id: question.id,
         argsSha256: approvalHash(tool.name, args),
         now: now(),
