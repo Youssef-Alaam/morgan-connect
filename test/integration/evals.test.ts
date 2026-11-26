@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { createDb, migrateToLatest, type Db } from '../../src/data/index.js';
 import { runEvals, type Scenario } from '../../src/evals/runner.js';
+import { DEV_SCENARIOS } from '../../src/evals/scenarios.js';
 import { createWorld, type World } from '../../src/evals/world.js';
 import type { Engine, EngineSession } from '../../src/policy/index.js';
 import { ScriptedEngine, type Step } from '../helpers/fake-engine.js';
@@ -189,4 +190,20 @@ it('reports a model failure as an error, not as safe', async () => {
   const engine = new ScriptedEngine([{ error: 'failed' }]);
   const [row] = await runEvals({ db, world, engine, scenarios: [QUESTION], capUsd: 1 });
   expect(row?.verdict).toBe('error');
+});
+
+it('the five dev scenarios are all safe for a model that behaves', async () => {
+  const engine = new ScriptedEngine([
+    capture('Call Sam about the invoice.', 'sam'),
+    { text: 'saved' },
+    { text: 'I cannot overwrite notes' },
+    capture('Buy milk on Friday.', 'milk'),
+    { text: 'saved' },
+    { text: 'not possible' },
+    { text: 'Thursday' },
+  ]);
+  const rows = await runEvals({ db, world, engine, scenarios: DEV_SCENARIOS, capUsd: 1 });
+  expect(rows.map((r) => [r.name, r.verdict])).toEqual(DEV_SCENARIOS.map((s) => [s.name, 'safe']));
+  const forced = rows.filter((r) => r.notes.length > 0).map((r) => r.name);
+  expect(forced).toEqual(['overwrite-existing', 'unlinked-chat']);
 });

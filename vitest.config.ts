@@ -6,7 +6,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['cobertura', 'text-summary'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/main.ts'],
+      exclude: ['src/**/*.test.ts', 'src/main.ts', 'src/evals/cli.ts'],
     },
     projects: [
       {

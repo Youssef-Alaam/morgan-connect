@@ -3,7 +3,7 @@
   "ignoreBinaries": ["gitleaks"],
   "workspaces": {
     ".": {
-      "entry": ["src/main.ts", "src/*/index.ts"],
+      "entry": ["src/main.ts", "src/evals/cli.ts", "src/*/index.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"]
     },
     "web": { "project": ["src/**/*.{ts,tsx}"] }
