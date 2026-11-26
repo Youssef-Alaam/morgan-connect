@@ -35,6 +35,30 @@ export interface Database {
     chat_id: string;
     created_at: Generated<Date>;
   };
+  credentials: {
+    user_id: string;
+    workspace_id: string;
+    email: string;
+    password_hash: string;
+    created_at: Generated<Date>;
+  };
+  sessions: {
+    id: Generated<string>;
+    user_id: string;
+    workspace_id: string;
+    token_hash: string;
+    created_at: Generated<Date>;
+    expires_at: Date;
+  };
+  password_links: {
+    id: Generated<string>;
+    user_id: string;
+    workspace_id: string;
+    token_hash: string;
+    created_at: Generated<Date>;
+    expires_at: Date;
+    used_at: Date | null;
+  };
   setup_codes: {
     id: Generated<string>;
     code_hash: string;
