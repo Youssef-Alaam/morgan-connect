@@ -15,6 +15,7 @@ import {
   createDb,
   createTurnQueue,
   dbVersion,
+  ensureAppRole,
   migrateToLatest,
   type Db,
 } from './data/index.js';
@@ -117,6 +118,28 @@ async function startTelegram(
   };
 }
 
+/**
+ * Migrate the database, then open the app's connection. With MIGRATION_DATABASE_URL the owner role
+ * migrates and sets up the app role, and the app never holds owner rights; without it one role
+ * does both, which leaves the audit log guarded by triggers only (docs/adr/0008-audit-log-guards.md).
+ */
+async function openDatabase(config: Config, logger: Logger): Promise<Db> {
+  const ownerUrl = config.MIGRATION_DATABASE_URL;
+  const separate = ownerUrl !== undefined && ownerUrl !== config.DATABASE_URL;
+  const owner = createDb(separate ? ownerUrl : config.DATABASE_URL);
+  try {
+    logger.info({ applied: await migrateToLatest(owner) }, 'migrations done');
+    if (separate) await ensureAppRole(owner, config.DATABASE_URL);
+    else logger.warn('MIGRATION_DATABASE_URL is not set: the app runs as the owner role');
+  } catch (error) {
+    await owner.destroy();
+    throw error;
+  }
+  if (!separate) return owner;
+  await owner.destroy();
+  return createDb(config.DATABASE_URL);
+}
+
 /** Load config, migrate the database, then serve HTTP. Tests may pass their own engine. */
 export async function start(
   env: Record<string, string | undefined>,
@@ -124,13 +147,7 @@ export async function start(
 ): Promise<Running> {
   const config = loadConfig(env);
   const logger = createLogger(config.LOG_LEVEL);
-  const db = createDb(config.DATABASE_URL);
-  try {
-    logger.info({ applied: await migrateToLatest(db) }, 'migrations done');
-  } catch (error) {
-    await db.destroy();
-    throw error;
-  }
+  const db = await openDatabase(config, logger);
   const stopTelegram = await startTelegram(config, db, logger, options.engine).catch(
     async (error: unknown) => {
       await db.destroy();

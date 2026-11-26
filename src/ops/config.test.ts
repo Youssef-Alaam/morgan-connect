@@ -67,3 +67,14 @@ it('sends the engine token only over https or to this machine or the compose hos
 it('refuses an unknown ENGINE', () => {
   expect(() => loadConfig({ DATABASE_URL: URL, ENGINE: 'magic' })).toThrow(/ENGINE/);
 });
+
+it('takes an optional owner connection for migrations', () => {
+  expect(loadConfig({ DATABASE_URL: URL }).MIGRATION_DATABASE_URL).toBeUndefined();
+  const owner = 'postgres://owner:pw@localhost:5432/morgan';
+  expect(loadConfig({ DATABASE_URL: URL, MIGRATION_DATABASE_URL: owner })).toMatchObject({
+    MIGRATION_DATABASE_URL: owner,
+  });
+  expect(() => loadConfig({ DATABASE_URL: URL, MIGRATION_DATABASE_URL: 'nope' })).toThrow(
+    /MIGRATION_DATABASE_URL/,
+  );
+});
