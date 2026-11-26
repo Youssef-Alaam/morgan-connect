@@ -120,3 +120,37 @@ it('refuses a row with no user or no workspace', async () => {
     ),
   ).rejects.toThrow();
 });
+
+it('refuses a row whose user belongs to another workspace', async () => {
+  await sql`insert into workspaces (id, name) values ('00000000-0000-0000-0000-0000000000f2', 'Other')`.execute(
+    db,
+  );
+  await sql`insert into users (id, role) values ('00000000-0000-0000-0000-0000000000f1', 'member')`.execute(
+    db,
+  );
+  await expect(
+    sql`insert into chat_messages (user_id, workspace_id, channel, chat_id, role, text)
+      values ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000f2', 'f', 'c', 'user', 'x')`.execute(
+      db,
+    ),
+  ).rejects.toThrow();
+});
+
+it('says what is wrong when old rows have no owner to take', async () => {
+  await sql`create database no_admin`.execute(db);
+  const bare = createDb(postgres.url.replace(/\/[^/]*$/, '/no_admin'));
+  try {
+    const before = Object.fromEntries(Object.entries(migrations).filter(([name]) => name < '0010'));
+    const run = (all: typeof migrations) =>
+      new Migrator({ db: bare, provider: { getMigrations: () => Promise.resolve(all) } });
+    expect((await run(before).migrateToLatest()).error).toBeUndefined();
+    await sql`insert into turns (idempotency_key, channel, chat_id, text) values ('a', 'f', 'c', 'x')`.execute(
+      bare,
+    );
+    expect((await run(migrations).migrateToLatest()).error).toMatchObject({
+      message: expect.stringContaining('no linked device and no admin') as string,
+    });
+  } finally {
+    await bare.destroy();
+  }
+});

@@ -121,6 +121,8 @@ async function recordCall(
     await recordUsage(deps.db, {
       channel: turn.channel,
       chatId: turn.chatId,
+      userId: turn.userId,
+      workspaceId: turn.workspaceId,
       model: deps.model,
       status: status === 'aborted' && timedOut() ? 'timeout' : status,
       ...used,
@@ -129,6 +131,9 @@ async function recordCall(
     deps.logger.warn({ turnId: turn.id }, 'usage not recorded');
   }
 }
+
+/** Whose data a turn writes: the person stored on the turn, never looked up again. */
+const owner = (turn: Turn) => ({ userId: turn.userId, workspaceId: turn.workspaceId });
 
 /** Remember a turn that stopped after it began using tools, so the model knows what it did. */
 async function keepStopped(
@@ -142,6 +147,7 @@ async function keepStopped(
       deps.db,
       { channel: turn.channel, chatId: turn.chatId },
       closeStoppedTurn(done),
+      owner(turn),
     );
   } catch {
     deps.logger.warn({ turnId: turn.id }, 'stopped turn not remembered');
@@ -196,7 +202,7 @@ async function ask(
 ): Promise<string> {
   const chat = { channel: turn.channel, chatId: turn.chatId };
   const history = await loadHistory(deps.db, chat, HISTORY_TURNS, HISTORY_CHARS);
-  const conversationId = await conversationFor(deps.db, chat);
+  const conversationId = await conversationFor(deps.db, chat, owner(turn));
   for (let attempt = 0; ; attempt += 1) {
     const pending: Promise<void>[] = [];
     const session = deps.engine.open({
@@ -215,7 +221,7 @@ async function ask(
     try {
       const answer = await session.prompt(stamped(deps, turn.text));
       answered = true;
-      await appendHistory(deps.db, chat, session.transcript());
+      await appendHistory(deps.db, chat, session.transcript(), owner(turn));
       return answer;
     } catch (error) {
       if (answered || !(await shouldRetry(deps, turn, session, { error, attempt, signal })))

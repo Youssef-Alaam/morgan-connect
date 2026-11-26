@@ -7,6 +7,7 @@ import {
   recordUsage,
   usageSince,
   type Db,
+  type Owner,
 } from '../../src/data/index.js';
 import { createLogger } from '../../src/ops/index.js';
 import type { Engine } from '../../src/policy/index.js';
@@ -16,12 +17,13 @@ import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
 let db: Db;
+let who: Owner;
 
 beforeAll(async () => {
   postgres = await startPostgres();
   db = createDb(postgres.url);
   await migrateToLatest(db);
-  await linkChats(db, ['T', 'c']);
+  who = await linkChats(db, ['T', 'c']);
 }, 180_000);
 
 afterAll(async () => {
@@ -32,6 +34,7 @@ afterAll(async () => {
 /** A ledger row at an exact time. */
 const put = async (iso: string, cost: number, input = 10, output = 1): Promise<void> => {
   await recordUsage(db, {
+    ...who,
     channel: 'fake',
     chatId: 'T',
     model: 'm',
@@ -103,7 +106,10 @@ it('/usage and /usage@BotName reply with the totals; empty is zero', async () =>
     turnTimeoutMs: 5000,
   });
   const ask = (text: string) =>
-    reply({ id: 'x', channel: 'fake', chatId: 'c', text, status: 'sending' }, new FakeChannel());
+    reply(
+      { id: 'x', channel: 'fake', chatId: 'c', text, status: 'sending', ...who },
+      new FakeChannel(),
+    );
   expect(await ask('/usage')).toBe(
     [
       'Usage (Asia/Riyadh)',
@@ -112,6 +118,7 @@ it('/usage and /usage@BotName reply with the totals; empty is zero', async () =>
     ].join('\n'),
   );
   await recordUsage(db, {
+    ...who,
     channel: 'fake',
     chatId: 'c',
     model: 'm',

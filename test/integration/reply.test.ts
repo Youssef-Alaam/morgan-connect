@@ -18,6 +18,7 @@ import {
   loadHistory,
   migrateToLatest,
   type Db,
+  type Owner,
   type Turn,
 } from '../../src/data/index.js';
 import { createIdentity } from '../../src/identity/index.js';
@@ -30,24 +31,17 @@ import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
 let db: Db;
+let who: Owner;
 let counter = 0;
 
 beforeAll(async () => {
   postgres = await startPostgres();
   db = createDb(postgres.url);
   await migrateToLatest(db);
-  await sql`insert into users (id) values ('00000000-0000-0000-0000-000000000008')`.execute(db);
-  await linkChats(
+  who = await linkChats(
     db,
-    Array.from({ length: 30 }, (_, i) => `c${String(i + 1)}`).filter(
-      (c) => c !== 'c8' && c !== 'c9',
-    ),
+    Array.from({ length: 30 }, (_, k) => `c${String(k + 1)}`),
   );
-  for (const chat of ['c8', 'c9']) {
-    await sql`insert into devices (user_id, channel, chat_id) values ('00000000-0000-0000-0000-000000000008', 'fake', ${chat})`.execute(
-      db,
-    );
-  }
 }, 180_000);
 
 afterAll(async () => {
@@ -61,6 +55,7 @@ const turn = (chatId: string, text: string): Turn => ({
   chatId,
   text,
   status: 'sending',
+  ...who,
 });
 /** What the model sees before each message when the zone is UTC and the clock is fixed. */
 const STAMP = '[Now: Wed 25 Nov 2026 10:30 (UTC, UTC+00:00)] ';
@@ -194,12 +189,17 @@ it('/new and /new@BotName both start over', async () => {
 
 it('keeps recent history within the character budget and never starts on an answer', async () => {
   const chat = { channel: 'fake', chatId: 'c11' };
-  await appendHistory(db, chat, [
-    { role: 'user', text: 'a'.repeat(50) },
-    { role: 'assistant', text: 'b'.repeat(50) },
-    { role: 'user', text: 'c'.repeat(50) },
-    { role: 'assistant', text: 'd'.repeat(50) },
-  ]);
+  await appendHistory(
+    db,
+    chat,
+    [
+      { role: 'user', text: 'a'.repeat(50) },
+      { role: 'assistant', text: 'b'.repeat(50) },
+      { role: 'user', text: 'c'.repeat(50) },
+      { role: 'assistant', text: 'd'.repeat(50) },
+    ],
+    who,
+  );
   const kept = await loadHistory(db, chat, 40, 120);
   expect(kept.map((m) => m.text[0])).toEqual(['c', 'd']);
   expect(await loadHistory(db, chat, 40, 160)).toHaveLength(2);
@@ -255,14 +255,19 @@ it('falls back to UTC for the time stamp when the zone is not valid', async () =
 it('trims only between user turns, so a tool call keeps its result', async () => {
   const chat = { channel: 'fake', chatId: 'c14' };
   const call = { id: 'x', name: 'clock_now', args: {} };
-  await appendHistory(db, chat, [
-    { role: 'user', text: 'old' },
-    { role: 'assistant', text: '', toolCalls: [call] },
-    { role: 'tool', text: 'noon', id: 'x', name: 'clock_now', isError: false },
-    { role: 'assistant', text: 'done' },
-    { role: 'user', text: 'new' },
-    { role: 'assistant', text: 'ok' },
-  ]);
+  await appendHistory(
+    db,
+    chat,
+    [
+      { role: 'user', text: 'old' },
+      { role: 'assistant', text: '', toolCalls: [call] },
+      { role: 'tool', text: 'noon', id: 'x', name: 'clock_now', isError: false },
+      { role: 'assistant', text: 'done' },
+      { role: 'user', text: 'new' },
+      { role: 'assistant', text: 'ok' },
+    ],
+    who,
+  );
   const last = await loadHistory(db, chat, 1, 10_000);
   expect(last.map((m) => m.role)).toEqual(['user', 'assistant']);
   expect(await loadHistory(db, chat, 2, 10_000)).toHaveLength(6);
@@ -339,12 +344,17 @@ it('stores a refused tool call as an error result', async () => {
 
 it('cuts a stored tool result to 4000 characters with a marker', async () => {
   const chat = { channel: 'fake', chatId: 'c19' };
-  await appendHistory(db, chat, [
-    { role: 'user', text: 'q' },
-    { role: 'assistant', text: '', toolCalls: [{ id: 'a', name: 'big', args: {} }] },
-    { role: 'tool', id: 'a', name: 'big', isError: false, text: 'x'.repeat(5000) },
-    { role: 'assistant', text: 'ok' },
-  ]);
+  await appendHistory(
+    db,
+    chat,
+    [
+      { role: 'user', text: 'q' },
+      { role: 'assistant', text: '', toolCalls: [{ id: 'a', name: 'big', args: {} }] },
+      { role: 'tool', id: 'a', name: 'big', isError: false, text: 'x'.repeat(5000) },
+      { role: 'assistant', text: 'ok' },
+    ],
+    who,
+  );
   const kept = await loadHistory(db, chat, 20, 24_000);
   expect(kept[2]?.text).toHaveLength(4000 + ' [truncated]'.length);
   expect(kept[2]?.text.endsWith('[truncated]')).toBe(true);
@@ -353,20 +363,30 @@ it('cuts a stored tool result to 4000 characters with a marker', async () => {
 it('counts user turns, not rows, and leaves out a turn with a damaged tool row', async () => {
   const chat = { channel: 'fake', chatId: 'c20' };
   const call = { id: 'z', name: 'clock_now', args: {} };
-  await appendHistory(db, chat, [
-    { role: 'user', text: 'broken' },
-    { role: 'assistant', text: '', toolCalls: [call] },
-    { role: 'tool', id: 'z', name: 'clock_now', isError: false, text: 'noon' },
-    { role: 'assistant', text: 'done' },
-  ]);
+  await appendHistory(
+    db,
+    chat,
+    [
+      { role: 'user', text: 'broken' },
+      { role: 'assistant', text: '', toolCalls: [call] },
+      { role: 'tool', id: 'z', name: 'clock_now', isError: false, text: 'noon' },
+      { role: 'assistant', text: 'done' },
+    ],
+    who,
+  );
   await sql`update chat_messages set data = null where chat_id = 'c20' and role = 'tool'`.execute(
     db,
   );
   for (let n = 0; n < 3; n += 1) {
-    await appendHistory(db, chat, [
-      { role: 'user', text: `q${String(n)}` },
-      { role: 'assistant', text: `a${String(n)}` },
-    ]);
+    await appendHistory(
+      db,
+      chat,
+      [
+        { role: 'user', text: `q${String(n)}` },
+        { role: 'assistant', text: `a${String(n)}` },
+      ],
+      who,
+    );
   }
   expect((await loadHistory(db, chat, 20, 24_000)).map((m) => m.text)).toEqual([
     'q0',

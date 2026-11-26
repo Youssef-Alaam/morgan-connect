@@ -1,5 +1,5 @@
 import type { Db } from './db.js';
-import { requireOwner } from './tenancy.js';
+import type { Owner } from './tenancy.js';
 
 export interface StoredToolCall {
   id: string;
@@ -154,14 +154,14 @@ export function closeStoppedTurn(partial: readonly ChatMessage[]): ChatMessage[]
   ];
 }
 
-/** Add messages in order, all or none. */
+/** Add messages in order, all or none, for the owner of the turn that made them. */
 export async function appendHistory(
   db: Db,
   chat: ChatKey,
   messages: readonly ChatMessage[],
+  owner: Owner,
 ): Promise<void> {
   if (messages.length === 0) return;
-  const owner = await requireOwner(db, chat);
   await db
     .insertInto('chat_messages')
     .values(
