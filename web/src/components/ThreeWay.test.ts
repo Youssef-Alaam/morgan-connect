@@ -21,7 +21,7 @@ describe('CodeInput', () => {
       createElement(CodeInput, { label: 'Code', value: '', onChange: () => undefined }),
     );
     expect(markup).toContain('inputMode="numeric"');
-    expect(markup).toContain('autoComplete="one-time-code"'.replace('C', 'C'));
+    expect(markup).toContain('autoComplete="one-time-code"');
     expect(markup).toContain('maxLength="6"');
   });
 });

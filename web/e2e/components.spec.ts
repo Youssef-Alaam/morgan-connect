@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 // The interactive parts the keyboard test must reach. A roving group (radio-like) counts
 // once: only its checked member is a tab stop.
 const TABBABLE =
-  '[data-gallery] :is(a[href], button, input:not([type=radio]), select, textarea, [role=radio][aria-checked=true]):not(:disabled)';
+  '[data-gallery] :is(a[href], button:not([role=radio]), input:not([type=radio]), select, textarea, [role=radio][aria-checked=true]):not(:disabled)';
 
 async function openGallery(page: Page, query: string): Promise<void> {
   await page.goto(`/components${query}`);
@@ -113,8 +113,8 @@ test('the code input keeps six digits and the three-way control moves with arrow
   await group.getByRole('radio', { name: 'Ask' }).focus();
   await page.keyboard.press(forward);
   await expect(group.getByRole('radio', { name: 'Auto' })).toBeChecked();
-  await expect(page.getByText('Auto sends without asking')).toBeVisible();
+  await expect(page.getByText('Auto sends without asking')).toHaveCount(2);
   await page.keyboard.press('Home');
   await expect(group.getByRole('radio', { name: 'Off' })).toBeChecked();
-  await expect(page.getByText('Auto sends without asking')).toBeHidden();
+  await expect(page.getByText('Auto sends without asking')).toHaveCount(1);
 });

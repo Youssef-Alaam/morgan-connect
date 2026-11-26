@@ -30,6 +30,20 @@
       "title": "Checkbox and switch",
       "remember": "Remember this device",
       "notifications": "Notifications"
+    },
+    "code": {
+      "title": "Code input",
+      "label": "Authenticator code",
+      "hint": "Six digits from your authenticator app."
+    },
+    "threeWay": {
+      "title": "Off, ask, auto",
+      "label": "Send email",
+      "off": "Off",
+      "ask": "Ask",
+      "auto": "Auto",
+      "risk": "Auto sends without asking you first. Use it only for things you can undo.",
+      "labelRisky": "Delete files"
     }
   }
 }

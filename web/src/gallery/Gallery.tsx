@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { ButtonSection } from './ButtonSection.tsx';
+import { CodeSection, ThreeWaySection } from './ControlSection.tsx';
 import { ChoicesSection, InputsSection } from './FormSection.tsx';
 
 // The component page (`/components` in the dev server): every component, one section each.
@@ -11,6 +12,8 @@ export function Gallery() {
       <ButtonSection />
       <InputsSection />
       <ChoicesSection />
+      <CodeSection />
+      <ThreeWaySection />
     </main>
   );
 }
