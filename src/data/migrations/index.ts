@@ -14,6 +14,7 @@ import { up as rowLevelSecurity } from './0013-row-level-security.js';
 import { up as chatMessageSummaries } from './0014-chat-message-summaries.js';
 import { up as adminRead } from './0015-admin-read.js';
 import { up as webAccounts } from './0016-web-accounts.js';
+import { up as invites } from './0017-invites.js';
 
 /** Applied in key order. Add new migrations here with the next number. */
 export const migrations: Record<string, Migration> = {
@@ -32,4 +33,5 @@ export const migrations: Record<string, Migration> = {
   '0014-chat-message-summaries': { up: chatMessageSummaries },
   '0015-admin-read': { up: adminRead },
   '0016-web-accounts': { up: webAccounts },
+  '0017-invites': { up: invites },
 };

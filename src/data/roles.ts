@@ -1,6 +1,7 @@
 import { type QueryExecutorProvider, sql } from 'kysely';
 import type { Db } from './db.js';
 import { ADMIN_READ_FUNCTIONS } from './admin-read.js';
+import { ACCOUNT_FUNCTIONS } from './invites.js';
 import { SYSTEM_FUNCTIONS } from './system.js';
 
 export interface AppCredentials {
@@ -64,7 +65,7 @@ export async function ensureAppRole(owner: Db, databaseUrl: string): Promise<voi
     );
     await sql`grant usage, select on all sequences in schema public to ${who}`.execute(trx);
     // Only the named system paths (migration 0012) and the admin's audited read path (0015).
-    for (const fn of [...SYSTEM_FUNCTIONS, ...ADMIN_READ_FUNCTIONS]) {
+    for (const fn of [...SYSTEM_FUNCTIONS, ...ADMIN_READ_FUNCTIONS, ...ACCOUNT_FUNCTIONS]) {
       await sql`grant execute on function ${sql.raw(`public.${fn}`)} to ${who}`.execute(trx);
     }
     // Every name is schema-qualified, so nothing the app makes can stand in for these tables.

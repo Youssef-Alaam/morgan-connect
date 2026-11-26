@@ -39,26 +39,25 @@ const ids = (who: Owner, chatId: string) => ({
   chat_id: chatId,
 });
 
-/** A login, a session and a password link for this person. */
+/** A login, a session, a password link and an invite for this person. */
 async function seedAccounts(owner: Db, who: Owner, chatId: string): Promise<void> {
+  const person = { user_id: who.userId, workspace_id: who.workspaceId };
   await owner
     .insertInto('credentials')
-    .values({
-      user_id: who.userId,
-      workspace_id: who.workspaceId,
-      email: `${chatId}@example.test`,
-      password_hash: 'h',
-    })
+    .values({ ...person, email: `${chatId}@example.test`, password_hash: 'h' })
     .execute();
-  const future = new Date(Date.now() + 3_600_000);
-  const hashes = { token_hash: `t-${chatId}`, expires_at: future };
+  const hashes = { token_hash: `t-${chatId}`, expires_at: new Date(Date.now() + 3_600_000) };
   await owner
     .insertInto('sessions')
-    .values({ user_id: who.userId, workspace_id: who.workspaceId, ...hashes })
+    .values({ ...person, ...hashes })
     .execute();
   await owner
     .insertInto('password_links')
-    .values({ user_id: who.userId, workspace_id: who.workspaceId, ...hashes, used_at: null })
+    .values({ ...person, ...hashes })
+    .execute();
+  await owner
+    .insertInto('invites')
+    .values({ ...person, ...hashes, role: 'member' })
     .execute();
 }
 
@@ -116,7 +115,7 @@ export async function startIsolation(): Promise<Isolation> {
   const alice = await linkChats(owner, ['a']);
   const member = await owner
     .insertInto('users')
-    .values({ role: 'member' })
+    .values({ role: 'member', told_admin_can_read_at: new Date() })
     .returning(['id', 'workspace_id'])
     .executeTakeFirstOrThrow();
   const bob = { userId: member.id, workspaceId: member.workspace_id };
@@ -170,6 +169,7 @@ export const COVERED: readonly string[] = [
   'credentials',
   'sessions',
   'password_links',
+  'invites',
 ];
 
 /** Grants the app role is deliberately without (src/data/roles.ts); everything else is granted. */
