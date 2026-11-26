@@ -136,6 +136,17 @@ it('refuses when the owner cannot be asked, with one audit row', async () => {
   expect(await audit()).toEqual([{ outcome: 'refused', decision: 'ask', tool: 'demo.gated' }]);
 });
 
+it('refuses and audits an error when the question cannot be put', async () => {
+  const { approvals, tool, call } = setup();
+  vi.spyOn(approvals, 'request').mockRejectedValue(new Error('database down'));
+  expect(await call({ note: 'x' }).result).toMatchObject({
+    isError: true,
+    text: expect.stringContaining('could not be asked') as string,
+  });
+  expect(tool.run).not.toHaveBeenCalled();
+  expect(await audit()).toEqual([{ outcome: 'error', decision: 'ask', tool: 'demo.gated' }]);
+});
+
 it('never retries a state-changing tool that failed, even when the model call then fails', async () => {
   const run = vi.fn(() => Promise.reject(new Error('disk full')));
   const { approvals, nextPrompt, tool } = setup(run);

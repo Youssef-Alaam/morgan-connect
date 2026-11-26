@@ -23,7 +23,11 @@ const NOT_APPROVED = {
   expired: { outcome: 'expired', text: EXPIRED_REFUSAL },
   unavailable: { outcome: 'refused', text: UNAVAILABLE_REFUSAL },
   aborted: { outcome: 'aborted', text: '' },
-} as const satisfies Record<Exclude<Verdict, 'approved'>, { outcome: AuditOutcome; text: string }>;
+  failed: { outcome: 'error', text: UNAVAILABLE_REFUSAL },
+} as const satisfies Record<
+  Exclude<Verdict | 'failed', 'approved'>,
+  { outcome: AuditOutcome; text: string }
+>;
 
 export interface Call {
   caller: Caller;
@@ -46,10 +50,14 @@ export async function beforeRun(
     await recorder.record({ ...call, decision, outcome: 'refused' });
     return { text: refusalFor(decision), isError: true };
   }
-  const verdict = await approvals.request({ ...call, signal });
+  // A question that could not even be put (a database error) is still audited, and refused.
+  const verdict = await approvals.request({ ...call, signal }).catch(() => 'failed' as const);
   if (verdict === 'approved') return undefined;
   const { outcome, text } = NOT_APPROVED[verdict];
-  await recorder.recordAfterRun({ ...call, decision, outcome });
+  // Nothing ran, so a failed audit write is raised, as for any other refusal.
+  const write =
+    verdict === 'unavailable' || verdict === 'failed' ? recorder.record : recorder.recordAfterRun;
+  await write({ ...call, decision, outcome });
   if (verdict === 'aborted') throw abortedError();
   return { text, isError: true };
 }
