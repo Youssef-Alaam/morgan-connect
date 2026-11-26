@@ -12,6 +12,7 @@ import {
   insertTurn,
   migrateToLatest,
   type Db,
+  type Owner,
 } from '../../src/data/index.js';
 import { linkChats } from '../helpers/link-chats.js';
 import { startFakeTelegram } from '../helpers/fake-telegram.js';
@@ -21,6 +22,7 @@ const PRIVILEGE_ERROR = { code: '42501' };
 let postgres: TestPostgres;
 let owner: Db;
 let app: Db;
+let who: Owner;
 
 /** A connection string to the given container as the app role. */
 function appUrl(container: TestPostgres = postgres, password = 'app-pass-1'): string {
@@ -34,7 +36,7 @@ beforeAll(async () => {
   postgres = await startPostgres();
   owner = createDb(postgres.url);
   await migrateToLatest(owner);
-  await linkChats(owner, ['c1']);
+  who = await linkChats(owner, ['c1']);
   await ensureAppRole(owner, appUrl());
   app = createDb(appUrl());
 });
@@ -85,8 +87,8 @@ it('still runs the normal flows: turns and tables made later', async () => {
     chatId: 'c1',
     text: 'hi',
   });
-  await claimTurn(app, turn.id);
-  await finishTurn(app, turn.id, { status: 'done', replyText: 'ok' });
+  await claimTurn(app, who, turn.id);
+  await finishTurn(app, who, turn.id, { status: 'done', replyText: 'ok' });
   await app.deleteFrom('chat_messages').execute();
 
   await sql`create table later_table (id int)`.execute(owner);

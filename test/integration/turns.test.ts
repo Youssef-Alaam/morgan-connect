@@ -9,6 +9,7 @@ import {
   listQueuedTurnIds,
   migrateToLatest,
   type Db,
+  type Owner,
   type TurnQueue,
 } from '../../src/data/index.js';
 import { linkChats } from '../helpers/link-chats.js';
@@ -17,12 +18,13 @@ import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 let postgres: TestPostgres;
 let db: Db;
 let queue: TurnQueue;
+let who: Owner;
 
 beforeAll(async () => {
   postgres = await startPostgres();
   db = createDb(postgres.url);
   await migrateToLatest(db);
-  await linkChats(db, ['1']);
+  who = await linkChats(db, ['1']);
   queue = createTurnQueue(postgres.url, () => undefined);
   await queue.start();
 });
@@ -64,18 +66,18 @@ it('stores one turn per idempotency key, owned by the chat user and workspace', 
 
 it('lets exactly one caller claim a turn, and records how it finished', async () => {
   const { id } = await insertTurn(db, newTurn('k2'));
-  expect(await claimTurn(db, id)).toMatchObject({ id, text: 'hi', status: 'sending' });
-  expect(await claimTurn(db, id)).toBeUndefined();
-  await finishTurn(db, id, { status: 'done', replyText: 'hi' });
-  expect((await getTurn(db, id))?.status).toBe('done');
+  expect(await claimTurn(db, who, id)).toMatchObject({ id, text: 'hi', status: 'sending' });
+  expect(await claimTurn(db, who, id)).toBeUndefined();
+  await finishTurn(db, who, id, { status: 'done', replyText: 'hi' });
+  expect((await getTurn(db, who, id))?.status).toBe('done');
 });
 
 it('finishes only a turn that is sending, and lists turns still queued', async () => {
   const { id } = await insertTurn(db, newTurn('k3'));
-  await finishTurn(db, id, { status: 'done', replyText: 'hi' });
-  expect((await getTurn(db, id))?.status).toBe('queued');
+  await finishTurn(db, who, id, { status: 'done', replyText: 'hi' });
+  expect((await getTurn(db, who, id))?.status).toBe('queued');
   expect(await listQueuedTurnIds(db)).toContain(id);
-  await claimTurn(db, id);
+  await claimTurn(db, who, id);
   expect(await listQueuedTurnIds(db)).not.toContain(id);
 });
 

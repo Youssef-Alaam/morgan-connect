@@ -24,6 +24,10 @@ let postgres: TestPostgres;
 let db: Db;
 let queue: TurnQueue;
 const logger = createLogger('silent');
+const PERSON = {
+  userId: '00000000-0000-0000-0000-000000000042',
+  workspaceId: '00000000-0000-0000-0000-000000000001',
+};
 
 beforeAll(async () => {
   postgres = await startPostgres();
@@ -129,7 +133,7 @@ it('after a worker is killed mid-send, the redelivered job does not send the rep
 it('re-queues a turn that has no job', async () => {
   const id = await seed('5');
   expect(await requeueStuckTurns(deps(new FakeChannel()))).toBeGreaterThanOrEqual(1);
-  expect((await getTurn(db, id))?.status).toBe('queued');
+  expect((await getTurn(db, PERSON, id))?.status).toBe('queued');
 });
 it('retries a failing send three times, then marks the turn failed', async () => {
   const channel = new FakeChannel();
