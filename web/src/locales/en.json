@@ -12,6 +12,24 @@
       "danger": "Delete",
       "disabled": "Unavailable",
       "pressed": "Pressed {{times}} times"
+    },
+    "inputs": {
+      "title": "Text input, password input and select",
+      "name": "Display name",
+      "nameHint": "Shown to the people in your chats.",
+      "email": "Email",
+      "emailError": "Enter an email address like name@example.com.",
+      "password": "Password",
+      "show": "Show password",
+      "hide": "Hide password",
+      "language": "Language",
+      "english": "English",
+      "arabic": "Arabic"
+    },
+    "choices": {
+      "title": "Checkbox and switch",
+      "remember": "Remember this device",
+      "notifications": "Notifications"
     }
   }
 }
