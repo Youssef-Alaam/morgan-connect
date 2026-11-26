@@ -155,3 +155,16 @@ test('a toast is announced and can be dismissed from the keyboard', async ({ pag
   await live.getByRole('button', { name: 'Dismiss' }).press('Enter');
   await expect(live).not.toContainText('Chat saved');
 });
+
+test('an approval is decided from the keyboard and then shows the outcome', async ({ page }) => {
+  const card = page.getByRole('group', { name: 'Send this email?' });
+  await card.getByRole('button', { name: 'Approve' }).press('Enter');
+  await expect(card).toContainText('Approved');
+  await expect(card.getByRole('button')).toHaveCount(0);
+});
+
+test('the side navigation marks the current page', async ({ page }) => {
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  await expect(nav.getByRole('link', { name: 'Chat' })).toHaveAttribute('aria-current', 'page');
+  await expect(nav.getByRole('link', { name: 'Users' })).not.toHaveAttribute('aria-current');
+});
