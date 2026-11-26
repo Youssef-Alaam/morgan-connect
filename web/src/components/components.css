@@ -115,3 +115,44 @@
   inset-inline-start: calc(100% - var(--switch-thumb) - var(--space-1));
   background: var(--onAccent);
 }
+
+.code-input {
+  direction: ltr;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-lg);
+  letter-spacing: var(--space-2);
+}
+
+.three-way {
+  display: inline-flex;
+  border: var(--border-width) solid var(--input-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.three-way-option {
+  min-block-size: var(--target);
+  padding-inline: var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.three-way-option[aria-checked='true'] {
+  background: var(--accent);
+  color: var(--onAccent);
+}
+
+.three-way-option:focus-visible {
+  outline-offset: calc(var(--border-width) * -3);
+}
+
+.page .risk {
+  padding-inline-start: var(--space-2);
+  border-inline-start: calc(var(--border-width) * 4) solid var(--danger);
+  color: var(--dangerText);
+}
