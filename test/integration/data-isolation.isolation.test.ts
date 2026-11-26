@@ -9,8 +9,10 @@ import {
   decideApproval,
   endConversation,
   getTurn,
+  listPasskeys,
   loadHistory,
   recordWebEvent,
+  removePasskey,
   usageSince,
   webEventsAfter,
 } from '../../src/data/index.js';
@@ -155,6 +157,19 @@ describe('user-data tables', () => {
 
   it('backup_codes', async () => {
     await expectIsolated('backup_codes', ctx);
+  });
+
+  it('passkeys', async () => {
+    await expectIsolated('passkeys', ctx);
+    expect(await listPasskeys(ctx.app, ctx.alice)).toMatchObject([{ credentialId: 'cred-a' }]);
+    const bobs = await ctx.owner
+      .selectFrom('passkeys')
+      .select('id')
+      .where('user_id', '=', ctx.bob.userId)
+      .executeTakeFirstOrThrow();
+    expect(await removePasskey(ctx.app, ctx.alice, bobs.id)).toBe('not_found');
+    const left = await listPasskeys(ctx.app, ctx.bob);
+    expect(left.map((each) => each.credentialId)).toContain('cred-b');
   });
 
   it('has run for every table in COVERED', () => {

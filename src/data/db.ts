@@ -98,6 +98,19 @@ export interface Database {
     created_at: Generated<Date>;
     used_at: Date | null;
   };
+  passkeys: {
+    id: Generated<string>;
+    user_id: string;
+    workspace_id: string;
+    credential_id: string;
+    public_key: string;
+    // bigint comes back from pg as a string.
+    counter: ColumnType<string, number | undefined, number>;
+    transports: string[] | null;
+    name: string;
+    created_at: Generated<Date>;
+    last_used_at: Date | null;
+  };
   setup_codes: {
     id: Generated<string>;
     code_hash: string;

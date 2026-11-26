@@ -22,6 +22,7 @@ export const SYSTEM_FUNCTIONS: readonly string[] = [
   'system_link_live(text)',
   'system_invite_live(text)',
   'system_redeem_invite(text, text, text)',
+  'system_passkey_by_credential(text)',
 ];
 
 interface OwnerRow {
@@ -168,4 +169,27 @@ export async function redeemInvite(
     db,
   );
   return toOwner(rows[0]);
+}
+
+/** Passkey sign-in: the person and public key behind a credential id, or undefined. */
+export async function passkeyByCredential(
+  db: Db,
+  credentialId: string,
+): Promise<
+  (Owner & { publicKey: string; counter: number; transports: string[] | null }) | undefined
+> {
+  const { rows } = await sql<
+    OwnerRow & { public_key: string; counter: string; transports: string[] | null }
+  >`select user_id, workspace_id, public_key, counter, transports
+    from system_passkey_by_credential(${credentialId})`.execute(db);
+  const row = rows[0];
+  const owner = toOwner(row);
+  return row === undefined || owner === undefined
+    ? undefined
+    : {
+        ...owner,
+        publicKey: row.public_key,
+        counter: Number(row.counter),
+        transports: row.transports,
+      };
 }

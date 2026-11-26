@@ -153,6 +153,7 @@ export const COVERED: readonly string[] = [
   'link_codes',
   'totp_factors',
   'backup_codes',
+  'passkeys',
 ];
 
 /** Grants the app role is deliberately without (src/data/roles.ts); everything else is granted. */

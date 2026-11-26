@@ -12,6 +12,7 @@ export { ownerOf, withOwner, type Owner } from './tenancy.js';
 export {
   credentialsByEmail,
   inviteLive,
+  passkeyByCredential,
   issueAdminLink,
   linkLive,
   redeemInvite,
@@ -37,6 +38,14 @@ export {
   spendTotpStep,
   startTotp,
 } from './second-factor.js';
+export {
+  addPasskey,
+  listPasskeys,
+  recordPasskeyUse,
+  removePasskey,
+  type NewPasskey,
+  type Passkey,
+} from './passkeys.js';
 export { migrateToLatest } from './migrator.js';
 export { assertRlsApplies, ensureAppRole } from './roles.js';
 export {

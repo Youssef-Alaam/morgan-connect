@@ -140,3 +140,16 @@ it('takes TWO_FACTOR_KEY as 32 base64 bytes and refuses anything else, without e
   expect(failure).toThrow(/TWO_FACTOR_KEY/);
   expect(failure).not.toThrow(short);
 });
+
+it('takes passkey settings together, and fails at boot when the origin is off the relying-party id', () => {
+  const load = (extra: Record<string, string>) => () => loadConfig({ DATABASE_URL: URL, ...extra });
+  const good = { WEBAUTHN_RP_ID: 'example.com', WEBAUTHN_ORIGIN: 'https://app.example.com' };
+  expect(load(good)).not.toThrow();
+  expect(load({})).not.toThrow();
+  expect(load({ WEBAUTHN_RP_ID: 'example.com' })).toThrow(/together/);
+  expect(load({ WEBAUTHN_ORIGIN: 'https://example.com' })).toThrow(/together/);
+  expect(load({ ...good, WEBAUTHN_ORIGIN: 'https://evilexample.com' })).toThrow(/subdomain/);
+  expect(load({ ...good, WEBAUTHN_ORIGIN: 'http://app.example.com' })).toThrow(/https/);
+  const local = { WEBAUTHN_RP_ID: 'localhost', WEBAUTHN_ORIGIN: 'http://localhost:3000' };
+  expect(load(local)).not.toThrow();
+});
