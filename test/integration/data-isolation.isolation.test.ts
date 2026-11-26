@@ -59,7 +59,8 @@ describe('user-data tables', () => {
   it('usage_ledger', async () => {
     await expectIsolated('usage_ledger', ctx);
     const report = await usageSince(ctx.app, ctx.alice, new Date(), 'UTC');
-    expect(report.month.calls).toBe(1);
+    expect(report.month).toMatchObject({ calls: 1, inputTokens: 1, outputTokens: 2 });
+    expect(Number(report.month.costUsd)).toBeCloseTo(0.25);
   });
 
   it('approvals', async () => {

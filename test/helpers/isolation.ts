@@ -24,6 +24,8 @@ export interface Isolation {
   /** Alice (admin) has chat `a`; Bob (member) has chat `b`. */
   alice: Owner;
   bob: Owner;
+  /** A second workspace, for forged writes that try to cross into it. */
+  otherWorkspaceId: string;
   bobTurnId: string;
   bobApprovalId: string;
   stop: () => Promise<void>;
@@ -51,11 +53,11 @@ async function seedRows(
     ...chat,
     model: 'm',
     status: 'ok',
-    inputTokens: 1,
-    outputTokens: 1,
+    inputTokens: chatId === 'b' ? 100 : 1,
+    outputTokens: chatId === 'b' ? 200 : 2,
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
-    costUsd: 0,
+    costUsd: chatId === 'b' ? 5 : 0.25,
   });
   const approvalId = await createApproval(owner, {
     owner: who,
@@ -97,6 +99,11 @@ export async function startIsolation(): Promise<Isolation> {
     .insertInto('devices')
     .values({ user_id: bob.userId, channel: 'fake', chat_id: 'b' })
     .execute();
+  const other = await owner
+    .insertInto('workspaces')
+    .values({ name: 'Other' })
+    .returning('id')
+    .executeTakeFirstOrThrow();
   await seedRows(owner, alice, 'a');
   const bobsRows = await seedRows(owner, bob, 'b');
   // Bob's approval is approved, so only the owner check (not its status) keeps Alice out.
@@ -111,6 +118,7 @@ export async function startIsolation(): Promise<Isolation> {
     app,
     alice,
     bob,
+    otherWorkspaceId: other.id,
     bobTurnId: bobsRows.turnId,
     bobApprovalId: bobsRows.approvalId,
     stop: async () => {
@@ -121,24 +129,96 @@ export async function startIsolation(): Promise<Isolation> {
   };
 }
 
-/** Run a statement that may be refused outright (no privilege) and count the rows it changed. */
-async function changed(run: Promise<{ numAffectedRows?: bigint | undefined }>): Promise<number> {
-  try {
-    return Number((await run).numAffectedRows ?? 0n);
-  } catch (error) {
-    if (error instanceof Error && /permission denied|row-level security/.test(error.message)) {
-      return 0;
-    }
-    throw error;
-  }
+/**
+ * Every user-data table that `expectIsolated` is called with. The catalog test fails when this set
+ * differs from the tables the database actually holds a person's rows in.
+ */
+export const COVERED: readonly string[] = [
+  'turns',
+  'chat_messages',
+  'chat_conversations',
+  'usage_ledger',
+  'approvals',
+  'audit_log',
+  'users',
+  'devices',
+];
+
+/** Grants the app role is deliberately without (src/data/roles.ts); everything else is granted. */
+const NO_UPDATE: readonly string[] = ['audit_log', 'users'];
+const NO_DELETE: readonly string[] = ['audit_log'];
+
+const RLS = /row-level security/;
+const DENIED = /permission denied/;
+
+async function granted(ctx: Isolation, table: string, verb: 'UPDATE' | 'DELETE'): Promise<boolean> {
+  const { rows } = await sql<{ ok: boolean }>`
+    select has_table_privilege(current_user, ${`public.${table}`}, ${verb}) as ok`.execute(ctx.app);
+  return rows[0]?.ok === true;
+}
+
+interface Column {
+  name: string;
+  /** A primary key with a default: a forged insert leaves it out, so it gets a fresh one. */
+  fresh: boolean;
+}
+
+async function columnsOf(owner: Db, table: string): Promise<Column[]> {
+  const { rows } = await sql<Column>`
+    select a.attname as name, (coalesce(i.indisprimary, false) and a.atthasdef) as fresh
+    from pg_attribute a
+    left join pg_index i on i.indrelid = a.attrelid and i.indisprimary and a.attnum = any(i.indkey)
+    where a.attrelid = ${`public.${table}`}::regclass and a.attnum > 0 and not a.attisdropped`.execute(
+    owner,
+  );
+  return rows;
+}
+
+/** Alice tries to write this row of someone else's (or hers, moved): the policy must refuse it. */
+async function forgedInsert(
+  ctx: Isolation,
+  table: string,
+  from: string,
+  change: Record<string, string>,
+): Promise<void> {
+  const columns = await columnsOf(ctx.owner, table);
+  const who = table === 'users' ? 'id' : 'user_id';
+  const found = await sql<{ row: object }>`
+    select row_to_json(t) as row from ${sql.table(table)} t where ${sql.id(who)} = ${from} limit 1`.execute(
+    ctx.owner,
+  );
+  const row = { ...found.rows[0]?.row, ...change };
+  const names = sql.join(columns.filter((c) => !c.fresh).map((c) => sql.id(c.name)));
+  const forged = withOwner(ctx.app, ctx.alice, (trx) =>
+    sql`insert into ${sql.table(table)} (${names}) select ${names}
+      from json_populate_record(null::${sql.table(table)}, ${JSON.stringify(row)}::json)`.execute(
+      trx,
+    ),
+  );
+  await expect(forged).rejects.toThrow(RLS);
+}
+
+/** Alice's own update that would hand her row to Bob or to another workspace must be refused. */
+async function forgedUpdate(ctx: Isolation, table: string, set: string, to: string): Promise<void> {
+  const who = sql.id(table === 'users' ? 'id' : 'user_id');
+  const moved = withOwner(ctx.app, ctx.alice, (trx) =>
+    sql`update ${sql.table(table)} set ${sql.id(set)} = ${to} where ${who} = ${ctx.alice.userId}`.execute(
+      trx,
+    ),
+  );
+  await expect(moved).rejects.toThrow(RLS);
 }
 
 /**
  * User A cannot read or write user B's rows in `table`, directly under row-level security as the
- * app role: reads show only A's rows, A cannot see, update or delete B's row, and an insert that
- * carries B's user is refused. B's rows are the same afterwards (checked as the owner role).
+ * app role: A sees only A's rows; A's update or delete of B's row changes nothing; an insert that
+ * carries B's user, or another workspace, is refused by the policy; A cannot hand her own row to
+ * B (update of user_id) or move it to another workspace. Where the app role has no update or
+ * delete grant at all, that is asserted instead, so a missing policy cannot hide behind it. B's
+ * rows are the same afterwards, checked as the owner role.
  */
 export async function expectIsolated(table: string, ctx: Isolation): Promise<void> {
+  expect(COVERED).toContain(table);
   const { owner, app, alice, bob } = ctx;
   const who = sql.id(table === 'users' ? 'id' : 'user_id');
   const from = sql.table(table);
@@ -155,16 +235,41 @@ export async function expectIsolated(table: string, ctx: Isolation): Promise<voi
     const theirs = await sql`select 1 from ${from} where ${who} = ${bob.userId}`.execute(trx);
     expect(theirs.rows).toEqual([]);
   });
-  const touch = (statement: ReturnType<typeof sql>) =>
-    changed(withOwner(app, alice, (trx) => statement.execute(trx)));
-  expect(await touch(sql`update ${from} set ${who} = ${who} where ${who} = ${bob.userId}`)).toBe(0);
-  expect(await touch(sql`delete from ${from} where ${who} = ${bob.userId}`)).toBe(0);
-  const row = await sql`select * from ${from} where ${who} = ${bob.userId} limit 1`.execute(owner);
-  const forged = withOwner(app, alice, (trx) =>
-    sql`insert into ${from} select * from json_populate_record(null::${from}, ${JSON.stringify(row.rows[0])}::json)`.execute(
-      trx,
-    ),
-  );
-  await expect(forged).rejects.toThrow(/row-level security|permission denied/);
+  await expectWrites(ctx, table);
+  await forgedInsert(ctx, table, bob.userId, {});
+  const hasWorkspace = (await columnsOf(owner, table)).some((c) => c.name === 'workspace_id');
+  if (hasWorkspace) {
+    await forgedInsert(ctx, table, alice.userId, { workspace_id: ctx.otherWorkspaceId });
+  }
   expect(await bobsRows()).toBe(before);
+}
+
+/** Update and delete: refused by grant where the app role has none, by the policy where it has. */
+async function expectWrites(ctx: Isolation, table: string): Promise<void> {
+  const { app, alice, bob } = ctx;
+  const who = sql.id(table === 'users' ? 'id' : 'user_id');
+  const from = sql.table(table);
+  const run = (statement: ReturnType<typeof sql>) =>
+    withOwner(app, alice, (trx) => statement.execute(trx));
+  const grants = {
+    update: await granted(ctx, table, 'UPDATE'),
+    delete: await granted(ctx, table, 'DELETE'),
+  };
+  expect(grants).toEqual({
+    update: !NO_UPDATE.includes(table),
+    delete: !NO_DELETE.includes(table),
+  });
+  const update = run(sql`update ${from} set ${who} = ${who} where ${who} = ${bob.userId}`);
+  if (grants.update) {
+    expect((await update).numAffectedRows).toBe(0n);
+    await forgedUpdate(ctx, table, table === 'users' ? 'id' : 'user_id', bob.userId);
+    if ((await columnsOf(ctx.owner, table)).some((c) => c.name === 'workspace_id')) {
+      await forgedUpdate(ctx, table, 'workspace_id', ctx.otherWorkspaceId);
+    }
+  } else {
+    await expect(update).rejects.toThrow(DENIED);
+  }
+  const remove = run(sql`delete from ${from} where ${who} = ${bob.userId}`);
+  if (grants.delete) expect((await remove).numAffectedRows).toBe(0n);
+  else await expect(remove).rejects.toThrow(DENIED);
 }
