@@ -68,6 +68,8 @@ export async function ensureAppRole(owner: Db, databaseUrl: string): Promise<voi
     }
     // Every name is schema-qualified, so nothing the app makes can stand in for these tables.
     await sql`revoke update, delete, truncate on public.audit_log from ${who}`.execute(trx);
+    // No app path changes a user row; a member must not be able to set their own role.
+    await sql`revoke update on public.users from ${who}`.execute(trx);
     // The migration books are the owner's alone to write.
     await sql`revoke insert, update, delete, truncate on public.schema_info, public.kysely_migration,
       public.kysely_migration_lock from ${who}`.execute(trx);
@@ -84,4 +86,17 @@ async function grantQueueSchema(
   await sql`grant all on all tables in schema pgboss to ${who}`.execute(trx);
   await sql`grant all on all sequences in schema pgboss to ${who}`.execute(trx);
   await sql`grant execute on all functions in schema pgboss to ${who}`.execute(trx);
+}
+
+/** Refuse to run as a role that row-level security does not hold back (superuser or BYPASSRLS). */
+export async function assertRlsApplies(db: Db): Promise<void> {
+  const { rows } = await sql<{ bypass: boolean }>`
+    select rolsuper or rolbypassrls as bypass from pg_roles where rolname = current_user`.execute(
+    db,
+  );
+  if (rows[0]?.bypass !== false) {
+    throw new Error(
+      'The DATABASE_URL role is a superuser or has BYPASSRLS, so row-level security would be off. Set MIGRATION_DATABASE_URL to the owner role and DATABASE_URL to a separate app role.',
+    );
+  }
 }

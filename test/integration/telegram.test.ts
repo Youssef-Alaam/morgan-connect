@@ -6,7 +6,7 @@ import { createDb, migrateToLatest } from '../../src/data/index.js';
 import { createLogger } from '../../src/ops/index.js';
 import { ScriptedEngine } from '../helpers/fake-engine.js';
 import { startFakeTelegram } from '../helpers/fake-telegram.js';
-import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
+import { roleUrls, startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
 
@@ -19,7 +19,7 @@ afterAll(async () => {
 });
 
 const env = (apiRoot: string): Record<string, string> => ({
-  DATABASE_URL: postgres.url,
+  ...roleUrls(postgres.url),
   PORT: '0',
   LOG_LEVEL: 'silent',
   TELEGRAM_BOT_TOKEN: '123:fake-token',
