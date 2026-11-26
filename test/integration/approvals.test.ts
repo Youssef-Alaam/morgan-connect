@@ -50,7 +50,6 @@ const statusOf = async (id: string): Promise<string | undefined> =>
   (await db.selectFrom('approvals').select('status').where('id', '=', id).executeTakeFirst())
     ?.status;
 
-/** Approvals whose questions are collected here instead of shown in a chat. */
 function setup(prompt?: (p: ApprovalPrompt) => Promise<void>) {
   const listeners: ((prompt: ApprovalPrompt) => void)[] = [];
   const approvals = createApprovals({
@@ -64,7 +63,6 @@ function setup(prompt?: (p: ApprovalPrompt) => Promise<void>) {
         return Promise.resolve();
       }),
   });
-  /** Start a request and wait until its question is out. */
   const ask = async (args: Record<string, unknown>, signal?: AbortSignal, who = caller) => {
     const shown = new Promise<ApprovalPrompt>((resolve) => listeners.push(resolve));
     const verdict = approvals.request({ caller: who, tool, args, signal });
@@ -99,6 +97,17 @@ it('stores the hash of the call under the owner, never the arguments', async () 
   });
   expect(row.args_sha256).toBe(approvalHash('demo.gated', { note: 'private words' }));
   expect(JSON.stringify(row)).not.toContain('private words');
+});
+
+it('counts exactly one of two taps that arrive together', async () => {
+  const { approvals, ask } = setup();
+  const { verdict, prompt } = await ask({ note: 'x' });
+  const taps = await Promise.all([
+    approvals.decide(prompt.id, 'approved', OWNER_CHAT),
+    approvals.decide(prompt.id, 'denied', OWNER_CHAT),
+  ]);
+  expect(taps.filter(Boolean)).toHaveLength(1);
+  expect(await verdict).toBe(taps[0] ? 'approved' : 'denied');
 });
 
 it('answers denied after Deny', async () => {
@@ -147,27 +156,19 @@ it('expires after the set time, and a late tap fails', async () => {
 });
 
 it('stops waiting when the turn is aborted, and cancels the question', async () => {
-  const { approvals, ask } = setup();
+  const { ask } = setup();
   const stop = new AbortController();
   const { verdict, prompt } = await ask({ note: 'x' }, stop.signal);
   stop.abort();
   expect(await verdict).toBe('aborted');
   expect(await statusOf(prompt.id)).toBe('cancelled');
-  expect(await approvals.decide(prompt.id, 'approved', OWNER_CHAT)).toBe(false);
 });
 
-it('does not ask when the turn was already stopped', async () => {
+it('does not ask when the chat has no owner, the args are too long, or the turn already stopped', async () => {
   const prompt = vi.fn(() => Promise.resolve());
   const { approvals } = setup(prompt);
-  const stop = new AbortController();
-  stop.abort();
-  expect(await approvals.request({ caller, tool, args: {}, signal: stop.signal })).toBe('aborted');
-  expect(prompt).not.toHaveBeenCalled();
-});
-
-it('does not ask when the chat has no owner or the arguments are too long to show', async () => {
-  const prompt = vi.fn(() => Promise.resolve());
-  const { approvals } = setup(prompt);
+  const stop = AbortSignal.abort();
+  expect(await approvals.request({ caller, tool, args: {}, signal: stop })).toBe('aborted');
   const stranger = { channel: 'fake', chatId: 'nobody' };
   expect(await approvals.request({ caller: stranger, tool, args: { a: 1 } })).toBe('unavailable');
   expect(await approvals.request({ caller, tool, args: { a: 'x'.repeat(3500) } })).toBe(

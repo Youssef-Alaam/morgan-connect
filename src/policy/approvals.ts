@@ -50,6 +50,7 @@ export interface Approvals {
 /** Telegram holds 4096 characters; what the owner approves must be shown in full or not asked. */
 const MAX_SHOWN = 3000;
 
+/** The owner sees this JSON, and `approvalHash` covers the same JSON of the same args. */
 function describeCall(tool: Described, args: Record<string, unknown>): string | undefined {
   const shown = JSON.stringify(args, null, 2);
   if (shown.length > MAX_SHOWN) return undefined;
