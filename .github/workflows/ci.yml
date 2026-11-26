@@ -84,7 +84,7 @@ jobs:
         run: >
           npx vitest run --project integration
           --coverage --coverage.reportsDirectory=coverage/integration
-      # No migrations exist yet, so the minimal script finds no tables and passes.
+      # Lists each user-data table with its isolation test; fails when one has none.
       - name: 14. Isolation coverage
         run: node scripts/check-isolation-tests.mjs
       # Passes when no src lines changed. Uses every cobertura file the test steps wrote.
