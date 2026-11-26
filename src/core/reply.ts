@@ -19,6 +19,7 @@ import {
   type EngineSession,
   type Gate,
 } from '../policy/index.js';
+import { joinSystem, trusted, type SystemPrompt } from '../safety/index.js';
 import { isCommand } from './commands.js';
 import type { ChannelSender } from './sender.js';
 import { formatUsage } from './usage-report.js';
@@ -38,7 +39,8 @@ export interface ReplyDeps {
   db: Db;
   engine: Engine;
   logger: Logger;
-  system?: string;
+  /** Instruction text: a trusted literal only. */
+  system?: SystemPrompt;
   /** The tools the model may call, each behind the policy gate. */
   gate?: Gate;
   /** The model id the engine uses; written to the usage ledger. */
@@ -146,15 +148,11 @@ async function keepStopped(
   }
 }
 
-const TIME_NOTE = 'The current local time is given at the start of each user message.';
+const TIME_NOTE = trusted('The current local time is given at the start of each user message.');
 
 /** The system prompt never changes between turns, so the provider can cache it. */
-const systemFor = (deps: ReplyDeps): string =>
-  deps.system === undefined
-    ? TIME_NOTE
-    : `${deps.system}
-
-${TIME_NOTE}`;
+const systemFor = (deps: ReplyDeps): SystemPrompt =>
+  deps.system === undefined ? TIME_NOTE : joinSystem(deps.system, TIME_NOTE);
 
 /** "[Now: Wed 25 Nov 2026 13:30 (Africa/Cairo, UTC+02:00)] hello": kept in the history, so each turn keeps its own time. */
 function stamped(deps: ReplyDeps, text: string): string {
