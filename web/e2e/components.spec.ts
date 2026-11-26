@@ -73,10 +73,15 @@ test('inputs, select, checkbox and switch work from the keyboard', async ({ page
   await expect(password).toHaveAttribute('type', 'password');
   await page.getByRole('button', { name: 'Show password' }).press('Enter');
   await expect(password).toHaveAttribute('type', 'text');
-  await expect(password).toHaveAttribute('autocomplete', 'current-password');
-  await expect(password).toHaveAttribute('spellcheck', 'false');
-  await expect(password).toHaveAttribute('autocapitalize', 'off');
-  await expect(password).toHaveAttribute('autocorrect', 'off');
+  const hints = {
+    autocomplete: 'current-password',
+    spellcheck: 'false',
+    autocapitalize: 'off',
+    autocorrect: 'off',
+  };
+  for (const [name, value] of Object.entries(hints)) {
+    await expect(password).toHaveAttribute(name, value);
+  }
 
   await page.getByLabel('Language').selectOption('ar');
   await expect(page.getByLabel('Language')).toHaveValue('ar');

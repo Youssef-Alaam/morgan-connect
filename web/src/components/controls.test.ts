@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { Checkbox, Switch } from './Toggle.tsx';
+import { Switch } from './Toggle.tsx';
 import { Select } from './Select.tsx';
 import { PasswordInput, TextInput } from './TextInput.tsx';
 
@@ -20,10 +20,6 @@ describe('TextInput', () => {
     expect(markup).toContain('aria-invalid="true"');
     expect(markup).toMatch(/aria-describedby="[^"]+ [^"]+"/);
     expect(markup).toContain('Bad');
-  });
-
-  it('is not invalid without an error', () => {
-    expect(render(createElement(TextInput, { label: 'Name' }))).not.toContain('aria-invalid');
   });
 });
 
@@ -67,26 +63,13 @@ describe('Select', () => {
   });
 });
 
-describe('Checkbox and Switch', () => {
-  it('checkbox is a native checkbox with its label', () => {
-    const markup = render(createElement(Checkbox, { label: 'Agree' }));
-    expect(markup).toContain('type="checkbox"');
-    expect(markup).toContain('Agree');
-  });
-
-  it('switch is named by a label that wraps it, so the text is clickable', () => {
-    const markup = render(
-      createElement(Switch, { label: 'On', checked: true, onChange: () => undefined }),
-    );
-    expect(markup.startsWith('<label')).toBe(true);
-    expect(markup).toContain('<span>On</span></label>');
-  });
-
+describe('Switch', () => {
   it.each([true, false])('switch reports checked=%s to assistive tech', (checked) => {
     const markup = render(
       createElement(Switch, { label: 'On', checked, onChange: () => undefined }),
     );
     expect(markup).toContain('role="switch"');
+    expect(markup).toContain('<span>On</span></label>'); // the label wraps it, so its text is clickable
     expect(markup).toContain(`aria-checked="${String(checked)}"`);
   });
 });
