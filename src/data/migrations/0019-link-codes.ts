@@ -24,7 +24,8 @@ async function createTable(db: Kysely<unknown>): Promise<void> {
 
 async function createFunctions(db: Kysely<unknown>): Promise<void> {
   // One step: spend the code and link the chat to the person who asked for it, or neither. A chat
-  // that is already linked (to anyone) is left as it is and the code is not spent.
+  // that is already linked (to anyone) is left as it is and the code is not spent. The audit row
+  // is written in the same step, so a link never exists without it.
   await sql`create function public.system_redeem_link_code(p_code_hash text, p_channel text,
     p_chat_id text) returns table (user_id uuid, workspace_id uuid) language plpgsql ${SAFE} as $$
     #variable_conflict use_column
@@ -38,6 +39,10 @@ async function createFunctions(db: Kysely<unknown>): Promise<void> {
         returning link_codes.user_id, link_codes.workspace_id into v_user, v_ws;
       if v_user is null then return; end if;
       insert into public.devices (user_id, channel, chat_id) values (v_user, p_channel, p_chat_id);
+      insert into public.audit_log (channel, chat_id, user_id, workspace_id, tool, action_type,
+        changes_state, arg_names, extra_args, args_sha256, decision, outcome, subject_user_id)
+        values (p_channel, p_chat_id, v_user, v_ws, 'device.link', 'device.link', true, '{}', 0,
+        encode(sha256(''::bytea), 'hex'), 'auto', 'ok', v_user);
       return query select v_user, v_ws;
     end $$`.execute(db);
 }

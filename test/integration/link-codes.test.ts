@@ -125,3 +125,13 @@ it('a chat already linked to someone else cannot be taken over, and the code is 
   const next = await newCode(ctx.bob);
   expect(await identity.link('web', 'forged', next)).toBe('refused');
 });
+
+it('caps refused tries across all chats, so new chats cannot keep guessing', async () => {
+  const strict = createIdentity(ctx.app);
+  const code = await newCode(ctx.bob);
+  for (let i = 0; i < 100; i += 1)
+    expect(await strict.link('fake', `g${String(i)}`, 'NOPE')).toBe('refused');
+  expect(await strict.link('fake', 'g-late', code)).toBe('limited');
+  expect(await ownerOfChat('g-late')).toBeUndefined();
+  expect(await identity.link('fake', 'g-late', code)).toBe('claimed');
+});
