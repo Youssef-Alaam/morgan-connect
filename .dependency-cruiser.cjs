@@ -57,6 +57,14 @@ module.exports = {
       to: { path: '^src/tools/' },
     },
     {
+      name: 'evals-never-imported-by-the-app',
+      severity: 'error',
+      comment:
+        'The eval harness is dev tooling: no app code may import it, so it stays out of the build.',
+      from: { path: '^src/', pathNot: '^src/evals/' },
+      to: { path: '^src/evals/' },
+    },
+    {
       name: 'web-and-backend-never-import-each-other',
       severity: 'error',
       from: { path: '^web/' },

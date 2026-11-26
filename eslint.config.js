@@ -53,7 +53,16 @@ const rawValues = ['Literal[value', 'TemplateElement[value.raw'].map((selector) 
 }));
 
 export default tseslint.config(
-  { ignores: ['node_modules/**', 'coverage/**', 'dist/**', 'web/dist/**', '.claude/**'] },
+  {
+    ignores: [
+      'node_modules/**',
+      'coverage/**',
+      'dist/**',
+      'dist-evals/**',
+      'web/dist/**',
+      '.claude/**',
+    ],
+  },
   eslint.configs.recommended,
   tseslint.configs.strictTypeChecked,
   tseslint.configs.stylisticTypeChecked,
