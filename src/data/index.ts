@@ -28,7 +28,14 @@ export {
   type LinkedDevice,
 } from './devices.js';
 export { changePassword, createAccount, createInvite } from './invites.js';
-export { confirmTotp, pendingTotp, startTotp } from './second-factor.js';
+export {
+  activeTotp,
+  confirmTotp,
+  pendingTotp,
+  spendBackupCode,
+  spendTotpStep,
+  startTotp,
+} from './second-factor.js';
 export { migrateToLatest } from './migrator.js';
 export { assertRlsApplies, ensureAppRole } from './roles.js';
 export {

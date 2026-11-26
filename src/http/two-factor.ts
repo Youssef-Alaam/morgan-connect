@@ -1,6 +1,16 @@
+import { randomUUID } from 'node:crypto';
 import { type Hono } from 'hono';
 import { z } from 'zod';
-import { accountOf, confirmTotp, pendingTotp, startTotp } from '../data/index.js';
+import {
+  accountOf,
+  activeTotp,
+  confirmTotp,
+  pendingTotp,
+  spendBackupCode,
+  spendTotpStep,
+  startTotp,
+  type Owner,
+} from '../data/index.js';
 import { createFailureLimiter, type FailureLimiter } from '../identity/limiter.js';
 import {
   checkTotp,
@@ -11,25 +21,124 @@ import {
   sealSecret,
   totpUri,
 } from '../identity/second-factor.js';
-import { type AuthDeps, type Signed } from './session.js';
+import { addressOf, openSession, type AuthDeps, type Shared, type Signed } from './session.js';
 
 const MAX_WRONG_CODES = 5;
 const WINDOW_MS = 15 * 60 * 1000;
+const CHALLENGE_MS = 5 * 60 * 1000;
+/** Binds a challenge to its purpose, so no stored secret can be passed off as one. */
+const CHALLENGE_AAD = 'sign-in';
 const code = z.object({ code: z.string().max(32) });
+const challengeBody = z.object({ challenge: z.string().max(500), code: z.string().max(32) });
+const challengeData = z.object({
+  userId: z.string(),
+  workspaceId: z.string(),
+  real: z.boolean(),
+  until: z.number(),
+});
 const unavailable = { error: 'two_factor_unavailable' } as const;
 
-/** What the second-factor paths share: the key, and one failure bucket per person. */
+/** What the second-factor paths share: the key, one failure bucket per person, and the check. */
 export interface TwoFactor {
   key: Buffer | undefined;
+  /**
+   * One wrong-code bucket per person, shared by the sign-in second step, confirm and disable, so
+   * guessing cannot be spread across the three paths. For a sign-in with a bad challenge it is the
+   * caller's address.
+   */
   limiter: FailureLimiter;
+  /** True for a live authenticator code (each step once) or an unused backup code (once). */
+  verify: (owner: Owner, code: string) => Promise<boolean>;
 }
 
-export function createTwoFactor({ twoFactorKey: key, now = Date.now }: AuthDeps): TwoFactor {
+export function createTwoFactor({ db, twoFactorKey: key, now = Date.now }: AuthDeps): TwoFactor {
   const limiter = createFailureLimiter({ max: MAX_WRONG_CODES, windowMs: WINDOW_MS, now });
-  return { key, limiter };
+  const verify = async (owner: Owner, given: string): Promise<boolean> => {
+    if (key === undefined) return false;
+    const sealed = await activeTotp(db, owner);
+    if (sealed === undefined) return false;
+    if (/^\d{6}$/.test(given)) {
+      const step = checkTotp(openSecret(key, owner.userId, sealed), given, now());
+      return step !== undefined && (await spendTotpStep(db, owner, step));
+    }
+    return spendBackupCode(db, owner, hashBackupCode(key, given));
+  };
+  return { key, limiter, verify };
 }
 
-/** Counts the try first, then runs the check, so concurrent tries cannot skip the limit. */
+/**
+ * The answer to a password that needs a second step, or undefined when none is needed. With a key
+ * set, a wrong password gets the same answer as a right one on an account with a second factor
+ * (same shape, only a right password carries the real person, a wrong one made-up ids no code can
+ * match), so the password is never confirmed to someone who lacks the second factor.
+ */
+export async function challengeIfNeeded(
+  { db }: AuthDeps,
+  two: TwoFactor,
+  owner: Owner | undefined,
+  now: number,
+): Promise<object | undefined> {
+  // One lookup either way, so a wrong password costs the same time as a right one.
+  const who = owner ?? { userId: randomUUID(), workspaceId: randomUUID() };
+  const on = owner !== undefined && (await activeTotp(db, who)) !== undefined;
+  if (two.key === undefined) {
+    // Never let a missing key switch a second factor off: refuse the sign-in (a 500, logged).
+    if (on) throw new Error('TWO_FACTOR_KEY is not set but this account has a second factor');
+    return undefined;
+  }
+  if (owner !== undefined && !on) return undefined;
+  const { userId, workspaceId } = who;
+  const data = { userId, workspaceId, real: owner !== undefined, until: now + CHALLENGE_MS };
+  const challenge = sealSecret(two.key, CHALLENGE_AAD, JSON.stringify(data));
+  return { step: 'second_factor', challenge };
+}
+
+/** The person a challenge was made for, if it is genuine, live and came from a right password. */
+function challengeOwner(two: TwoFactor, challenge: string, now: number): Owner | undefined {
+  try {
+    const raw = openSecret(two.key ?? Buffer.alloc(32), CHALLENGE_AAD, challenge);
+    const data = challengeData.parse(JSON.parse(raw));
+    return data.real && data.until > now
+      ? { userId: data.userId, workspaceId: data.workspaceId }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Second half of a sign-in: the challenge from `/sign-in` plus an authenticator or backup code. */
+export function secondStepRoute(
+  routes: Hono<Signed>,
+  deps: AuthDeps,
+  shared: Shared,
+  two: TwoFactor,
+): void {
+  const { db, logger, now = Date.now } = deps;
+  routes.post('/sign-in/second-factor', async (c) => {
+    if (two.key === undefined) return c.json(unavailable, 501);
+    const parsed = challengeBody.safeParse(await c.req.json().catch(() => undefined));
+    if (!parsed.success) return c.json({ error: 'invalid_request' }, 400);
+    const address = addressOf(c);
+    const owner = challengeOwner(two, parsed.data.challenge, now());
+    const bucket = owner?.userId ?? address;
+    if (two.limiter.blocked(bucket) || shared.byAddress.blocked(address)) {
+      return c.json({ error: 'too_many_attempts' }, 429);
+    }
+    // Counted before the check, so concurrent tries cannot skip the limit.
+    two.limiter.fail(bucket);
+    if (owner === undefined || !(await two.verify(owner, parsed.data.code))) {
+      shared.byAddress.fail(address);
+      logger.warn('web sign-in refused');
+      return c.json({ error: 'invalid_credentials' }, 401);
+    }
+    two.limiter.reset(bucket);
+    await openSession(c, { db, now }, owner);
+    logger.info({ userId: owner.userId }, 'web sign-in with second factor');
+    return c.json({ ok: true });
+  });
+}
+
+/** Counts the try first, then runs the check; a person's tries share one limit. */
 async function tried(
   limiter: FailureLimiter,
   userId: string,
@@ -47,9 +156,9 @@ const refusal = (status: 401 | 429) => ({
 });
 
 /**
- * Turning on an authenticator app (M2-6): `setup` hands out a secret and the address for its QR
- * code; `confirm` takes the first code, switches it on and shows the backup codes once. Without
- * `TWO_FACTOR_KEY` there is nowhere safe to keep the secret, so both answer 501.
+ * Turning an authenticator app on (M2-6): `setup` hands out a secret and the address for
+ * its QR code; `confirm` takes the first code, switches it on and shows the backup codes once.
+ * Without `TWO_FACTOR_KEY` there is nowhere safe to keep the secret.
  */
 export function twoFactorRoutes(routes: Hono<Signed>, deps: AuthDeps, two: TwoFactor): void {
   const { db, now = Date.now } = deps;

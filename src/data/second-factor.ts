@@ -89,3 +89,43 @@ export function confirmTotp(
     return true;
   });
 }
+
+/** The sealed secret of the authenticator that is switched on, or undefined when there is none. */
+export function activeTotp(db: Db, owner: Owner): Promise<string | undefined> {
+  return withOwner(db, owner, async (trx) => {
+    const row = await trx
+      .selectFrom('totp_factors')
+      .select('secret_sealed')
+      .where('confirmed_at', 'is not', null)
+      .executeTakeFirst();
+    return row?.secret_sealed;
+  });
+}
+
+/** Use up a 30-second step: true only when it is newer than every step used before. */
+export function spendTotpStep(db: Db, owner: Owner, step: number): Promise<boolean> {
+  return withOwner(db, owner, async (trx) => {
+    const row = await trx
+      .updateTable('totp_factors')
+      .set({ last_step: step })
+      .where('confirmed_at', 'is not', null)
+      .where('last_step', '<', String(step))
+      .returning('user_id')
+      .executeTakeFirst();
+    return row !== undefined;
+  });
+}
+
+/** Use up a backup code by its hash: true the first time only. */
+export function spendBackupCode(db: Db, owner: Owner, codeHash: string): Promise<boolean> {
+  return withOwner(db, owner, async (trx) => {
+    const row = await trx
+      .updateTable('backup_codes')
+      .set({ used_at: new Date() })
+      .where('code_hash', '=', codeHash)
+      .where('used_at', 'is', null)
+      .returning('id')
+      .executeTakeFirst();
+    return row !== undefined;
+  });
+}
