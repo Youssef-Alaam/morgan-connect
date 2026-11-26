@@ -13,6 +13,7 @@ export {
   type EngineToolOutput,
   type EngineUsage,
 } from '../providers/index.js';
+export { approvalHash } from './approval-hash.js';
 export { createGate, type Caller, type Gate } from './gate.js';
 export type { VaultOptions } from '../tools/index.js';
 export { createApprovals, type ApprovalPrompt, type Approvals, type Verdict } from './approvals.js';
