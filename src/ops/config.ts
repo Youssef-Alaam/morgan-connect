@@ -72,6 +72,8 @@ const schema = z
         }
       }, 'must be an IANA time zone name')
       .default('UTC'),
+    // After this many idle minutes the next message starts a new conversation, as if the person had typed /new.
+    IDLE_GAP_MINUTES: z.coerce.number().int().min(5).default(360),
   })
   .superRefine((value, ctx) => {
     const need = (
