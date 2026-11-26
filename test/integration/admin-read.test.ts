@@ -87,6 +87,14 @@ it('cannot be called by name as someone else, or past its audit gate', async () 
   );
   expect((await forged).rows).toEqual([{ admin_read_chat: null }]);
   expect(await auditRows('refused')).toBe(before + 1);
+  // The refusal is recorded under the person actually set (Bob), not the admin id he passed.
+  const mine = await ctx.owner
+    .selectFrom('audit_log')
+    .select(['user_id', 'workspace_id'])
+    .where('action_type', '=', 'admin.read')
+    .where('reason', '=', 'me')
+    .execute();
+  expect(mine).toEqual([{ user_id: ctx.bob.userId, workspace_id: ctx.bob.workspaceId }]);
   // The gate that writes the audit row is not for the app role: rows cannot be had without it.
   const gate = withOwner(ctx.app, ctx.alice, (trx) =>
     sql`select admin_read_gate('chat', ${ctx.alice.userId}::uuid, ${ctx.bob.userId}::uuid, 'r')`.execute(
@@ -94,4 +102,28 @@ it('cannot be called by name as someone else, or past its audit gate', async () 
     ),
   );
   await expect(gate).rejects.toThrow(/permission denied/);
+});
+
+it('refuses a call with nobody set on the transaction, and a past-the-cap limit is clamped', async () => {
+  const bare = await ctx.app
+    .transaction()
+    .execute((trx) =>
+      sql`select admin_read_chat(${ctx.alice.userId}::uuid, ${ctx.bob.userId}::uuid, 'bare', 5)`.execute(
+        trx,
+      ),
+    );
+  expect(bare.rows).toEqual([{ admin_read_chat: null }]);
+  const row = await ctx.owner
+    .selectFrom('audit_log')
+    .select(['user_id', 'outcome'])
+    .where('reason', '=', 'bare')
+    .executeTakeFirstOrThrow();
+  expect(row).toEqual({ user_id: null, outcome: 'refused' });
+  const huge = await withOwner(ctx.app, ctx.alice, (trx) =>
+    sql<{ n: number }>`select jsonb_array_length(
+      admin_read_chat(${ctx.alice.userId}::uuid, ${ctx.bob.userId}::uuid, 'big', 100000)) as n`.execute(
+      trx,
+    ),
+  );
+  expect(huge.rows[0]?.n).toBe(1);
 });
