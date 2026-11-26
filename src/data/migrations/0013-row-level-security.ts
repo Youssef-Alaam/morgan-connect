@@ -1,3 +1,4 @@
+// throwaway: createTable('sample_notes')
 import { type Kysely, sql } from 'kysely';
 
 /**
