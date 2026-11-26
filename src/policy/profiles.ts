@@ -1,6 +1,7 @@
 import {
   assignedTo,
   assignPreset,
+  overviewOf,
   listPresets,
   type Assigned,
   type Db,
@@ -45,6 +46,13 @@ const toProfile = (row: PresetRow | undefined): Profile =>
     }),
   ) as Profile;
 
+/** The profile an assignment resolves to, from the stored presets. */
+function resolve(presets: PresetRow[], assigned: Assigned): AccessProfile {
+  const preset = presetFor(assigned);
+  const stored = presets.find((row) => row.preset === preset);
+  return { preset, modes: toProfile(stored), shellGate: stored?.shellGate ?? 'risky_only' };
+}
+
 /**
  * The profile for this person on this chat (the gate's question in M2-9b). A damaged preset row
  * never opens a door: what it does not say clearly is `off`.
@@ -54,9 +62,7 @@ export async function profileFor(
   owner: Owner,
   device?: { channel: string; chatId: string },
 ): Promise<AccessProfile> {
-  const preset = presetFor(await assignedTo(db, owner, device));
-  const stored = (await listPresets(db)).find((row) => row.preset === preset);
-  return { preset, modes: toProfile(stored), shellGate: stored?.shellGate ?? 'risky_only' };
+  return resolve(await listPresets(db), await assignedTo(db, owner, device));
 }
 
 /** A grant that loosens one action type, with the translation key of its risk warning (D27). */
@@ -104,5 +110,33 @@ export async function assignProfile(
     previous,
     preset: target.preset,
     warnings: loosened(modesOf(previous), modesOf(target.preset)),
+  };
+}
+
+export interface DeviceProfile extends AccessProfile {
+  deviceId: string;
+  channel: string;
+  /** False when the device takes its person's profile. */
+  own: boolean;
+}
+
+/** The profile that applies to a person and to each of their chats. Undefined when not allowed. */
+export async function profilesOf(
+  db: Db,
+  caller: Owner,
+  userId: string,
+): Promise<{ person: AccessProfile; devices: DeviceProfile[] } | undefined> {
+  const overview = await overviewOf(db, caller, userId);
+  if (overview === undefined) return undefined;
+  const presets = await listPresets(db);
+  const base = { role: overview.role, personPreset: overview.personPreset };
+  return {
+    person: resolve(presets, { ...base, devicePreset: undefined }),
+    devices: overview.devices.map((device) => ({
+      ...resolve(presets, { ...base, devicePreset: device.preset }),
+      deviceId: device.id,
+      channel: device.channel,
+      own: device.preset !== undefined,
+    })),
   };
 }

@@ -103,7 +103,9 @@ export {
   assignedTo,
   assignPreset,
   listPresets,
+  overviewOf,
   type Assigned,
+  type Overview,
   type PresetRow,
   type ShellGate,
 } from './profiles.js';
