@@ -87,3 +87,4 @@ describe('checkIsolation', () => {
     expect(checkIsolation({ migrations, tests: both, exempt: ['workspaces'] }).missing).toEqual([]);
   });
 });
+// throwaway
