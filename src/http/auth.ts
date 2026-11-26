@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { accountOf, credentialsByEmail, endSession, linkLive, redeemLink } from '../data/index.js';
 import { sha256 } from '../identity/admin-link.js';
 import { createFailureLimiter } from '../identity/limiter.js';
+import { chatRoutes, type ChatDeps } from './chat.js';
 import { createPasswordHasher } from '../identity/password.js';
 import { memberRoutes } from './members.js';
 import {
@@ -90,7 +91,7 @@ function setPasswordRoute(routes: Hono<Signed>, { db }: AuthDeps, shared: Shared
 }
 
 /** Sign-in, sign-out, first-password link and `/api/me`. Handlers reach data only through `withOwner`. */
-export function authRoutes(deps: AuthDeps): Hono<Signed> {
+export function authRoutes(deps: AuthDeps, chat?: ChatDeps): Hono<Signed> {
   const { db } = deps;
   const routes = new Hono<Signed>();
   const byAddress = createFailureLimiter({
@@ -110,6 +111,7 @@ export function authRoutes(deps: AuthDeps): Hono<Signed> {
 
   routes.use(sessionGate(db));
   memberRoutes(routes, deps, shared);
+  if (chat !== undefined) chatRoutes(routes, chat);
 
   routes.get('/me', async (c) => c.json(await accountOf(db, c.get('session'))));
 

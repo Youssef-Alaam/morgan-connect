@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Logger } from '../ops/index.js';
 import { authRoutes } from './auth.js';
+import type { ChatDeps } from './chat.js';
 import { API_PREFIX, type AuthDeps } from './session.js';
 
 export interface AppDeps {
@@ -9,6 +10,8 @@ export interface AppDeps {
   logger: Logger;
   /** The web account API (`/api/*`); left out, there are no web accounts. */
   auth?: Omit<AuthDeps, 'logger'>;
+  /** The web chat (`/api/chat`), behind the same session gate; needs `auth`. */
+  chat?: Omit<ChatDeps, 'logger'>;
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -22,7 +25,13 @@ export function createApp(deps: AppDeps): Hono {
     }
   });
   if (deps.auth !== undefined) {
-    app.route(API_PREFIX, authRoutes({ ...deps.auth, logger: deps.logger }));
+    app.route(
+      API_PREFIX,
+      authRoutes(
+        { ...deps.auth, logger: deps.logger },
+        deps.chat && { ...deps.chat, logger: deps.logger },
+      ),
+    );
     app.onError((error, c) => {
       deps.logger.error({ err: error }, 'request failed');
       return c.json({ error: 'server_error' }, 500);
