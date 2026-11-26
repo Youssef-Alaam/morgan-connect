@@ -1,7 +1,7 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from '@hono/node-server';
-import { type ChannelAdapter, createTelegramAdapter } from './channels/index.js';
+import { type ChannelAdapter, createTelegramAdapter, createWebChannel } from './channels/index.js';
 import {
   assertFitsJobExpiry,
   createReplier,
@@ -25,7 +25,7 @@ import {
   type Db,
   type TurnQueue,
 } from './data/index.js';
-import { createApp } from './http/index.js';
+import { type ChatDeps, createApp } from './http/index.js';
 import {
   createAnthropicEngine,
   createApprovals,
@@ -118,59 +118,64 @@ async function openQueue(config: Config, logger: Logger): Promise<TurnQueue> {
   return queue;
 }
 
-/** Questions to the owner go out as a Telegram message with Approve and Deny buttons. */
-const telegramApprovals = (db: Db, telegram: ChannelAdapter): Approvals =>
+/** Questions to the owner go out on the chat they came from; only Telegram can ask yet (web: M2-12b). */
+const approvalsFor = (db: Db, telegram: ChannelAdapter | undefined): Approvals =>
   createApprovals({
     db,
     ttlMs: APPROVAL_TTL_MS,
-    prompt: ({ caller, text, id }) => telegram.askApproval(caller.chatId, text, id),
+    prompt: ({ caller, text, id }) =>
+      telegram !== undefined && caller.channel === 'telegram'
+        ? telegram.askApproval(caller.chatId, text, id)
+        : Promise.reject(new Error('This channel cannot ask for approval yet')),
   });
 
-/** With a Telegram token set, start the queue, the worker and the poller. Returns its stop. */
-async function startTelegram(
+interface Chat {
+  /** The web chat's way into the pipeline, the same one Telegram uses. */
+  chat: Omit<ChatDeps, 'logger' | 'db'>;
+  stop: () => Promise<void>;
+}
+
+/** Start the queue, the worker and the web chat; with a Telegram token also the poller. */
+async function startChat(
   config: Config,
   db: Db,
   logger: Logger,
   { engine, onClaimed }: { engine: Engine | undefined; onClaimed: () => Promise<void> },
-): Promise<() => Promise<void>> {
-  if (config.TELEGRAM_BOT_TOKEN === undefined) return () => Promise.resolve();
+): Promise<Chat> {
   assertFitsJobExpiry(TIMING, TURN_EXPIRE_SECONDS);
   const queue = await openQueue(config, logger);
-  const telegram = createTelegramAdapter(
-    config.TELEGRAM_BOT_TOKEN,
-    logger,
-    config.TELEGRAM_API_ROOT,
-  );
+  const telegram =
+    config.TELEGRAM_BOT_TOKEN === undefined
+      ? undefined
+      : createTelegramAdapter(config.TELEGRAM_BOT_TOKEN, logger, config.TELEGRAM_API_ROOT);
+  const web = createWebChannel(db);
   const identity = createIdentity(db, { onClaimed });
-  const approvals = telegramApprovals(db, telegram);
+  const approvals = approvalsFor(db, telegram);
   const reply = buildReplier(config, { db, logger, engine, approvals });
   const aborts = createTurnAborts();
-  const deps = {
-    db,
-    queue,
-    senders: [telegram],
-    logger,
-    retryDelayMs: 1000,
-    identity,
-    reply,
-    aborts,
-  };
+  const senders = telegram === undefined ? [web] : [telegram, web];
+  const deps = { db, queue, senders, logger, retryDelayMs: 1000, identity, reply, aborts };
   try {
     await closeOrphanedApprovals(db);
-    await announceSetupCode(identity, logger);
     await startWorker(deps);
     await requeueStuckTurns(deps);
-    await telegram.start(
-      (message) => ingest(deps, message),
-      (answer) => approvals.decide(answer.id, answer.decision, answer),
-    );
+    if (telegram !== undefined) {
+      await announceSetupCode(identity, logger);
+      await telegram.start(
+        (message) => ingest(deps, message),
+        (answer) => approvals.decide(answer.id, answer.decision, answer),
+      );
+    }
   } catch (error) {
     await queue.stop();
     throw error;
   }
-  return async () => {
-    await telegram.stop();
-    await queue.stop();
+  return {
+    chat: { events: web, ingest: (message) => ingest(deps, message) },
+    stop: async () => {
+      await telegram?.stop();
+      await queue.stop();
+    },
   };
 }
 
@@ -194,7 +199,7 @@ async function openDatabase(config: Config, logger: Logger): Promise<Db> {
     logger.info({ applied: await migrateToLatest(owner) }, 'migrations done');
     if (separate) {
       // The owner installs the queue's tables, so the app role needs no right to create schemas.
-      if (config.TELEGRAM_BOT_TOKEN !== undefined) await installQueueSchema(separateUrl);
+      await installQueueSchema(separateUrl);
       await ensureAppRole(owner, config.DATABASE_URL);
     } else logger.warn('MIGRATION_DATABASE_URL is not set: the app runs as the owner role');
   } catch (error) {
@@ -210,6 +215,18 @@ async function openDatabase(config: Config, logger: Logger): Promise<Db> {
     throw error;
   }
   return app;
+}
+
+/** Serve the app; resolves once the port is open. */
+function listen(
+  app: ReturnType<typeof createApp>,
+  port: number,
+): Promise<ReturnType<typeof serve>> {
+  return new Promise((resolve) => {
+    const server = serve({ fetch: app.fetch, port }, () => {
+      resolve(server);
+    });
+  });
 }
 
 /** Load config, migrate the database, then serve HTTP. Tests may pass their own engine. */
@@ -228,19 +245,20 @@ export async function start(
       config.PUBLIC_URL ?? `http://localhost:${String(listening)}`,
     );
   };
-  const stopTelegram = await startTelegram(config, db, logger, {
+  const chat = await startChat(config, db, logger, {
     engine: options.engine,
     onClaimed: announce,
   }).catch(async (error: unknown) => {
     await db.destroy();
     throw error;
   });
-  const app = createApp({ dbVersion: () => dbVersion(db), logger, auth: { db } });
-  const server = await new Promise<ReturnType<typeof serve>>((resolve) => {
-    const listening = serve({ fetch: app.fetch, port: config.PORT }, () => {
-      resolve(listening);
-    });
+  const app = createApp({
+    dbVersion: () => dbVersion(db),
+    logger,
+    auth: { db },
+    chat: chat.chat,
   });
+  const server = await listen(app, config.PORT);
   const address = server.address();
   const port = typeof address === 'object' && address !== null ? address.port : config.PORT;
   listening = port;
@@ -249,7 +267,7 @@ export async function start(
   return {
     port,
     stop: async () => {
-      await stopTelegram();
+      await chat.stop();
       await new Promise<void>((resolve, reject) => {
         server.close((error) => {
           if (error === undefined) resolve();

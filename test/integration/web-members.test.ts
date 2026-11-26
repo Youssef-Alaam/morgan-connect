@@ -27,6 +27,15 @@ beforeAll(async () => {
     dbVersion: () => Promise.resolve('17'),
     logger: createLogger('trace', sink),
     auth: { db: ctx.app },
+    // The chat routes too, so one walk covers every route under /api.
+    chat: {
+      events: {
+        acknowledge: () => Promise.resolve(),
+        eventsAfter: () => Promise.resolve([]),
+        subscribe: () => () => undefined,
+      },
+      ingest: () => Promise.resolve(),
+    },
   });
 }, 180_000);
 afterAll(async () => {

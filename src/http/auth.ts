@@ -91,7 +91,7 @@ function setPasswordRoute(routes: Hono<Signed>, { db }: AuthDeps, shared: Shared
 }
 
 /** Sign-in, sign-out, first-password link and `/api/me`. Handlers reach data only through `withOwner`. */
-export function authRoutes(deps: AuthDeps, chat?: ChatDeps): Hono<Signed> {
+export function authRoutes(deps: AuthDeps, chat?: Omit<ChatDeps, 'db'>): Hono<Signed> {
   const { db } = deps;
   const routes = new Hono<Signed>();
   const byAddress = createFailureLimiter({
@@ -111,7 +111,7 @@ export function authRoutes(deps: AuthDeps, chat?: ChatDeps): Hono<Signed> {
 
   routes.use(sessionGate(db));
   memberRoutes(routes, deps, shared);
-  if (chat !== undefined) chatRoutes(routes, chat);
+  if (chat !== undefined) chatRoutes(routes, { ...chat, db });
 
   routes.get('/me', async (c) => c.json(await accountOf(db, c.get('session'))));
 

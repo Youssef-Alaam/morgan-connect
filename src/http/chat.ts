@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { Context, Hono } from 'hono';
+import { getCookie } from 'hono/cookie';
 import { type SSEStreamingApi, streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import type { InboundMessage } from '../core/index.js';
-import { WEB_EVENT_PAGE, type Owner, type WebEvent } from '../data/index.js';
+import { sessionOwner, WEB_EVENT_PAGE, type Db, type Owner, type WebEvent } from '../data/index.js';
+import { sha256 } from '../identity/admin-link.js';
 import type { Logger } from '../ops/index.js';
-import type { Signed } from './session.js';
+import { COOKIE, type Signed } from './session.js';
 
 /** What the chat routes need from the web channel (wired in boot; http never imports channels). */
 export interface ChatEvents {
@@ -15,6 +17,7 @@ export interface ChatEvents {
 }
 
 export interface ChatDeps {
+  db: Db;
   logger: Logger;
   events: ChatEvents;
   /** The same pipeline entry the Telegram channel uses. */
@@ -67,6 +70,7 @@ function stream(c: Context<Signed>, deps: ChatDeps): Response | Promise<Response
   const session = c.get('session');
   const who = { owner: session, chatId: session.sessionId };
   const keepAliveMs = deps.keepAliveMs ?? KEEP_ALIVE_MS;
+  const token = getCookie(c, COOKIE) ?? '';
   let cursor = cursorOf(c.req.header('last-event-id') ?? c.req.query('after'));
   // Tells a proxy in front not to hold the stream back.
   c.header('X-Accel-Buffering', 'no');
@@ -98,7 +102,10 @@ function stream(c: Context<Signed>, deps: ChatDeps): Response | Promise<Response
             resolve(false);
           };
         });
-        if (quiet && isOpen()) await out.write(': keep-alive\n\n');
+        if (!quiet || !isOpen()) continue;
+        // A person who signed out (or whose session ended) stops receiving at the next tick.
+        if ((await sessionOwner(deps.db, sha256(token))) === undefined) break;
+        await out.write(': keep-alive\n\n');
       }
     } catch (error) {
       // The browser gets a fixed word, never the database's own message.
