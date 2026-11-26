@@ -112,6 +112,14 @@ it('closes a question that is still open, but never a used or denied one', async
   expect(await statusOf(denied)).toBe('denied');
 });
 
+it('lets an Approve that beat the timer stand, but a cancel still ends it', async () => {
+  const id = await open();
+  await answer(id);
+  expect(await closeApproval(db, id, 'expired')).toBe(false);
+  expect(await statusOf(id)).toBe('approved');
+  expect(await closeApproval(db, id, 'cancelled')).toBe(true);
+});
+
 it('closes every open question at startup, approved but unused ones too', async () => {
   const pending = await open();
   const approved = await open();

@@ -83,7 +83,10 @@ export async function consumeApproval(
   return row !== undefined;
 }
 
-/** End a question nobody answered in time (`expired`) or that the turn gave up on (`cancelled`). */
+/**
+ * End a question nobody answered in time (`expired`: only a still pending one, so an Approve that
+ * races the timer is kept) or that the turn gave up on (`cancelled`: pending or approved).
+ */
 export async function closeApproval(
   db: Db,
   id: string,
@@ -93,13 +96,16 @@ export async function closeApproval(
     .updateTable('approvals')
     .set({ status })
     .where('id', '=', id)
-    .where('status', 'in', ['pending', 'approved'])
+    .where('status', 'in', status === 'expired' ? ['pending'] : ['pending', 'approved'])
     .returning('id')
     .executeTakeFirst();
   return row !== undefined;
 }
 
-/** At startup no turn is waiting any more, so every open question is over. Returns how many. */
+/**
+ * At startup no turn is waiting any more, so every open question is over. Assumes one app instance
+ * per database: a second running instance would have its waiting questions closed. Returns how many.
+ */
 export async function closeOrphanedApprovals(db: Db): Promise<number> {
   const rows = await db
     .updateTable('approvals')
