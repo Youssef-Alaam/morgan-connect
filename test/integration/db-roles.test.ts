@@ -13,6 +13,7 @@ import {
   migrateToLatest,
   type Db,
   type Owner,
+  withOwner,
 } from '../../src/data/index.js';
 import { linkChats } from '../helpers/link-chats.js';
 import { startFakeTelegram } from '../helpers/fake-telegram.js';
@@ -62,8 +63,12 @@ const entry = (): Parameters<typeof appendAudit>[1] => ({
 
 it('lets the app role add and read audit rows', async () => {
   await appendAudit(app, entry());
-  const rows = await app.selectFrom('audit_log').select('id').execute();
+  const rows = await withOwner(app, who, (trx) =>
+    trx.selectFrom('audit_log').select('id').execute(),
+  );
   expect(rows).toHaveLength(1);
+  // Under row-level security, nobody set means no rows.
+  expect(await app.selectFrom('audit_log').select('id').execute()).toHaveLength(0);
 });
 
 it('refuses UPDATE, DELETE and TRUNCATE on audit_log on privilege, not on the trigger', async () => {
