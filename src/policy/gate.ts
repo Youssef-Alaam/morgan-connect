@@ -6,7 +6,10 @@ import {
   ACTION_TYPES,
   createClockTool,
   createDemoGatedTool,
+  createVault,
+  createVaultCaptureTool,
   type ToolDefinition,
+  type VaultOptions,
 } from '../tools/index.js';
 import type { Approvals } from './approvals.js';
 import { abortedError, runGuarded } from './guard.js';
@@ -23,6 +26,8 @@ export interface GateOptions {
   tools?: readonly ToolDefinition[];
   /** Add the harmless `demo.gated` test tool, which always needs approval (the DEMO_TOOLS setting). */
   demo?: boolean;
+  /** Where `vault.capture` saves notes. Unset: the tool is not registered. */
+  vault?: VaultOptions;
   profile?: Profile;
   /** Asks the owner before an `ask` tool runs. Without it, `ask` tools are refused. */
   approvals?: Approvals;
@@ -51,9 +56,10 @@ function fencedError(tool: ToolDefinition, error: unknown): Error {
   return new Error(wrapUntrusted(untrusted(message), source), { cause: error });
 }
 
-const defaultTools = (timezone: string | undefined, demo: boolean): ToolDefinition[] => [
-  createClockTool({ ...(timezone === undefined ? {} : { timezone }) }),
-  ...(demo ? [createDemoGatedTool()] : []),
+const defaultTools = (options: GateOptions): ToolDefinition[] => [
+  createClockTool({ ...(options.timezone === undefined ? {} : { timezone: options.timezone }) }),
+  ...(options.demo === true ? [createDemoGatedTool()] : []),
+  ...(options.vault === undefined ? [] : [createVaultCaptureTool(createVault(options.vault))]),
 ];
 
 /** Refuse a bad registry at startup, not on the first call. */
@@ -73,8 +79,8 @@ function checkTools(tools: readonly ToolDefinition[]): void {
  * exactly one audit row, after the run, so the row records how it went.
  */
 export function createGate(options: GateOptions): Gate {
-  const { db, timezone, demo = false, profile = OWNER_PROFILE, approvals, logger } = options;
-  const tools = options.tools ?? defaultTools(timezone, demo);
+  const { db, profile = OWNER_PROFILE, approvals, logger } = options;
+  const tools = options.tools ?? defaultTools(options);
   const timeoutMs = options.toolTimeoutMs ?? 30_000;
   checkTools(tools);
   const recorder = createRecorder(db, logger);
