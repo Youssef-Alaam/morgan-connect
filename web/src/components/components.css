@@ -333,6 +333,10 @@
   overflow-wrap: anywhere;
 }
 
+.approval-args code {
+  font: inherit;
+}
+
 .approval h3 {
   margin: 0;
 }
