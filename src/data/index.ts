@@ -38,6 +38,7 @@ export {
   type ChatMessage,
   type StoredToolCall,
 } from './history.js';
+export { planCompaction, saveSummary, type CompactionPlan } from './compaction.js';
 export { conversationFor, endConversation } from './conversations.js';
 export { appendAudit, type AuditEntry } from './audit.js';
 export {
