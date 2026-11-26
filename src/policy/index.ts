@@ -14,3 +14,4 @@ export {
   type EngineUsage,
 } from '../providers/index.js';
 export { createGate, type Caller, type Gate } from './gate.js';
+export { createApprovals, type ApprovalPrompt, type Approvals, type Verdict } from './approvals.js';
