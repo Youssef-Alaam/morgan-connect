@@ -1,6 +1,7 @@
 import { type QueryExecutorProvider, sql } from 'kysely';
 import type { Db } from './db.js';
 import { ADMIN_READ_FUNCTIONS } from './admin-read.js';
+import { BUDGET_FUNCTIONS } from './budgets.js';
 import { DEVICE_FUNCTIONS } from './devices.js';
 import { PROFILE_FUNCTIONS } from './profiles.js';
 import { ACCOUNT_FUNCTIONS } from './invites.js';
@@ -13,6 +14,7 @@ const NAMED_FUNCTIONS = [
   ...ACCOUNT_FUNCTIONS,
   ...DEVICE_FUNCTIONS,
   ...PROFILE_FUNCTIONS,
+  ...BUDGET_FUNCTIONS,
 ];
 
 export interface AppCredentials {
@@ -87,6 +89,8 @@ export async function ensureAppRole(owner: Db, databaseUrl: string): Promise<voi
       trx,
     );
     await revokeProfileWrites(trx, who);
+    // Budgets are read by their owner but written only by admin_set_budget.
+    await sql`revoke update, delete on public.budgets from ${who}`.execute(trx);
     // The migration books are the owner's alone to write.
     await sql`revoke insert, update, delete, truncate on public.schema_info, public.kysely_migration,
       public.kysely_migration_lock from ${who}`.execute(trx);

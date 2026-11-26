@@ -213,6 +213,13 @@ export interface Database {
     cost_usd: ColumnType<string, string, never>;
     created_at: Generated<Date>;
   };
+  budgets: {
+    user_id: string;
+    workspace_id: string;
+    // numeric comes back from pg as a string.
+    monthly_limit_usd: string;
+    updated_at: Generated<Date>;
+  };
 }
 
 export type UsageStatus = 'ok' | 'failed' | 'aborted' | 'timeout';

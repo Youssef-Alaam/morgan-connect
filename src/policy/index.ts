@@ -30,3 +30,4 @@ export {
   type Preset,
   type RiskWarning,
 } from './profiles.js';
+export { checkBudget, type BudgetVerdict, type KeySource } from './budget.js';
