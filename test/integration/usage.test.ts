@@ -18,6 +18,7 @@ import {
   type EngineSession,
 } from '../../src/policy/index.js';
 import { FakeChannel } from '../helpers/fake-channel.js';
+import { linkChats } from '../helpers/link-chats.js';
 import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
@@ -28,6 +29,7 @@ beforeAll(async () => {
   postgres = await startPostgres();
   db = createDb(postgres.url);
   await migrateToLatest(db);
+  await linkChats(db, ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7']);
 }, 180_000);
 
 afterAll(async () => {

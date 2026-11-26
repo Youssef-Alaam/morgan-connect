@@ -1,4 +1,5 @@
 import type { Db } from './db.js';
+import { requireOwner } from './tenancy.js';
 
 export interface StoredToolCall {
   id: string;
@@ -160,10 +161,13 @@ export async function appendHistory(
   messages: readonly ChatMessage[],
 ): Promise<void> {
   if (messages.length === 0) return;
+  const owner = await requireOwner(db, chat);
   await db
     .insertInto('chat_messages')
     .values(
       messages.map((m) => ({
+        user_id: owner.userId,
+        workspace_id: owner.workspaceId,
         channel: chat.channel,
         chat_id: chat.chatId,
         role: m.role,

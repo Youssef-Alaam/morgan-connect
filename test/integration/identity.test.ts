@@ -129,10 +129,14 @@ it('still links the chat when the confirmation cannot be sent', async () => {
 });
 
 it('fails a stored turn of an unlinked chat without replying', async () => {
+  // A turn stored while the chat was linked, whose device has since gone.
+  await sql`insert into users default values`.execute(db);
   const { rows } = await sql<{
     id: string;
-  }>`insert into turns (idempotency_key, channel, chat_id, text)
-    values ('fake:9:1', 'fake', '9', 'x') returning id`.execute(db);
+  }>`insert into turns (idempotency_key, channel, chat_id, text, user_id, workspace_id)
+    select 'fake:9:1', 'fake', '9', 'x', id, workspace_id from users limit 1 returning id`.execute(
+    db,
+  );
   await processTurn(deps(), rows[0]?.id ?? '');
   const turn = await sql<{
     status: string;

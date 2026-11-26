@@ -1,4 +1,5 @@
 import type { Db, TurnStatus } from './db.js';
+import { requireOwner } from './tenancy.js';
 
 export interface NewTurn {
   idempotencyKey: string;
@@ -38,6 +39,7 @@ export async function insertTurn(
   db: Db,
   turn: NewTurn,
 ): Promise<{ id: string; status: TurnStatus; created: boolean }> {
+  const owner = await requireOwner(db, turn);
   const inserted = await db
     .insertInto('turns')
     .values({
@@ -45,8 +47,8 @@ export async function insertTurn(
       channel: turn.channel,
       chat_id: turn.chatId,
       text: turn.text,
-      user_id: null,
-      workspace_id: null,
+      user_id: owner.userId,
+      workspace_id: owner.workspaceId,
       reply_text: null,
       error: null,
     })

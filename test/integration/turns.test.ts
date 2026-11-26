@@ -11,6 +11,7 @@ import {
   type Db,
   type TurnQueue,
 } from '../../src/data/index.js';
+import { linkChats } from '../helpers/link-chats.js';
 import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
@@ -21,6 +22,7 @@ beforeAll(async () => {
   postgres = await startPostgres();
   db = createDb(postgres.url);
   await migrateToLatest(db);
+  await linkChats(db, ['1']);
   queue = createTurnQueue(postgres.url, () => undefined);
   await queue.start();
 });
@@ -38,7 +40,7 @@ const newTurn = (key: string) => ({
   text: 'hi',
 });
 
-it('stores one turn per idempotency key, with no user or workspace yet', async () => {
+it('stores one turn per idempotency key, owned by the chat user and workspace', async () => {
   const first = await insertTurn(db, newTurn('k1'));
   const again = await insertTurn(db, newTurn('k1'));
   expect(first).toMatchObject({ created: true, status: 'queued' });
@@ -48,7 +50,16 @@ it('stores one turn per idempotency key, with no user or workspace yet', async (
     .selectAll()
     .where('id', '=', first.id)
     .executeTakeFirst();
-  expect(row).toMatchObject({ user_id: null, workspace_id: null });
+  const owner = await db
+    .selectFrom('devices')
+    .innerJoin('users', 'users.id', 'devices.user_id')
+    .select(['users.id as user_id', 'users.workspace_id'])
+    .where('devices.chat_id', '=', '1')
+    .executeTakeFirstOrThrow();
+  expect(row).toMatchObject(owner);
+  await expect(insertTurn(db, { ...newTurn('k-stranger'), chatId: 'nobody' })).rejects.toThrow(
+    'No linked user',
+  );
 });
 
 it('lets exactly one caller claim a turn, and records how it finished', async () => {

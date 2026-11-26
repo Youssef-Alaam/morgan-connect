@@ -8,8 +8,8 @@ export interface Database {
   schema_info: { key: string; value: string };
   turns: {
     id: Generated<string>;
-    user_id: string | null;
-    workspace_id: string | null;
+    user_id: string;
+    workspace_id: string;
     idempotency_key: string;
     channel: string;
     chat_id: string;
@@ -19,7 +19,13 @@ export interface Database {
     error: string | null;
     created_at: Generated<Date>;
   };
-  users: { id: Generated<string>; role: Generated<string>; created_at: Generated<Date> };
+  workspaces: { id: Generated<string>; name: string; created_at: Generated<Date> };
+  users: {
+    id: Generated<string>;
+    role: Generated<string>;
+    workspace_id: Generated<string>;
+    created_at: Generated<Date>;
+  };
   devices: {
     id: Generated<string>;
     user_id: string;
@@ -35,6 +41,8 @@ export interface Database {
   };
   chat_messages: {
     id: Generated<string>;
+    user_id: string;
+    workspace_id: string;
     channel: string;
     chat_id: string;
     role: 'user' | 'assistant' | 'tool';
@@ -44,6 +52,8 @@ export interface Database {
     created_at: Generated<Date>;
   };
   chat_conversations: {
+    user_id: string;
+    workspace_id: string;
     channel: string;
     chat_id: string;
     conversation_id: Generated<string>;
@@ -56,6 +66,7 @@ export interface Database {
     channel: string;
     chat_id: string;
     user_id: string | null;
+    workspace_id: string;
     tool: string;
     action_type: string;
     changes_state: boolean;
@@ -67,6 +78,8 @@ export interface Database {
   };
   usage_ledger: {
     id: Generated<string>;
+    user_id: string;
+    workspace_id: string;
     channel: string;
     chat_id: string;
     model: string;

@@ -60,8 +60,11 @@ const message = (messageId: string, text = 'hello') => ({
 /** A turn row with no job. */
 const seed = async (messageId: string, channel = 'fake'): Promise<string> =>
   (
-    await sql<{ id: string }>`insert into turns (idempotency_key, channel, chat_id, text)
-      values (${`${channel}:42:${messageId}`}, ${channel}, '42', 'x') returning id`.execute(db)
+    await sql<{
+      id: string;
+    }>`insert into turns (idempotency_key, channel, chat_id, text, user_id, workspace_id)
+      select ${`${channel}:42:${messageId}`}, ${channel}, '42', 'x', id, workspace_id
+      from users where id = '00000000-0000-0000-0000-000000000042' returning id`.execute(db)
   ).rows[0]?.id ?? '';
 const turnRow = async (messageId: string) =>
   (
