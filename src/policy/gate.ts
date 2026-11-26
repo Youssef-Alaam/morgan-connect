@@ -2,7 +2,12 @@ import type { Db } from '../data/index.js';
 import type { Logger } from '../ops/index.js';
 import type { EngineTool, EngineToolOutput } from '../providers/index.js';
 import { untrusted, wrapUntrusted } from '../safety/index.js';
-import { ACTION_TYPES, createClockTool, type ToolDefinition } from '../tools/index.js';
+import {
+  ACTION_TYPES,
+  createClockTool,
+  createDemoGatedTool,
+  type ToolDefinition,
+} from '../tools/index.js';
 import type { Approvals } from './approvals.js';
 import { abortedError, runGuarded } from './guard.js';
 import { decide, OWNER_PROFILE, type Profile } from './profile.js';
@@ -16,6 +21,8 @@ export interface GateOptions {
   /** The zone the clock tool answers in (the TIMEZONE setting). */
   timezone?: string;
   tools?: readonly ToolDefinition[];
+  /** Add the harmless `demo.gated` test tool, which always needs approval (the DEMO_TOOLS setting). */
+  demo?: boolean;
   profile?: Profile;
   /** Asks the owner before an `ask` tool runs. Without it, `ask` tools are refused. */
   approvals?: Approvals;
@@ -44,6 +51,11 @@ function fencedError(tool: ToolDefinition, error: unknown): Error {
   return new Error(wrapUntrusted(untrusted(message), source), { cause: error });
 }
 
+const defaultTools = (timezone: string | undefined, demo: boolean): ToolDefinition[] => [
+  createClockTool({ ...(timezone === undefined ? {} : { timezone }) }),
+  ...(demo ? [createDemoGatedTool()] : []),
+];
+
 /** Refuse a bad registry at startup, not on the first call. */
 function checkTools(tools: readonly ToolDefinition[]): void {
   const names = new Set<string>();
@@ -61,14 +73,8 @@ function checkTools(tools: readonly ToolDefinition[]): void {
  * exactly one audit row, after the run, so the row records how it went.
  */
 export function createGate(options: GateOptions): Gate {
-  const {
-    db,
-    timezone,
-    tools = [createClockTool({ ...(timezone === undefined ? {} : { timezone }) })],
-    profile = OWNER_PROFILE,
-    approvals,
-    logger,
-  } = options;
+  const { db, timezone, demo = false, profile = OWNER_PROFILE, approvals, logger } = options;
+  const tools = options.tools ?? defaultTools(timezone, demo);
   const timeoutMs = options.toolTimeoutMs ?? 30_000;
   checkTools(tools);
   const recorder = createRecorder(db, logger);

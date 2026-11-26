@@ -11,8 +11,15 @@ it('applies defaults and treats empty values as unset', () => {
     LOG_LEVEL: 'info',
     ANTHROPIC_MODEL: 'claude-sonnet-5-5',
     ENGINE: 'pi',
+    DEMO_TOOLS: false,
     TIMEZONE: 'UTC',
   });
+});
+
+it('reads DEMO_TOOLS as a switch that is off by default', () => {
+  expect(loadConfig({ DATABASE_URL: URL, DEMO_TOOLS: 'true' }).DEMO_TOOLS).toBe(true);
+  expect(loadConfig({ DATABASE_URL: URL, DEMO_TOOLS: 'false' }).DEMO_TOOLS).toBe(false);
+  expect(() => loadConfig({ DATABASE_URL: URL, DEMO_TOOLS: 'maybe' })).toThrow(/DEMO_TOOLS/);
 });
 
 it('takes an IANA TIMEZONE and rejects anything else', () => {
