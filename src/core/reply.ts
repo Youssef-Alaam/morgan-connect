@@ -49,9 +49,8 @@ export interface ReplyDeps {
   system?: SystemPrompt;
   /** The tools the model may call, each behind the policy gate. */
   gate?: Gate;
-  /** Spend limits (M2-10a). Unset: no limit is checked. */
   /**
-   * Checked here in core, once at the start of each turn, not in the policy gate (which only
+   * Spend limits (M2-10a). Unset: no limit is checked. Checked here in core, once at the start of each turn, not in the policy gate (which only
    * guards tools). Compaction calls are not checked. M2-10b builds on this.
    */
   budget?: BudgetSettings;

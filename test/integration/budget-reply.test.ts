@@ -3,7 +3,9 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 import { BUDGET_REPLY, createReplier, type ReplyDeps } from '../../src/core/index.js';
 import {
   createDb,
+  createInvite,
   migrateToLatest,
+  redeemInvite,
   setBudget,
   type Db,
   type Owner,
@@ -140,4 +142,28 @@ it('still refuses when the audit row cannot be written', async () => {
     await db.schema.alterTable('audit_log_gone').renameTo('audit_log').execute();
   }
   expect(logs).toContain('budget refusal not audited');
+});
+
+it('holds a member who joined by invite to the invite limit: answered, then refused', async () => {
+  const invited = { tokenHash: 'inv-e2e', ttlSeconds: 600, monthlyLimitUsd: 0.005 };
+  expect(await createInvite(db, admin, invited)).toBe(true);
+  const joined = await redeemInvite(db, {
+    tokenHash: 'inv-e2e',
+    email: 'e@x.test',
+    passwordHash: 'p',
+  });
+  if (joined === undefined) throw new Error('the invite was not accepted');
+  await db
+    .insertInto('devices')
+    .values({ user_id: joined.userId, channel: 'fake', chat_id: 'G2' })
+    .execute();
+  const engine = new ScriptedEngine([{ text: 'first', tokens: 5 }, { text: 'never' }]);
+  const reply = replier(engine, { keySource: 'admin' });
+  const mine = { ...turn('hi'), ...joined, chatId: 'G2' };
+  expect(await reply(mine, new FakeChannel())).toBe('first');
+  expect(await reply({ ...mine, id: 'e2e-2' }, new FakeChannel())).toEqual({
+    text: BUDGET_REPLY,
+    askMore: true,
+  });
+  expect(engine.opened).toHaveLength(1);
 });
