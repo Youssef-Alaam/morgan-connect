@@ -1,0 +1,10 @@
+{
+  "fonts": [
+    {
+      "dir": "web/public/fonts",
+      "licence": "OFL-1.1",
+      "licenceFile": "OFL.txt",
+      "approved": "Owner brand decision D010: Space Grotesk and Space Mono"
+    }
+  ]
+}
