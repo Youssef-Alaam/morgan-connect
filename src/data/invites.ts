@@ -27,31 +27,16 @@ export async function createInvite(
   });
 }
 
-/** Make a member with a temporary password. False when the caller is not an admin. */
+/** Make a member with a temporary password; their id, or undefined when the caller is not an admin. */
 export async function createAccount(
   db: Db,
   admin: Owner,
   account: { email: string; passwordHash: string; monthlyLimitUsd: number | null },
-): Promise<boolean> {
+): Promise<string | undefined> {
   const { email, passwordHash, monthlyLimitUsd } = account;
   return withOwner(db, admin, async (trx) => {
-    const { rows } = await sql<{ ok: boolean }>`select admin_create_account(
-      ${email}, ${passwordHash}, ${monthlyLimitUsd}::numeric) as ok`.execute(trx);
-    return rows[0]?.ok === true;
-  });
-}
-
-/** Set a new password, and record that the person was told the admin can read their chats. */
-export function changePassword(
-  db: Db,
-  owner: Owner,
-  change: { passwordHash: string; noticeAccepted: boolean },
-): Promise<void> {
-  return withOwner(db, owner, async (trx) => {
-    await trx
-      .updateTable('credentials')
-      .set({ password_hash: change.passwordHash, must_change: false })
-      .execute();
-    if (change.noticeAccepted) await sql`select member_accept_notice()`.execute(trx);
+    const { rows } = await sql<{ id: string | null }>`select admin_create_account(
+      ${email}, ${passwordHash}, ${monthlyLimitUsd}::numeric) as id`.execute(trx);
+    return rows[0]?.id ?? undefined;
   });
 }
