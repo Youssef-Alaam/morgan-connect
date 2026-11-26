@@ -73,10 +73,13 @@ const billedEngine = (outcomes: Outcome[]): Engine => ({
       prompt: async () => {
         if (outcome.end === 'hang') {
           outcome.waiting?.();
+          // An abort that landed before this prompt began still counts (the time limit can fire first).
           await new Promise<void>((resolve) => {
-            abort.signal.addEventListener('abort', () => {
-              resolve();
-            });
+            if (abort.signal.aborted) resolve();
+            else
+              abort.signal.addEventListener('abort', () => {
+                resolve();
+              });
           });
           outcome.calls.forEach((c) => onUsage?.({ ...c, status: 'aborted' }));
           throw new EngineError('aborted', 'aborted');
