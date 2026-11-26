@@ -87,13 +87,15 @@ export interface Assignment {
 
 /**
  * The admin sets a preset for a person, or for one of their devices. Undefined when refused. The
- * result lists a risk warning for each action type that is now looser than before.
+ * result lists a risk warning for each action type that is now looser than before. Nobody may set
+ * their own profile to Restricted: the admin would lock themselves out of Morgan.
  */
 export async function assignProfile(
   db: Db,
   caller: Owner,
   target: { userId: string; deviceId?: string | undefined; preset: Preset },
 ): Promise<Assignment | undefined> {
+  if (target.userId === caller.userId && target.preset === 'restricted') return undefined;
   const before = await assignPreset(db, caller, target);
   if (before === undefined) return undefined;
   const presets = await listPresets(db);

@@ -26,7 +26,7 @@ const EXPECTED = {
   trusted: {
     read: 'auto',
     create: 'auto',
-    overwrite: 'auto',
+    overwrite: 'ask',
     delete: 'ask',
     send: 'ask',
     execute: 'ask',
@@ -60,8 +60,9 @@ const deviceId = async (channel: string): Promise<string> =>
       .where('channel', '=', channel)
       .executeTakeFirstOrThrow()
   ).id;
+/** A web session's device cannot have its own choice, so on web the person's is what applies. */
 const assign = (preset: Preset, channel?: string) =>
-  channel === undefined
+  channel === undefined || channel === 'web'
     ? assignProfile(ctx.app, ctx.alice, { userId: ctx.bob.userId, preset })
     : deviceId(channel).then((id) =>
         assignProfile(ctx.app, ctx.alice, { userId: ctx.bob.userId, deviceId: id, preset }),
@@ -110,10 +111,17 @@ it('returns a risk warning for every type a grant loosens, and none when it tigh
   expect(loosening?.previous).toBe('restricted');
   expect(loosening?.warnings.map((w) => w.warning)).toEqual([
     'profile.risk.create.auto',
-    'profile.risk.overwrite.auto',
+    'profile.risk.overwrite.ask',
     'profile.risk.delete.ask',
     'profile.risk.send.ask',
     'profile.risk.execute.ask',
   ]);
   expect((await assign('standard'))?.warnings).toEqual([]);
+});
+
+it('refuses an admin setting their own profile to Restricted, so they cannot lock themselves out', async () => {
+  const own = { userId: ctx.alice.userId, preset: 'restricted' } as const;
+  expect(await assignProfile(ctx.app, ctx.alice, own)).toBeUndefined();
+  expect((await profileFor(ctx.app, ctx.alice)).preset).toBe('standard');
+  expect(await assignProfile(ctx.app, ctx.alice, { ...own, preset: 'trusted' })).toBeDefined();
 });
