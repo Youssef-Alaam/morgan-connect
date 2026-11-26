@@ -2,6 +2,7 @@ import { type ColumnType, type Generated, Kysely, PostgresDialect, sql } from 'k
 import pg from 'pg';
 
 export type AuditOutcome = 'ok' | 'error' | 'refused' | 'denied' | 'expired' | 'aborted';
+export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired' | 'cancelled' | 'used';
 export type TurnStatus = 'queued' | 'sending' | 'done' | 'failed';
 
 export interface Database {
@@ -75,6 +76,20 @@ export interface Database {
     args_sha256: string;
     decision: 'auto' | 'ask' | 'off';
     outcome: AuditOutcome;
+  };
+  approvals: {
+    id: Generated<string>;
+    user_id: string;
+    workspace_id: string;
+    channel: string;
+    chat_id: string;
+    turn_id: string | null;
+    tool: string;
+    args_sha256: string;
+    status: Generated<ApprovalStatus>;
+    created_at: Generated<Date>;
+    expires_at: Date;
+    decided_at: Date | null;
   };
   usage_ledger: {
     id: Generated<string>;

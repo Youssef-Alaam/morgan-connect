@@ -1,6 +1,7 @@
 export {
   createDb,
   dbVersion,
+  type ApprovalStatus,
   type AuditOutcome,
   type Database,
   type Db,
@@ -44,3 +45,11 @@ export {
   type UsageReport,
   type UsageTotals,
 } from './usage.js';
+export {
+  closeApproval,
+  closeOrphanedApprovals,
+  consumeApproval,
+  createApproval,
+  decideApproval,
+  type NewApproval,
+} from './approvals.js';
