@@ -30,7 +30,31 @@ it('keeps one pending authenticator per person and replaces it while it is uncon
 
 it('confirms once: it records the step, swaps in the new backup codes and closes the pending slot', async () => {
   const codeHashes = ['x1', 'x2', 'x3'];
-  expect(await confirmTotp(ctx.app, ctx.alice, { step: 77, codeHashes })).toBe(true);
+  const keepSessionId = (
+    await ctx.owner
+      .selectFrom('sessions')
+      .select('id')
+      .where('user_id', '=', ctx.alice.userId)
+      .executeTakeFirstOrThrow()
+  ).id;
+  await ctx.owner
+    .insertInto('sessions')
+    .values({
+      user_id: ctx.alice.userId,
+      workspace_id: ctx.alice.workspaceId,
+      token_hash: 'extra',
+      expires_at: new Date(Date.now() + 60_000),
+    })
+    .execute();
+  const confirm = { sealed: 'sealed-2', step: 77, codeHashes, keepSessionId };
+  expect(await confirmTotp(ctx.app, ctx.alice, { ...confirm, sealed: 'sealed-0' })).toBe(false);
+  expect(await confirmTotp(ctx.app, ctx.alice, confirm)).toBe(true);
+  const kept = await ctx.owner
+    .selectFrom('sessions')
+    .select('id')
+    .where('user_id', '=', ctx.alice.userId)
+    .execute();
+  expect(kept.map((row) => row.id)).toEqual([keepSessionId]);
   expect(await hashesOf(ctx.alice.userId)).toEqual(codeHashes);
   const factor = await ctx.owner
     .selectFrom('totp_factors')
@@ -39,7 +63,9 @@ it('confirms once: it records the step, swaps in the new backup codes and closes
     .executeTakeFirstOrThrow();
   expect([factor.confirmed_at instanceof Date, factor.last_step]).toEqual([true, '77']);
   expect(await pendingTotp(ctx.app, ctx.alice)).toBeUndefined();
-  expect(await confirmTotp(ctx.app, ctx.alice, { step: 78, codeHashes: ['y1'] })).toBe(false);
+  expect(await confirmTotp(ctx.app, ctx.alice, { ...confirm, step: 78, codeHashes: ['y1'] })).toBe(
+    false,
+  );
   expect(await hashesOf(ctx.alice.userId)).toEqual(codeHashes);
   expect(await startTotp(ctx.app, ctx.alice, 'sealed-3')).toBe(false);
 });

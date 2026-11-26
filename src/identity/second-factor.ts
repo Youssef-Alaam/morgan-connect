@@ -1,4 +1,11 @@
-import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomInt } from 'node:crypto';
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHmac,
+  hkdfSync,
+  randomBytes,
+  randomInt,
+} from 'node:crypto';
 import { Secret, TOTP } from 'otpauth';
 
 /** Authenticator-app codes (RFC 6238): six digits, 30 seconds, one step either side for clock drift. */
@@ -9,6 +16,10 @@ const ISSUER = 'Morgan';
 const BACKUP_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 const BACKUP_LENGTH = 10;
 export const BACKUP_CODE_COUNT = 10;
+
+/** One purpose-bound key out of the master key, so sealing and hashing never share a key. */
+const subkey = (master: Buffer, purpose: string): Buffer =>
+  Buffer.from(hkdfSync('sha256', master, Buffer.alloc(0), `morgan-two-factor/${purpose}`, 32));
 
 const totp = (secret: Secret, label = 'account'): TOTP =>
   new TOTP({ issuer: ISSUER, label, secret, period: PERIOD_SECONDS });
@@ -37,7 +48,7 @@ export function checkTotp(secret: string, code: string, nowMs: number): number |
 /** Encrypt a secret for the database (AES-256-GCM); bound to the person, so it cannot be moved to another row. */
 export function sealSecret(key: Buffer, userId: string, plain: string): string {
   const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  const cipher = createCipheriv('aes-256-gcm', subkey(key, 'seal'), iv);
   cipher.setAAD(Buffer.from(userId));
   const body = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
   return [iv, cipher.getAuthTag(), body].map((part) => part.toString('base64url')).join('.');
@@ -47,7 +58,7 @@ export function sealSecret(key: Buffer, userId: string, plain: string): string {
 export function openSecret(key: Buffer, userId: string, sealed: string): string {
   const [iv, tag, body] = sealed.split('.').map((part) => Buffer.from(part, 'base64url'));
   if (iv === undefined || tag === undefined || body === undefined) throw new Error('bad secret');
-  const decipher = createDecipheriv('aes-256-gcm', key, iv);
+  const decipher = createDecipheriv('aes-256-gcm', subkey(key, 'seal'), iv);
   decipher.setAAD(Buffer.from(userId));
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(body), decipher.final()]).toString('utf8');
@@ -67,5 +78,5 @@ export function newBackupCodes(): string[] {
 /** What is stored for a backup code: a keyed hash, so a copy of the database alone cannot be searched for codes. */
 export function hashBackupCode(key: Buffer, code: string): string {
   const plain = code.toLowerCase().replace(/[\s-]/g, '');
-  return createHmac('sha256', key).update(plain).digest('hex');
+  return createHmac('sha256', subkey(key, 'backup-code')).update(plain).digest('hex');
 }

@@ -1,4 +1,5 @@
-import type { Db, Owner } from './db.js';
+import type { Transaction } from 'kysely';
+import type { Database, Db, Owner } from './db.js';
 import { withOwner } from './tenancy.js';
 
 /** The authenticator secret (sealed) and backup codes (hashed) of one person. Rows are theirs alone (RLS). */
@@ -37,23 +38,43 @@ export function pendingTotp(db: Db, owner: Owner): Promise<string | undefined> {
   });
 }
 
+/** Sign out every other browser session of this person (a change of second factor ends them). */
+async function endOtherSessions(trx: Transaction<Database>, keepSessionId: string): Promise<void> {
+  const others = await trx
+    .selectFrom('sessions')
+    .select('id')
+    .where('id', '<>', keepSessionId)
+    .execute();
+  const ids = others.map((row) => row.id);
+  if (ids.length === 0) return;
+  await trx
+    .deleteFrom('devices')
+    .where('channel', '=', 'web')
+    .where('chat_id', 'in', ids)
+    .execute();
+  await trx.deleteFrom('sessions').where('id', 'in', ids).execute();
+}
+
 /**
  * Turn the authenticator on with the step of the code just shown, and store the backup codes
- * (hashes) in the same step. False when there is nothing pending to confirm.
+ * (hashes) in the same step, and end the person's other sessions. False when the secret that was
+ * checked (`sealed`) is no longer the pending one.
  */
 export function confirmTotp(
   db: Db,
   owner: Owner,
-  confirm: { step: number; codeHashes: string[] },
+  confirm: { sealed: string; step: number; codeHashes: string[]; keepSessionId: string },
 ): Promise<boolean> {
   return withOwner(db, owner, async (trx) => {
     const done = await trx
       .updateTable('totp_factors')
       .set({ confirmed_at: new Date(), last_step: confirm.step })
       .where('confirmed_at', 'is', null)
+      .where('secret_sealed', '=', confirm.sealed)
       .returning('user_id')
       .executeTakeFirst();
     if (done === undefined) return false;
+    await endOtherSessions(trx, confirm.keepSessionId);
     await trx.deleteFrom('backup_codes').execute();
     await trx
       .insertInto('backup_codes')
