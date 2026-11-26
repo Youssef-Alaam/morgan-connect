@@ -3,9 +3,11 @@ import type { Logger } from '../ops/index.js';
 import type { EngineTool, EngineToolOutput } from '../providers/index.js';
 import { untrusted, wrapUntrusted } from '../safety/index.js';
 import { ACTION_TYPES, createClockTool, type ToolDefinition } from '../tools/index.js';
+import type { Approvals } from './approvals.js';
 import { abortedError, runGuarded } from './guard.js';
-import { decide, OWNER_PROFILE, type Mode, type Profile } from './profile.js';
+import { decide, OWNER_PROFILE, type Profile } from './profile.js';
 import { createRecorder, type Caller } from './recorder.js';
+import { beforeRun } from './not-approved.js';
 
 export type { Caller };
 
@@ -15,14 +17,13 @@ export interface GateOptions {
   timezone?: string;
   tools?: readonly ToolDefinition[];
   profile?: Profile;
+  /** Asks the owner before an `ask` tool runs. Without it, `ask` tools are refused. */
+  approvals?: Approvals;
   logger?: Pick<Logger, 'error'>;
   /** A tool that runs longer than this is stopped (default 30 s). */
   toolTimeoutMs?: number;
 }
 
-const ASK_REFUSAL =
-  'This needs the owner to approve it first, and approvals are not available yet. It was not run. Tell the user what you wanted to do instead.';
-const OFF_REFUSAL = 'This tool is turned off. It was not run.';
 const UNKNOWN_REFUSAL = 'There is no such tool. Use only the tools you were given.';
 const TIMEOUT_MESSAGE = 'The tool took too long and was stopped.';
 
@@ -55,8 +56,6 @@ function checkTools(tools: readonly ToolDefinition[]): void {
   }
 }
 
-const refusalFor = (mode: Mode): string => (mode === 'ask' ? ASK_REFUSAL : OFF_REFUSAL);
-
 /**
  * The one gate (L2): every tool call goes through here, is decided by the profile, and writes
  * exactly one audit row, after the run, so the row records how it went.
@@ -67,11 +66,12 @@ export function createGate(options: GateOptions): Gate {
     timezone,
     tools = [createClockTool({ ...(timezone === undefined ? {} : { timezone }) })],
     profile = OWNER_PROFILE,
+    approvals,
     logger,
   } = options;
   const timeoutMs = options.toolTimeoutMs ?? 30_000;
   checkTools(tools);
-  const { record, recordAfterRun } = createRecorder(db, logger);
+  const recorder = createRecorder(db, logger);
 
   async function invoke(
     tool: ToolDefinition,
@@ -81,13 +81,15 @@ export function createGate(options: GateOptions): Gate {
   ): Promise<string | EngineToolOutput> {
     const decision = decide(profile, tool.actionType);
     const call = { caller, tool, args, decision };
-    if (decision !== 'auto') {
-      await record({ ...call, outcome: 'refused' });
-      return { text: refusalFor(decision), isError: true };
-    }
+    const stopped = await beforeRun(
+      { decision, approvals, signal },
+      { caller, tool, args },
+      recorder,
+    );
+    if (stopped !== undefined) return stopped;
     const ran = await runGuarded(tool, args, signal, timeoutMs);
     const outcome = ran.kind === 'ok' ? 'ok' : ran.kind === 'aborted' ? 'aborted' : 'error';
-    await recordAfterRun({ ...call, outcome });
+    await recorder.recordAfterRun({ ...call, outcome });
     // What a tool returns came from outside: the model gets it fenced as data (STANDARDS section 6).
     if (ran.kind === 'ok')
       return wrapUntrusted(untrusted(ran.output), `tool ${engineName(tool.name)}`);
@@ -106,7 +108,7 @@ export function createGate(options: GateOptions): Gate {
       })),
     unknownTool: (caller) => async (name, args) => {
       const tool = { name, actionType: 'unknown', changesState: false, parameters: {} };
-      await record({ caller, tool, args, decision: 'off', outcome: 'refused' });
+      await recorder.record({ caller, tool, args, decision: 'off', outcome: 'refused' });
       return UNKNOWN_REFUSAL;
     },
   };
