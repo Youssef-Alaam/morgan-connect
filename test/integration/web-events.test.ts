@@ -1,5 +1,12 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { createSession, endSession, recordWebEvent, webEventsAfter } from '../../src/data/index.js';
+import {
+  createSession,
+  endSession,
+  recordWebEvent,
+  WEB_EVENT_KEEP,
+  WEB_EVENT_PAGE,
+  webEventsAfter,
+} from '../../src/data/index.js';
 import { startIsolation, type Isolation } from '../helpers/isolation.js';
 
 let ctx: Isolation;
@@ -44,3 +51,19 @@ it('drops a session events with the session', async () => {
   await createSession(app, alice, { tokenHash: 'ev-3', expiresAt });
   expect(await webEventsAfter(app, alice, gone, '0')).toEqual([]);
 });
+
+it('keeps only the newest events of a session', async () => {
+  const { app, alice } = ctx;
+  for (let n = 0; n < WEB_EVENT_KEEP + 5; n += 1) {
+    await recordWebEvent(app, alice, 's-cap', { kind: 'message', text: String(n) });
+  }
+  const kept = await webEventsAfter(app, alice, 's-cap', '0');
+  expect(kept).toHaveLength(WEB_EVENT_PAGE);
+  const all = await ctx.owner
+    .selectFrom('web_events')
+    .select('text')
+    .where('chat_id', '=', 's-cap')
+    .execute();
+  expect(all).toHaveLength(WEB_EVENT_KEEP);
+  expect(all.some((row) => row.text === '0')).toBe(false);
+}, 60_000);

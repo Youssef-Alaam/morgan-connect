@@ -1,6 +1,9 @@
 import type { Db, Owner } from './db.js';
 import { withOwner } from './tenancy.js';
 
+/** A session keeps its newest events only, so a long chat cannot grow the table without end. */
+export const WEB_EVENT_KEEP = 500;
+
 /** The most events one read returns; a caller that gets this many asks again. */
 export const WEB_EVENT_PAGE = 100;
 
@@ -33,6 +36,21 @@ export function recordWebEvent(
       .onConflict((conflict) => conflict.doNothing())
       .returning('id')
       .executeTakeFirst();
+    await trx
+      .deleteFrom('web_events')
+      .where('chat_id', '=', chatId)
+      .where(
+        'id',
+        '<=',
+        trx
+          .selectFrom('web_events')
+          .select('id')
+          .where('chat_id', '=', chatId)
+          .orderBy('id', 'desc')
+          .limit(1)
+          .offset(WEB_EVENT_KEEP),
+      )
+      .execute();
     return row?.id;
   });
 }

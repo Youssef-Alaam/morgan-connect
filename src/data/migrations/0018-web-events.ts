@@ -17,8 +17,8 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     ref text, text text not null default '', created_at timestamptz not null default now(),
     foreign key (user_id, workspace_id) references users (id, workspace_id))`.execute(db);
   await sql`create index web_events_by_chat on web_events (chat_id, id)`.execute(db);
-  // A resent message is acknowledged once.
-  await sql`create unique index web_events_ack_once on web_events (chat_id, ref)
+  // A resent message is acknowledged once (per person, so one person's id can never collide with another's).
+  await sql`create unique index web_events_ack_once on web_events (user_id, chat_id, ref)
     where kind = 'ack'`.execute(db);
   await sql`alter table web_events enable row level security`.execute(db);
   await sql`alter table web_events force row level security`.execute(db);

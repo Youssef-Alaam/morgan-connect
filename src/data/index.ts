@@ -67,4 +67,10 @@ export {
   decideApproval,
   type NewApproval,
 } from './approvals.js';
-export { recordWebEvent, webEventsAfter, WEB_EVENT_PAGE, type WebEvent } from './web-events.js';
+export {
+  recordWebEvent,
+  webEventsAfter,
+  WEB_EVENT_KEEP,
+  WEB_EVENT_PAGE,
+  type WebEvent,
+} from './web-events.js';
