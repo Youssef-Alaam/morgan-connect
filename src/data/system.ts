@@ -50,6 +50,12 @@ export async function queuedTurnIds(db: Db): Promise<string[]> {
   return rows.map((row) => row.id);
 }
 
+/** Startup sweep: close every open question. Returns how many. */
+export async function expireOpenApprovals(db: Db): Promise<number> {
+  const { rows } = await sql<{ n: number }>`select system_expire_open_approvals() as n`.execute(db);
+  return rows[0]?.n ?? 0;
+}
+
 /** Setup: true once anyone has claimed the install. */
 export async function installClaimed(db: Db): Promise<boolean> {
   const { rows } = await sql<{ claimed: boolean }>`

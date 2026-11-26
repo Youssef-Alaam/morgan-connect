@@ -1,10 +1,10 @@
-import { closeApproval, type Db } from '../data/index.js';
+import { closeApproval, type Db, type Owner } from '../data/index.js';
 
 type Answer = 'approved' | 'denied' | 'expired' | 'aborted';
 
 export interface WaitingRoom {
   /** Pause until the question is answered, runs out of time, or the turn is aborted. */
-  wait: (id: string, signal: AbortSignal | undefined) => Promise<Answer>;
+  wait: (id: string, owner: Owner, signal: AbortSignal | undefined) => Promise<Answer>;
   /** Wake the turn waiting on this question with the owner's answer. */
   settle: (id: string, answer: Answer) => void;
   /** Give up on a question the owner can no longer be asked. */
@@ -14,6 +14,8 @@ export interface WaitingRoom {
 /** The turns paused on a question, in memory: a restart ends them all (closeOrphanedApprovals). */
 export function createWaitingRoom(db: Db, ttlMs: number): WaitingRoom {
   const waiting = new Map<string, (answer: Answer) => void>();
+  /** Whose question each id is, so closing it runs as them. */
+  const owners = new Map<string, Owner>();
   const settle = (id: string, answer: Answer): void => {
     waiting.get(id)?.(answer);
     waiting.delete(id);
@@ -21,7 +23,9 @@ export function createWaitingRoom(db: Db, ttlMs: number): WaitingRoom {
 
   /** Close the row first, so a tap that lands at the same moment cannot also win. */
   const giveUp = (id: string, status: 'expired' | 'cancelled', answer: Answer): void => {
-    closeApproval(db, id, status)
+    const owner = owners.get(id);
+    if (owner === undefined) return;
+    closeApproval(db, owner, id, status)
       .catch(() => false)
       .then((closed) => {
         if (closed || status === 'cancelled') settle(id, answer);
@@ -34,7 +38,8 @@ export function createWaitingRoom(db: Db, ttlMs: number): WaitingRoom {
     cancel: (id) => {
       giveUp(id, 'cancelled', 'aborted');
     },
-    wait: async (id, signal) => {
+    wait: async (id, owner, signal) => {
+      owners.set(id, owner);
       const answered = new Promise<Answer>((resolve) => {
         waiting.set(id, resolve);
       });
@@ -52,6 +57,7 @@ export function createWaitingRoom(db: Db, ttlMs: number): WaitingRoom {
         clearTimeout(timer);
         signal?.removeEventListener('abort', abort);
         waiting.delete(id);
+        owners.delete(id);
       }
     },
   };

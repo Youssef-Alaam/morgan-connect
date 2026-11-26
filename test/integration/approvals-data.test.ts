@@ -91,7 +91,8 @@ it('takes no answer once the time is up', async () => {
 
 it('is spent on the exact call, once, and not before approval or after expiry', async () => {
   const id = await open('h1');
-  const use = (hash: string, now = NOW) => consumeApproval(db, { id, argsSha256: hash, now });
+  const use = (hash: string, now = NOW) =>
+    consumeApproval(db, owner, { id, argsSha256: hash, now });
   expect(await use('h1')).toBe(false); // not approved yet
   await answer(id);
   expect(await use('other')).toBe(false); // other arguments, other hash
@@ -105,9 +106,9 @@ it('closes a question that is still open, but never a used or denied one', async
   const waiting = await open();
   const denied = await open();
   await answer(denied, OWNER_CHAT, 'denied');
-  expect(await closeApproval(db, waiting, 'expired')).toBe(true);
-  expect(await closeApproval(db, waiting, 'cancelled')).toBe(false);
-  expect(await closeApproval(db, denied, 'expired')).toBe(false);
+  expect(await closeApproval(db, owner, waiting, 'expired')).toBe(true);
+  expect(await closeApproval(db, owner, waiting, 'cancelled')).toBe(false);
+  expect(await closeApproval(db, owner, denied, 'expired')).toBe(false);
   expect(await statusOf(waiting)).toBe('expired');
   expect(await statusOf(denied)).toBe('denied');
 });
@@ -115,9 +116,9 @@ it('closes a question that is still open, but never a used or denied one', async
 it('lets an Approve that beat the timer stand, but a cancel still ends it', async () => {
   const id = await open();
   await answer(id);
-  expect(await closeApproval(db, id, 'expired')).toBe(false);
+  expect(await closeApproval(db, owner, id, 'expired')).toBe(false);
   expect(await statusOf(id)).toBe('approved');
-  expect(await closeApproval(db, id, 'cancelled')).toBe(true);
+  expect(await closeApproval(db, owner, id, 'cancelled')).toBe(true);
 });
 
 it('closes every open question at startup, approved but unused ones too', async () => {
@@ -126,7 +127,7 @@ it('closes every open question at startup, approved but unused ones too', async 
   await answer(approved);
   const used = await open();
   await answer(used);
-  await consumeApproval(db, { id: used, argsSha256: 'h1', now: NOW });
+  await consumeApproval(db, owner, { id: used, argsSha256: 'h1', now: NOW });
   expect(await closeOrphanedApprovals(db)).toBe(2);
   expect([await statusOf(pending), await statusOf(approved), await statusOf(used)]).toEqual([
     'expired',

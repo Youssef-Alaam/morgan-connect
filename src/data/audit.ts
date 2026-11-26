@@ -1,5 +1,5 @@
 import type { AuditOutcome, Db } from './db.js';
-import { DEFAULT_WORKSPACE_ID, ownerOf } from './tenancy.js';
+import { DEFAULT_WORKSPACE_ID, ownerOf, withOwner } from './tenancy.js';
 
 export interface AuditEntry {
   turnId?: string | undefined;
@@ -22,22 +22,22 @@ export interface AuditEntry {
  */
 export async function appendAudit(db: Db, entry: AuditEntry): Promise<void> {
   const owner = await ownerOf(db, entry);
-  await db
-    .insertInto('audit_log')
-    .values({
-      turn_id: entry.turnId ?? null,
-      channel: entry.channel,
-      chat_id: entry.chatId,
-      user_id: owner?.userId ?? null,
-      workspace_id: owner?.workspaceId ?? DEFAULT_WORKSPACE_ID,
-      tool: entry.tool,
-      action_type: entry.actionType,
-      changes_state: entry.changesState,
-      arg_names: [...entry.argNames],
-      extra_args: entry.extraArgs,
-      args_sha256: entry.argsSha256,
-      decision: entry.decision,
-      outcome: entry.outcome,
-    })
-    .execute();
+  const row = {
+    turn_id: entry.turnId ?? null,
+    channel: entry.channel,
+    chat_id: entry.chatId,
+    user_id: owner?.userId ?? null,
+    workspace_id: owner?.workspaceId ?? DEFAULT_WORKSPACE_ID,
+    tool: entry.tool,
+    action_type: entry.actionType,
+    changes_state: entry.changesState,
+    arg_names: [...entry.argNames],
+    extra_args: entry.extraArgs,
+    args_sha256: entry.argsSha256,
+    decision: entry.decision,
+    outcome: entry.outcome,
+  };
+  // A stranger's row has no person; the table takes inserts from the app role either way.
+  if (owner === undefined) await db.insertInto('audit_log').values(row).execute();
+  else await withOwner(db, owner, (trx) => trx.insertInto('audit_log').values(row).execute());
 }
