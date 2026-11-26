@@ -55,6 +55,15 @@ export interface Database {
     expires_at: Date;
     used_at: Date | null;
   };
+  link_codes: {
+    id: Generated<string>;
+    user_id: string;
+    workspace_id: string;
+    code_hash: string;
+    created_at: Generated<Date>;
+    expires_at: Date;
+    used_at: Date | null;
+  };
   sessions: {
     id: Generated<string>;
     user_id: string;

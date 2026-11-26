@@ -150,10 +150,11 @@ export const COVERED: readonly string[] = [
   'password_links',
   'invites',
   'web_events',
+  'link_codes',
 ];
 
 /** Grants the app role is deliberately without (src/data/roles.ts); everything else is granted. */
-const NO_UPDATE: readonly string[] = ['audit_log', 'users', 'invites'];
+const NO_UPDATE: readonly string[] = ['audit_log', 'users', 'invites', 'link_codes'];
 const NO_DELETE: readonly string[] = ['audit_log'];
 
 /** Tables `expectIsolated` has run for in this file. */

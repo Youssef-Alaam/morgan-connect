@@ -1,8 +1,17 @@
 import { type QueryExecutorProvider, sql } from 'kysely';
 import type { Db } from './db.js';
 import { ADMIN_READ_FUNCTIONS } from './admin-read.js';
+import { DEVICE_FUNCTIONS } from './devices.js';
 import { ACCOUNT_FUNCTIONS } from './invites.js';
 import { SYSTEM_FUNCTIONS } from './system.js';
+
+/** Every function the app role may execute, by signature. */
+const NAMED_FUNCTIONS = [
+  ...SYSTEM_FUNCTIONS,
+  ...ADMIN_READ_FUNCTIONS,
+  ...ACCOUNT_FUNCTIONS,
+  ...DEVICE_FUNCTIONS,
+];
 
 export interface AppCredentials {
   user: string;
@@ -65,14 +74,16 @@ export async function ensureAppRole(owner: Db, databaseUrl: string): Promise<voi
     );
     await sql`grant usage, select on all sequences in schema public to ${who}`.execute(trx);
     // Only the named system paths (migration 0012) and the admin's audited read path (0015).
-    for (const fn of [...SYSTEM_FUNCTIONS, ...ADMIN_READ_FUNCTIONS, ...ACCOUNT_FUNCTIONS]) {
+    for (const fn of NAMED_FUNCTIONS) {
       await sql`grant execute on function ${sql.raw(`public.${fn}`)} to ${who}`.execute(trx);
     }
     // Every name is schema-qualified, so nothing the app makes can stand in for these tables.
     await sql`revoke update, delete, truncate on public.audit_log from ${who}`.execute(trx);
     // No app path changes a user row (role, workspace, limit, notice) or a spent invite: only the
     // named functions do, so a member cannot promote themselves and an admin cannot re-arm a token.
-    await sql`revoke update on public.users, public.invites from ${who}`.execute(trx);
+    await sql`revoke update on public.users, public.invites, public.link_codes from ${who}`.execute(
+      trx,
+    );
     // The migration books are the owner's alone to write.
     await sql`revoke insert, update, delete, truncate on public.schema_info, public.kysely_migration,
       public.kysely_migration_lock from ${who}`.execute(trx);
