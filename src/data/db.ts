@@ -135,6 +135,16 @@ export interface Database {
     expires_at: Date;
     decided_at: Date | null;
   };
+  web_events: {
+    id: Generated<string>;
+    user_id: string;
+    workspace_id: string;
+    chat_id: string;
+    kind: 'ack' | 'message';
+    ref: string | null;
+    text: Generated<string>;
+    created_at: Generated<Date>;
+  };
   usage_ledger: {
     id: Generated<string>;
     user_id: string;
