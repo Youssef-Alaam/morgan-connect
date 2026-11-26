@@ -19,6 +19,7 @@ import {
   type Shared,
   type Signed,
 } from './session.js';
+import { createTwoFactor, twoFactorRoutes } from './two-factor.js';
 
 const MAX_WRONG_TRIES = 5;
 // One address may fail more often than one email (a shared office), but not without end.
@@ -114,6 +115,7 @@ export function authRoutes(deps: AuthDeps, chat?: Omit<ChatDeps, 'db'>): Hono<Si
   memberRoutes(routes, deps, shared);
   if (chat !== undefined) chatRoutes(routes, { ...chat, db });
   deviceRoutes(routes, deps);
+  twoFactorRoutes(routes, deps, createTwoFactor(deps));
 
   routes.get('/me', async (c) => c.json(await accountOf(db, c.get('session'))));
 
