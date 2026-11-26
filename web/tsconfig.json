@@ -9,5 +9,5 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["src", "*.config.ts"]
+  "include": ["src", "e2e", "*.config.ts"]
 }

@@ -1,0 +1,31 @@
+.btn {
+  min-block-size: var(--target);
+  padding-inline: var(--space-3);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: var(--font-size-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--button-background);
+  color: var(--button-color);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--input-border);
+}
+
+.btn-danger {
+  background: var(--button-danger-background);
+  color: var(--button-color);
+}
