@@ -60,9 +60,13 @@ test('a button can be pressed with the keyboard', async ({ page }) => {
   const press = page.getByRole('button', { name: 'Press me' });
   await press.focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('status')).toHaveText('Pressed 1 times');
+  await expect(page.locator('[data-gallery="button"]').getByRole('status')).toHaveText(
+    'Pressed 1 times',
+  );
   await page.keyboard.press('Space');
-  await expect(page.getByRole('status')).toHaveText('Pressed 2 times');
+  await expect(page.locator('[data-gallery="button"]').getByRole('status')).toHaveText(
+    'Pressed 2 times',
+  );
 });
 
 test('inputs, select, checkbox and switch work from the keyboard', async ({ page }) => {

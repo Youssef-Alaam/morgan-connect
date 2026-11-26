@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { ButtonSection } from './ButtonSection.tsx';
+import { BadgeSection, BannerSection, EmptyStateSection, TableSection } from './DataSection.tsx';
 import { CodeSection, ThreeWaySection } from './ControlSection.tsx';
 import { ChoicesSection, InputsSection } from './FormSection.tsx';
 
@@ -14,6 +15,10 @@ export function Gallery() {
       <ChoicesSection />
       <CodeSection />
       <ThreeWaySection />
+      <BadgeSection />
+      <BannerSection />
+      <TableSection />
+      <EmptyStateSection />
     </main>
   );
 }
