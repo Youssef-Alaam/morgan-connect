@@ -226,3 +226,46 @@
 .empty-state h3 {
   margin: 0;
 }
+
+.dialog {
+  inline-size: min(var(--dialog-width), 100%);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--card-border);
+  border-radius: var(--radius);
+  background: var(--card-background);
+  color: var(--text);
+}
+
+.dialog::backdrop {
+  background: var(--text);
+  opacity: var(--opacity-scrim);
+}
+
+.dialog h2 {
+  margin-block-start: 0;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.toast-region {
+  position: fixed;
+  inset-block-end: var(--space-3);
+  inset-inline-end: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--card-border);
+  border-radius: var(--radius);
+  background: var(--card-background);
+  color: var(--text);
+}
