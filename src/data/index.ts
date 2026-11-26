@@ -9,7 +9,15 @@ export {
 } from './db.js';
 export { claimSetupCode, isDeviceLinked, replaceSetupCode } from './identity.js';
 export { ownerOf, withOwner, type Owner } from './tenancy.js';
-export { turnOwner } from './system.js';
+export {
+  credentialsByEmail,
+  issueAdminLink,
+  linkLive,
+  redeemLink,
+  sessionOwner,
+  turnOwner,
+} from './system.js';
+export { accountOf, createSession, endSession, type Account } from './accounts.js';
 export { migrateToLatest } from './migrator.js';
 export { assertRlsApplies, ensureAppRole } from './roles.js';
 export {

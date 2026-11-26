@@ -119,6 +119,18 @@ describe('user-data tables', () => {
     expect(auditedSoFar()).toEqual([...ADMIN_READABLE_TABLES].sort());
   });
 
+  it('credentials', async () => {
+    await expectIsolated('credentials', ctx);
+  });
+
+  it('sessions', async () => {
+    await expectIsolated('sessions', ctx);
+  });
+
+  it('password_links', async () => {
+    await expectIsolated('password_links', ctx);
+  });
+
   it('has run for every table in COVERED', () => {
     expect(isolatedSoFar()).toEqual([...COVERED].sort());
   });

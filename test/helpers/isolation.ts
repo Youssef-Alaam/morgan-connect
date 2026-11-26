@@ -39,6 +39,29 @@ const ids = (who: Owner, chatId: string) => ({
   chat_id: chatId,
 });
 
+/** A login, a session and a password link for this person. */
+async function seedAccounts(owner: Db, who: Owner, chatId: string): Promise<void> {
+  await owner
+    .insertInto('credentials')
+    .values({
+      user_id: who.userId,
+      workspace_id: who.workspaceId,
+      email: `${chatId}@example.test`,
+      password_hash: 'h',
+    })
+    .execute();
+  const future = new Date(Date.now() + 3_600_000);
+  const hashes = { token_hash: `t-${chatId}`, expires_at: future };
+  await owner
+    .insertInto('sessions')
+    .values({ user_id: who.userId, workspace_id: who.workspaceId, ...hashes })
+    .execute();
+  await owner
+    .insertInto('password_links')
+    .values({ user_id: who.userId, workspace_id: who.workspaceId, ...hashes, used_at: null })
+    .execute();
+}
+
 /** One row of this person's in each table that has no seed of its own, as the owner role. */
 async function seedRows(
   owner: Db,
@@ -67,6 +90,7 @@ async function seedRows(
     argsSha256: 'h',
     expiresAt: new Date(Date.now() + 3_600_000),
   });
+  await seedAccounts(owner, who, chatId);
   await owner
     .insertInto('audit_log')
     .values({
@@ -143,6 +167,9 @@ export const COVERED: readonly string[] = [
   'audit_log',
   'users',
   'devices',
+  'credentials',
+  'sessions',
+  'password_links',
 ];
 
 /** Grants the app role is deliberately without (src/data/roles.ts); everything else is granted. */

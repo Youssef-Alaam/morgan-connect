@@ -14,6 +14,12 @@ export const SYSTEM_FUNCTIONS: readonly string[] = [
   'system_expire_open_approvals()',
   'system_install_claimed()',
   'system_claim_install(text, text, text)',
+  'system_credentials_by_email(text)',
+  'system_session_owner(text)',
+  'system_issue_admin_link(text, integer)',
+  'system_redeem_link(text, text, text)',
+  'system_sweep_sessions()',
+  'system_link_live(text)',
 ];
 
 interface OwnerRow {
@@ -70,6 +76,72 @@ export async function claimInstall(
 ): Promise<boolean> {
   const { rows } = await sql<{ ok: boolean }>`
     select system_claim_install(${claim.codeHash}, ${claim.channel}, ${claim.chatId}) as ok`.execute(
+    db,
+  );
+  return rows[0]?.ok === true;
+}
+
+/** Sign-in: the person and password hash behind an email, or undefined. */
+export async function credentialsByEmail(
+  db: Db,
+  email: string,
+): Promise<(Owner & { passwordHash: string }) | undefined> {
+  const { rows } = await sql<OwnerRow & { password_hash: string }>`
+    select user_id, workspace_id, password_hash from system_credentials_by_email(${email})`.execute(
+    db,
+  );
+  const row = rows[0];
+  const owner = toOwner(row);
+  return row === undefined || owner === undefined
+    ? undefined
+    : { ...owner, passwordHash: row.password_hash };
+}
+
+/** Session cookie: the person behind a live session token hash, with the session id. */
+export async function sessionOwner(
+  db: Db,
+  tokenHash: string,
+): Promise<(Owner & { sessionId: string }) | undefined> {
+  const { rows } = await sql<OwnerRow & { session_id: string }>`
+    select user_id, workspace_id, session_id from system_session_owner(${tokenHash})`.execute(db);
+  const row = rows[0];
+  const owner = toOwner(row);
+  return row === undefined || owner === undefined
+    ? undefined
+    : { ...owner, sessionId: row.session_id };
+}
+
+/** The admin's first-password link, if the admin has no password yet. False when none is needed. */
+export async function issueAdminLink(
+  db: Db,
+  tokenHash: string,
+  ttlSeconds: number,
+): Promise<boolean> {
+  const { rows } = await sql<{ ok: boolean }>`
+    select system_issue_admin_link(${tokenHash}, ${ttlSeconds}::integer) as ok`.execute(db);
+  return rows[0]?.ok === true;
+}
+
+/** Spend a password link and create the login in one step; undefined if the link is not live. */
+export async function redeemLink(
+  db: Db,
+  link: { tokenHash: string; email: string; passwordHash: string },
+): Promise<Owner | undefined> {
+  const { rows } = await sql<OwnerRow>`
+    select user_id, workspace_id
+    from system_redeem_link(${link.tokenHash}, ${link.email}, ${link.passwordHash})`.execute(db);
+  return toOwner(rows[0]);
+}
+
+/** Drop expired sessions and their web devices, whoever they belong to. Returns how many. */
+export async function sweepSessions(db: Db): Promise<number> {
+  const { rows } = await sql<{ n: number }>`select system_sweep_sessions() as n`.execute(db);
+  return rows[0]?.n ?? 0;
+}
+
+/** True while a password link is unspent and unexpired (it is not spent by asking). */
+export async function linkLive(db: Db, tokenHash: string): Promise<boolean> {
+  const { rows } = await sql<{ ok: boolean }>`select system_link_live(${tokenHash}) as ok`.execute(
     db,
   );
   return rows[0]?.ok === true;
