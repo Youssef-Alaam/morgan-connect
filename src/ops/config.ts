@@ -41,6 +41,24 @@ const schema = z
     ENGINE_TOKEN: z.string().min(1).optional(),
     // Adds a harmless `demo.gated` tool that always asks for approval, to try the Approve and Deny buttons.
     DEMO_TOOLS: z.stringbool().default(false),
+    // The vault repository that `vault.capture` writes to. Set the URL and the token together, or neither.
+    // The token is sent to this host, so the URL must be https unless it is this machine.
+    VAULT_REMOTE_URL: z
+      .url()
+      .refine((value) => {
+        const { protocol, hostname, username, password } = new URL(value);
+        const local = ['localhost', '127.0.0.1'].includes(hostname);
+        return (protocol === 'https:' || local) && username === '' && password === '';
+      }, 'must be https (or localhost) and must not contain a login')
+      .optional(),
+    // A fine-grained token with write access to that one repository. Never logged.
+    VAULT_TOKEN: z.string().min(1).optional(),
+    VAULT_BRANCH: z
+      .string()
+      .regex(/^[w][w./-]*$/, 'must be a plain branch name')
+      .default('main'),
+    // Where Morgan keeps its own clone of the vault. Default: a folder in the system temp directory.
+    VAULT_DIR: z.string().min(1).optional(),
     // Where "today" and "this month" start in /usage. An IANA name such as UTC or Asia/Riyadh.
     TIMEZONE: z
       .string()
@@ -56,11 +74,18 @@ const schema = z
       .default('UTC'),
   })
   .superRefine((value, ctx) => {
-    if (value.ENGINE !== 'http') return;
-    for (const key of ['ENGINE_URL', 'ENGINE_TOKEN'] as const) {
-      if (value[key] === undefined) {
-        ctx.addIssue({ code: 'custom', path: [key], message: 'required when ENGINE is http' });
+    const need = (
+      keys: ('ENGINE_URL' | 'ENGINE_TOKEN' | 'VAULT_REMOTE_URL' | 'VAULT_TOKEN')[],
+      why: string,
+    ) => {
+      for (const key of keys) {
+        if (value[key] === undefined) ctx.addIssue({ code: 'custom', path: [key], message: why });
       }
+    };
+    if (value.ENGINE === 'http')
+      need(['ENGINE_URL', 'ENGINE_TOKEN'], 'required when ENGINE is http');
+    if (value.VAULT_REMOTE_URL !== undefined || value.VAULT_TOKEN !== undefined) {
+      need(['VAULT_REMOTE_URL', 'VAULT_TOKEN'], 'set VAULT_REMOTE_URL and VAULT_TOKEN together');
     }
   });
 
