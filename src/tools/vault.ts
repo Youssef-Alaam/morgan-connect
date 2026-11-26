@@ -1,10 +1,15 @@
 import { execFile } from 'node:child_process';
-import { lstat, mkdir } from 'node:fs/promises';
+import { lstat, mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { atomicWrite } from '../ops/index.js';
 
 /** Runs git with these arguments in `cwd` and returns its output. Tests wrap it to stage a race. */
-export type GitRunner = (cwd: string, args: string[], env: NodeJS.ProcessEnv) => Promise<string>;
+export type GitRunner = (
+  cwd: string,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  signal?: AbortSignal,
+) => Promise<string>;
 
 export interface VaultOptions {
   /** The vault repository, e.g. `https://github.com/owner/vault.git`. Must not carry a token. */
@@ -36,17 +41,32 @@ export class VaultError extends Error {
 
 export interface Vault {
   /** Write one new note and push it as one commit. Never overwrites, never leaves `_inbox/`. */
-  capture: (path: string, content: string) => Promise<Captured>;
+  capture: (path: string, content: string, signal?: AbortSignal) => Promise<Captured>;
 }
 
 /** `_inbox/` + date + slug: one folder level, no dots, no `..`, nothing to escape with. */
 const INBOX_PATH = /^_inbox\/\d{4}-\d{2}-\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/;
 const PUSH_TRIES = 3;
-const IDENTITY = ['-c', 'user.name=Morgan', '-c', 'user.email=morgan@users.noreply.github.com'];
 
-export const runGit: GitRunner = (cwd, args, env) =>
+/** The date in the file name must be a real day, so `2026-02-31` is refused. */
+function realDate(path: string): boolean {
+  const day = path.slice('_inbox/'.length, '_inbox/YYYY-MM-DD'.length);
+  const parsed = new Date(`${day}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(day);
+}
+/** Config for every git call: our identity, and no following redirects (the token must stay on one host). */
+const IDENTITY = [
+  '-c',
+  'user.name=Morgan',
+  '-c',
+  'user.email=morgan@users.noreply.github.com',
+  '-c',
+  'http.followRedirects=false',
+];
+
+export const runGit: GitRunner = (cwd, args, env, signal) =>
   new Promise((resolve, reject) => {
-    const options = { cwd, env, timeout: 60_000, maxBuffer: 4_000_000, windowsHide: true };
+    const options = { cwd, env, signal, timeout: 20_000, maxBuffer: 4_000_000, windowsHide: true };
     execFile('git', args, options, (error, stdout, stderr) => {
       if (error === null) resolve(stdout);
       else reject(new Error(stderr.trim() === '' ? error.message : stderr.trim()));
@@ -57,7 +77,7 @@ export const runGit: GitRunner = (cwd, args, env) =>
 function gitEnv(token: string): NodeJS.ProcessEnv {
   const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
   return {
-    ...process.env,
+    ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_'))),
     GIT_TERMINAL_PROMPT: '0',
     GIT_CONFIG_COUNT: '1',
     GIT_CONFIG_KEY_0: 'http.extraHeader',
@@ -104,7 +124,10 @@ async function pushWithRetry({ git, fetch, branch, remoteRef }: PushParts, path:
 }
 
 /** Our own clone of the vault: every git call goes through here, so errors are scrubbed in one place. */
-function createClone({ remoteUrl, token, branch, dir, git: run = runGit }: VaultOptions) {
+function createClone(
+  { remoteUrl, token, branch, dir, git: run = runGit }: VaultOptions,
+  signal: () => AbortSignal | undefined,
+) {
   const env = gitEnv(token);
   const secrets = [token, env['GIT_CONFIG_VALUE_0'] ?? '', Buffer.from(token).toString('base64')];
   const scrub = (text: string): string =>
@@ -116,7 +139,7 @@ function createClone({ remoteUrl, token, branch, dir, git: run = runGit }: Vault
     return new VaultError('failed', scrub(`git ${what} failed: ${reason}`));
   };
   const git = (args: string[]): Promise<string> =>
-    run(dir, [...IDENTITY, ...args], env).catch((error: unknown) => {
+    run(dir, [...IDENTITY, ...args], env, signal()).catch((error: unknown) => {
       throw fail(args[0] ?? '', error);
     });
   const remoteRef = `origin/${branch}`;
@@ -128,11 +151,14 @@ function createClone({ remoteUrl, token, branch, dir, git: run = runGit }: Vault
     if (!(await exists(join(dir, '.git')))) {
       await mkdir(dirname(dir), { recursive: true });
       const clone = ['clone', '--quiet', '--branch', branch, '--single-branch', '--', remoteUrl];
-      await run(dirname(dir), [...IDENTITY, ...clone, dir], env).catch((error: unknown) => {
-        throw fail('clone', error);
-      });
+      await run(dirname(dir), [...IDENTITY, ...clone, dir], env, signal()).catch(
+        (error: unknown) => {
+          throw fail('clone', error);
+        },
+      );
       return;
     }
+    await git(['remote', 'set-url', 'origin', remoteUrl]);
     await fetch();
     await git(['reset', '--quiet', '--hard', remoteRef]);
     await git(['clean', '--quiet', '-fd']);
@@ -150,10 +176,12 @@ function createClone({ remoteUrl, token, branch, dir, git: run = runGit }: Vault
 
 export function createVault(options: VaultOptions): Vault {
   const { remoteUrl, dir } = options;
-  const clone = createClone(options);
+  // The signal of the capture now running; captures run one at a time, so one slot is enough.
+  let stop: AbortSignal | undefined;
+  const clone = createClone(options, () => stop);
 
   async function capture(path: string, content: string): Promise<Captured> {
-    if (!INBOX_PATH.test(path)) {
+    if (!INBOX_PATH.test(path) || !realDate(path)) {
       throw new VaultError('refused', 'The path must be _inbox/YYYY-MM-DD-short-slug.md');
     }
     await clone.sync();
@@ -162,7 +190,13 @@ export function createVault(options: VaultOptions): Vault {
       throw new VaultError('refused', '_inbox is not a folder in this vault');
     }
     if (await exists(join(dir, path))) {
-      throw new VaultError('refused', `${path} already exists; it is never overwritten`);
+      const same = (await readFile(join(dir, path), 'utf8').catch(() => undefined)) === content;
+      throw new VaultError(
+        'refused',
+        same
+          ? `${path} already holds this same note; nothing new was saved`
+          : `${path} already exists with different text; it is never overwritten`,
+      );
     }
     await mkdir(inbox, { recursive: true });
     await atomicWrite(join(dir, path), content);
@@ -174,8 +208,11 @@ export function createVault(options: VaultOptions): Vault {
   // One capture at a time: two at once would race on the same clone.
   let last: Promise<unknown> = Promise.resolve();
   return {
-    capture: (path, content) => {
-      const next = last.then(() => capture(path, content));
+    capture: (path, content, signal) => {
+      const next = last.then(() => {
+        stop = signal;
+        return capture(path, content);
+      });
       last = next.catch(() => undefined);
       return next;
     },

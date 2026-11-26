@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { commitUrl, createVault, type GitRunner, runGit, VaultError } from './vault.js';
 
 const TOKEN = 'not-a-real-token';
@@ -78,9 +78,38 @@ it.each([
   '/etc/2026-11-26-x.md',
   '_inbox/2026-11-26-x.txt',
   '_inbox/x.md',
+  '_inbox/2026-02-31-x.md',
 ])('refuses the path %s', async (path) => {
   expect((await refused(vaultIn('clone').capture(path, 'x'))).kind).toBe('refused');
   expect(commits()).toEqual(['init']);
+});
+
+it('says so when the same note already landed, and when the text differs', async () => {
+  const vault = vaultIn('clone');
+  await vault.capture(PATH, 'same');
+  expect((await refused(vault.capture(PATH, 'same'))).message).toContain('same note');
+  expect((await refused(vault.capture(PATH, 'other'))).message).toContain('different text');
+});
+
+it('points the clone back at the configured remote, drops GIT_ env, and passes the signal', async () => {
+  const seen: { args: string[]; env: NodeJS.ProcessEnv; signal: AbortSignal | undefined }[] = [];
+  const spy: GitRunner = (cwd, args, env, signal) => {
+    seen.push({ args, env, signal });
+    return runGit(cwd, args, env, signal);
+  };
+  const vault = vaultIn('clone', { git: spy });
+  git(root, 'init', '--quiet', join(root, 'clone'));
+  git(join(root, 'clone'), 'remote', 'add', 'origin', 'https://elsewhere.invalid/x.git');
+  vi.stubEnv('GIT_DIR', '/nowhere');
+  const stop = new AbortController();
+  await vault.capture(PATH, 'x', stop.signal);
+  vi.unstubAllEnvs();
+  expect(seen.some((call) => call.args.includes('set-url') && call.args.includes(remote))).toBe(
+    true,
+  );
+  expect(seen.every((call) => call.env['GIT_DIR'] === undefined)).toBe(true);
+  expect(seen.every((call) => call.args.includes('http.followRedirects=false'))).toBe(true);
+  expect(seen.every((call) => call.signal === stop.signal)).toBe(true);
 });
 
 it('retries a push after the remote moved, with no duplicate commit', async () => {
