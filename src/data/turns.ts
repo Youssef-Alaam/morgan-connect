@@ -1,5 +1,6 @@
 import type { Db, TurnStatus } from './db.js';
-import { ownerOf } from './tenancy.js';
+import { queuedTurnIds } from './system.js';
+import { type Owner, ownerOf, withOwner } from './tenancy.js';
 
 export interface NewTurn {
   idempotencyKey: string;
@@ -48,56 +49,62 @@ export async function insertTurn(
 ): Promise<{ id: string; status: TurnStatus; created: boolean }> {
   const owner = await ownerOf(db, turn);
   if (owner === undefined) throw new Error('No linked user for this chat');
-  const inserted = await db
-    .insertInto('turns')
-    .values({
-      idempotency_key: turn.idempotencyKey,
-      channel: turn.channel,
-      chat_id: turn.chatId,
-      text: turn.text,
-      user_id: owner.userId,
-      workspace_id: owner.workspaceId,
-      reply_text: null,
-      error: null,
-    })
-    .onConflict((oc) => oc.column('idempotency_key').doNothing())
-    .returning(['id', 'status'])
-    .executeTakeFirst();
-  if (inserted !== undefined) return { ...inserted, created: true };
-  const existing = await db
-    .selectFrom('turns')
-    .select(['id', 'status'])
-    .where('idempotency_key', '=', turn.idempotencyKey)
-    .executeTakeFirstOrThrow();
-  return { ...existing, created: false };
+  return withOwner(db, owner, async (trx) => {
+    const inserted = await trx
+      .insertInto('turns')
+      .values({
+        idempotency_key: turn.idempotencyKey,
+        channel: turn.channel,
+        chat_id: turn.chatId,
+        text: turn.text,
+        user_id: owner.userId,
+        workspace_id: owner.workspaceId,
+        reply_text: null,
+        error: null,
+      })
+      .onConflict((oc) => oc.column('idempotency_key').doNothing())
+      .returning(['id', 'status'])
+      .executeTakeFirst();
+    if (inserted !== undefined) return { ...inserted, created: true };
+    const existing = await trx
+      .selectFrom('turns')
+      .select(['id', 'status'])
+      .where('idempotency_key', '=', turn.idempotencyKey)
+      .executeTakeFirstOrThrow();
+    return { ...existing, created: false };
+  });
 }
 
 /** Mark a queued turn as `sending` and return it; undefined if someone already claimed it. */
-export async function claimTurn(db: Db, id: string): Promise<Turn | undefined> {
-  const row = await db
-    .updateTable('turns')
-    .set({ status: 'sending' })
-    .where('id', '=', id)
-    .where('status', '=', 'queued')
-    .returning(columns)
-    .executeTakeFirst();
+export async function claimTurn(db: Db, owner: Owner, id: string): Promise<Turn | undefined> {
+  const row = await withOwner(db, owner, (trx) =>
+    trx
+      .updateTable('turns')
+      .set({ status: 'sending' })
+      .where('id', '=', id)
+      .where('status', '=', 'queued')
+      .returning(columns)
+      .executeTakeFirst(),
+  );
   return row === undefined ? undefined : toTurn(row);
 }
 
-export async function getTurn(db: Db, id: string): Promise<Turn | undefined> {
-  const row = await db.selectFrom('turns').select(columns).where('id', '=', id).executeTakeFirst();
+export async function getTurn(db: Db, owner: Owner, id: string): Promise<Turn | undefined> {
+  const row = await withOwner(db, owner, (trx) =>
+    trx.selectFrom('turns').select(columns).where('id', '=', id).executeTakeFirst(),
+  );
   return row === undefined ? undefined : toTurn(row);
 }
 
-/** Turn ids still queued: their job may have been lost between insert and enqueue. */
-export async function listQueuedTurnIds(db: Db): Promise<string[]> {
-  const rows = await db.selectFrom('turns').select('id').where('status', '=', 'queued').execute();
-  return rows.map((row) => row.id);
+/** Turn ids still queued, for everyone: their job may have been lost between insert and enqueue. */
+export function listQueuedTurnIds(db: Db): Promise<string[]> {
+  return queuedTurnIds(db);
 }
 
 /** Record the outcome. Only a sending turn can finish, so a late writer cannot overwrite. */
 export async function finishTurn(
   db: Db,
+  owner: Owner,
   id: string,
   result: { status: 'done'; replyText: string } | { status: 'failed'; error: string },
 ): Promise<void> {
@@ -105,10 +112,12 @@ export async function finishTurn(
     result.status === 'done'
       ? { status: result.status, reply_text: result.replyText }
       : { status: result.status, error: result.error };
-  await db
-    .updateTable('turns')
-    .set(fields)
-    .where('id', '=', id)
-    .where('status', '=', 'sending')
-    .execute();
+  await withOwner(db, owner, (trx) =>
+    trx
+      .updateTable('turns')
+      .set(fields)
+      .where('id', '=', id)
+      .where('status', '=', 'sending')
+      .execute(),
+  );
 }

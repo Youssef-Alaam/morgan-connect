@@ -42,6 +42,14 @@ export async function turnOwner(db: Db, turnId: string): Promise<Owner | undefin
   return toOwner(rows[0]);
 }
 
+/** Startup sweep: every turn still queued, whoever it belongs to. */
+export async function queuedTurnIds(db: Db): Promise<string[]> {
+  const { rows } = await sql<{ id: string }>`select id from system_queued_turn_ids() as id`.execute(
+    db,
+  );
+  return rows.map((row) => row.id);
+}
+
 /** Setup: true once anyone has claimed the install. */
 export async function installClaimed(db: Db): Promise<boolean> {
   const { rows } = await sql<{ claimed: boolean }>`

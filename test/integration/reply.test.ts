@@ -419,7 +419,7 @@ it('the worker sends the model answer as the reply', async () => {
   });
   await processTurn(workerDeps(channel, reply), created.id);
   expect(channel.attempts).toEqual([{ chatId: 'c8', text: 'from the model' }]);
-  expect((await getTurn(db, created.id))?.status).toBe('done');
+  expect((await getTurn(db, who, created.id))?.status).toBe('done');
 });
 
 it('/stop from the same chat aborts the running turn; /stop with nothing running does nothing', async () => {

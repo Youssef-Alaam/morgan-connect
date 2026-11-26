@@ -5,6 +5,7 @@ import {
   insertTurn,
   ownerOf,
   listQueuedTurnIds,
+  turnOwner,
   type Db,
   type Turn,
   type TurnQueue,
@@ -87,11 +88,14 @@ async function replyTo(
 
 /** Run one turn: reply with the model's answer (or echo the text when no model is set). Claimed before the send, so a redelivery never resends. */
 export async function processTurn(deps: PipelineDeps, turnId: string): Promise<void> {
-  const turn = await claimTurn(deps.db, turnId);
+  // The job holds only the id: find whose turn it is, then do everything else as them.
+  const owner = await turnOwner(deps.db, turnId);
+  if (owner === undefined) return;
+  const turn = await claimTurn(deps.db, owner, turnId);
   if (turn === undefined) {
-    const existing = await getTurn(deps.db, turnId);
+    const existing = await getTurn(deps.db, owner, turnId);
     if (existing?.status === 'sending') {
-      await finishTurn(deps.db, turnId, { status: 'failed', error: 'interrupted' });
+      await finishTurn(deps.db, owner, turnId, { status: 'failed', error: 'interrupted' });
       deps.logger.warn({ turnId }, 'turn was interrupted mid-send; not resending');
     }
     return;
@@ -105,10 +109,10 @@ export async function processTurn(deps: PipelineDeps, turnId: string): Promise<v
     const text =
       deps.reply === undefined ? turn.text : await replyTo(deps, turn, sender, deps.reply);
     await sendWithRetry(() => sender.send(turn.chatId, text), deps.retryDelayMs);
-    await finishTurn(deps.db, turnId, { status: 'done', replyText: text });
+    await finishTurn(deps.db, owner, turnId, { status: 'done', replyText: text });
   } catch (error) {
     const kind = error instanceof PipelineError ? error.kind : 'send_failed';
-    await finishTurn(deps.db, turnId, { status: 'failed', error: kind });
+    await finishTurn(deps.db, owner, turnId, { status: 'failed', error: kind });
     deps.logger.error({ turnId, kind }, 'turn failed');
   }
 }
