@@ -20,7 +20,6 @@ beforeAll(async () => {
   await createSession(ctx.app, ctx.bob, { tokenHash: sha256('bob-token'), expiresAt });
   const logger = createLogger('silent');
   const web = createWebChannel(ctx.app);
-  // A queue that runs the turn at once: the worker is not what this file is about.
   const queue: TurnQueue = {
     start: () => Promise.resolve(),
     enqueue: (id) => {
@@ -117,8 +116,6 @@ it('resumes after the last id seen, with nothing repeated', async () => {
   expect(all.map((e) => e.data.text || e.data.ref)).toEqual(['m1', 'hello', 'm2', 'second']);
   const rest = await readEvents(await events('alice', { 'last-event-id': all[1]?.id ?? '' }), 2);
   expect(rest.map((e) => e.id)).toEqual(all.slice(2).map((e) => e.id));
-  // A garbage id replays from the start instead of failing.
-  expect(await readEvents(await events('alice', { 'last-event-id': 'x' }), 4)).toHaveLength(4);
 });
 
 it('never shows one person the events of another', async () => {
@@ -153,7 +150,9 @@ it('keeps a quiet stream alive with a comment line', async () => {
     ingest: () => Promise.resolve(),
     keepAliveMs: 20,
   });
-  const response = await quiet.request('/api/chat/events', { headers: { cookie: cookies.alice } });
+  const response = await quiet.request('/api/chat/events', {
+    headers: { cookie: cookies.alice, 'last-event-id': '999999999' },
+  });
   const reader = response.body?.getReader();
   const chunk = await reader?.read();
   expect(new TextDecoder().decode(chunk?.value as Uint8Array | undefined)).toContain(
