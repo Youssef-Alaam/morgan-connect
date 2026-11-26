@@ -2,6 +2,7 @@ import { sql } from 'kysely';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import {
   FAILURE_REPLY,
+  IDLE_REPLY,
   NEW_REPLY,
   STOPPED_REPLY,
   createReplier,
@@ -463,4 +464,65 @@ it('/stop from the same chat aborts the running turn; /stop with nothing running
   await ingest(deps, stop('3'));
   await running;
   expect(channel.attempts).toEqual([{ chatId: 'c9', text: STOPPED_REPLY }]);
+});
+
+const MINUTE = 60_000;
+const GAP = 360 * MINUTE;
+/** A clock that runs `ahead` ms past the real one, so rows just written look that much older. */
+const clockAhead = (ahead: () => number) => (): Date => new Date(Date.now() + ahead());
+
+it('continues the conversation just under the idle gap and starts a new one just over it', async () => {
+  let ahead = 0;
+  const { reply, engine } = replierFor([{ text: 'a' }, { text: 'b' }, { text: 'c' }], 0, {
+    now: clockAhead(() => ahead),
+    idleGapMs: GAP,
+  });
+  const channel = new FakeChannel();
+  await reply(turn('c24', 'one'), channel);
+  const first = engine.opened[0]?.conversationId;
+  ahead = GAP - MINUTE;
+  expect(await reply(turn('c24', 'two'), channel)).toBe('b');
+  expect(engine.opened[1]?.conversationId).toBe(first);
+  expect(engine.opened[1]?.history).toHaveLength(2);
+  expect(engine.ended).toEqual([]);
+  ahead = 2 * GAP + MINUTE;
+  expect(await reply(turn('c24', 'three'), channel)).toBe(`${IDLE_REPLY}
+
+c`);
+  expect(engine.opened[2]?.history).toEqual([]);
+  expect(engine.opened[2]?.conversationId).not.toBe(first);
+  expect(engine.ended).toEqual([first]);
+});
+
+it('does not announce a new conversation for a chat with no history, and ignores the gap when unset', async () => {
+  const { reply, engine } = replierFor([{ text: 'a' }, { text: 'b' }], 0, {
+    now: clockAhead(() => 10 * GAP),
+    idleGapMs: GAP,
+  });
+  expect(await reply(turn('c25', 'first ever'), new FakeChannel())).toBe('a');
+  expect(engine.ended).toEqual([]);
+  const off = replierFor([{ text: 'a' }, { text: 'b' }], 0, { now: clockAhead(() => 10 * GAP) });
+  await off.reply(turn('c26', 'one'), new FakeChannel());
+  expect(await off.reply(turn('c26', 'two'), new FakeChannel())).toBe('b');
+  expect(off.engine.opened[1]?.history).toHaveLength(2);
+});
+
+it('a turn still running when the gap passes is not cut', async () => {
+  let ahead = 0;
+  const { reply, engine } = replierFor([{ text: 'a' }, { hang: true }], 0, {
+    now: clockAhead(() => ahead),
+    idleGapMs: GAP,
+  });
+  const channel = new FakeChannel();
+  await reply(turn('c27', 'one'), channel);
+  const controller = new AbortController();
+  const running = reply(turn('c27', 'two'), channel, controller.signal);
+  await vi.waitFor(() => {
+    expect(engine.prompts).toHaveLength(2);
+  });
+  ahead = 3 * GAP;
+  expect(engine.ended).toEqual([]);
+  controller.abort();
+  expect(await running).toBe(STOPPED_REPLY);
+  expect(engine.ended).toEqual([]);
 });

@@ -190,3 +190,20 @@ export async function clearHistory(db: Db, owner: Owner, chat: ChatKey): Promise
       .execute(),
   );
 }
+
+/** When this chat last had a message stored, or undefined when it has none. */
+export async function lastMessageAt(
+  db: Db,
+  owner: Owner,
+  chat: ChatKey,
+): Promise<Date | undefined> {
+  const row = await withOwner(db, owner, (trx) =>
+    trx
+      .selectFrom('chat_messages')
+      .select((eb) => eb.fn.max('created_at').as('last'))
+      .where('channel', '=', chat.channel)
+      .where('chat_id', '=', chat.chatId)
+      .executeTakeFirst(),
+  );
+  return row?.last ?? undefined;
+}

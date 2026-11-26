@@ -4,6 +4,7 @@ import {
   closeStoppedTurn,
   conversationFor,
   endConversation,
+  lastMessageAt,
   loadHistory,
   recordUsage,
   usageSince,
@@ -34,6 +35,7 @@ const HISTORY_CHARS = 24_000;
 export const FAILURE_REPLY = "Sorry, I couldn't get an answer just now. Please try again soon.";
 export const STOPPED_REPLY = 'Stopped.';
 export const NEW_REPLY = 'Started a new conversation.';
+export const IDLE_REPLY = 'It has been a while, so I started a new conversation.';
 
 export interface ReplyDeps {
   db: Db;
@@ -53,6 +55,8 @@ export interface ReplyDeps {
   typingIntervalMs: number;
   /** The whole answer, retries included, must fit inside the queue's job expiry. */
   turnTimeoutMs: number;
+  /** After this long without a message the next one starts a new conversation. Unset: never. */
+  idleGapMs?: number;
 }
 
 /** The time limit plus the waits before model retries must end before the queue gives up the job. */
@@ -194,6 +198,19 @@ async function shouldRetry(
   return false;
 }
 
+/** At turn start: when the chat has been quiet for the idle gap, start over as `/new` does. True if it did. */
+async function startOverWhenIdle(deps: ReplyDeps, turn: Turn): Promise<boolean> {
+  if (deps.idleGapMs === undefined) return false;
+  const last = await lastMessageAt(deps.db, owner(turn), {
+    channel: turn.channel,
+    chatId: turn.chatId,
+  });
+  const now = (deps.now ?? (() => new Date()))();
+  if (last === undefined || now.getTime() - last.getTime() <= deps.idleGapMs) return false;
+  await startOver(deps, turn);
+  return true;
+}
+
 async function ask(
   deps: ReplyDeps,
   turn: Turn,
@@ -266,7 +283,13 @@ export function createReplier(deps: ReplyDeps): Replier {
     const both = AbortSignal.any(signal === undefined ? [limit] : [signal, limit]);
     const stopTyping = keepTyping(deps, turn, sender);
     try {
-      return await ask(deps, turn, both, () => limit.aborted && signal?.aborted !== true);
+      const renewed = await startOverWhenIdle(deps, turn);
+      const answer = await ask(deps, turn, both, () => limit.aborted && signal?.aborted !== true);
+      return renewed
+        ? `${IDLE_REPLY}
+
+${answer}`
+        : answer;
     } catch (error) {
       const kind = error instanceof EngineError ? error.kind : 'failed';
       deps.logger.warn({ turnId: turn.id, kind }, 'model reply failed');

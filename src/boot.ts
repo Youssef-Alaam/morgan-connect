@@ -99,6 +99,7 @@ function buildReplier(
           ...vaultFrom(config),
         }),
         timezone: config.TIMEZONE,
+        idleGapMs: config.IDLE_GAP_MINUTES * 60_000,
         ...TIMING,
       });
 }

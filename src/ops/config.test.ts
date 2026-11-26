@@ -14,6 +14,7 @@ it('applies defaults and treats empty values as unset', () => {
     DEMO_TOOLS: false,
     VAULT_BRANCH: 'main',
     TIMEZONE: 'UTC',
+    IDLE_GAP_MINUTES: 360,
   });
 });
 
@@ -26,6 +27,17 @@ it('reads DEMO_TOOLS as a switch that is off by default', () => {
 it('takes an IANA TIMEZONE and rejects anything else', () => {
   expect(loadConfig({ DATABASE_URL: URL, TIMEZONE: 'Asia/Riyadh' }).TIMEZONE).toBe('Asia/Riyadh');
   expect(() => loadConfig({ DATABASE_URL: URL, TIMEZONE: 'Mars/Base' })).toThrow(/TIMEZONE/);
+});
+
+it('reads IDLE_GAP_MINUTES (default 6 hours) and refuses under 5 minutes', () => {
+  expect(loadConfig({ DATABASE_URL: URL, IDLE_GAP_MINUTES: '90' }).IDLE_GAP_MINUTES).toBe(90);
+  expect(loadConfig({ DATABASE_URL: URL, IDLE_GAP_MINUTES: '5' }).IDLE_GAP_MINUTES).toBe(5);
+  expect(() => loadConfig({ DATABASE_URL: URL, IDLE_GAP_MINUTES: '4' })).toThrow(
+    /IDLE_GAP_MINUTES/,
+  );
+  expect(() => loadConfig({ DATABASE_URL: URL, IDLE_GAP_MINUTES: 'soon' })).toThrow(
+    /IDLE_GAP_MINUTES/,
+  );
 });
 
 it('reads every key', () => {
