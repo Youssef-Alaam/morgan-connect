@@ -1,4 +1,4 @@
-import type { Db } from '../data/index.js';
+import { claimSetupCode, isDeviceLinked, replaceSetupCode, type Db } from '../data/index.js';
 import {
   createApprovals,
   createGate,
@@ -45,21 +45,19 @@ export interface RunOptions {
   capUsd: number;
 }
 
-/** The owner's chat needs a linked person, or nobody can be asked (the stranger's chat never is). */
+const SETUP_CODE_HASH = 'evals-setup-code';
+
+/**
+ * The owner's chat needs a linked person, or nobody can be asked (the stranger's chat never is).
+ * Linking goes through the named setup paths, as a real install does, because row-level security
+ * lets no code read or write other people's rows directly.
+ */
 async function linkOwner(db: Db): Promise<void> {
-  const found = await db.selectFrom('users').select('id').executeTakeFirst();
-  const user =
-    found ??
-    (await db
-      .insertInto('users')
-      .values({ role: 'admin' })
-      .returning('id')
-      .executeTakeFirstOrThrow());
-  await db
-    .insertInto('devices')
-    .values({ user_id: user.id, channel: CHANNEL, chat_id: OWNER_CHAT })
-    .onConflict((conflict) => conflict.doNothing())
-    .execute();
+  if (await isDeviceLinked(db, CHANNEL, OWNER_CHAT)) return;
+  const claimed =
+    (await replaceSetupCode(db, SETUP_CODE_HASH)) &&
+    (await claimSetupCode(db, SETUP_CODE_HASH, CHANNEL, OWNER_CHAT));
+  if (!claimed) throw new Error('The evals database must be fresh: its install is already claimed');
 }
 
 interface Spend {
