@@ -166,9 +166,13 @@ async function keepStopped(
 
 const TIME_NOTE = trusted('The current local time is given at the start of each user message.');
 
+const LANGUAGE_NOTE = trusted(
+  "Reply in the language of the person's latest message; commands and fixed bot lines stay in English.",
+);
+
 /** The system prompt never changes between turns, so the provider can cache it. */
 const systemFor = (deps: ReplyDeps): SystemPrompt =>
-  deps.system === undefined ? TIME_NOTE : joinSystem(deps.system, TIME_NOTE);
+  joinSystem(...(deps.system === undefined ? [] : [deps.system]), TIME_NOTE, LANGUAGE_NOTE);
 
 /** "[Now: Wed 25 Nov 2026 13:30 (Africa/Cairo, UTC+02:00)] hello": kept in the history, so each turn keeps its own time. */
 function stamped(deps: ReplyDeps, text: string): string {
