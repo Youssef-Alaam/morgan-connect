@@ -351,16 +351,10 @@ it('does not retry a model hiccup once a tool has run, and keeps what happened',
 });
 
 it('stores a refused tool call as an error result', async () => {
-  const off = {
-    read: 'off',
-    create: 'off',
-    overwrite: 'off',
-    delete: 'off',
-    send: 'off',
-    execute: 'off',
-  } as const;
+  // A chat nobody linked has no profile, so everything is off for it.
+  await db.deleteFrom('devices').where('chat_id', '=', 'c18').execute();
   const { reply } = replierFor([{ tool: 'clock_now', args: {} }, { text: 'sorry' }], 0, {
-    gate: gateWith({ profile: off }),
+    gate: gateWith({}),
   });
   await reply(turn('c18', 'time?'), new FakeChannel());
   const kept = await loadHistory(

@@ -1,4 +1,4 @@
-import type { Db } from '../data/index.js';
+import { ownerOf, type Db } from '../data/index.js';
 import type { Logger } from '../ops/index.js';
 import type { EngineTool, EngineToolOutput } from '../providers/index.js';
 import { untrusted, wrapUntrusted } from '../safety/index.js';
@@ -13,7 +13,8 @@ import {
 } from '../tools/index.js';
 import type { Approvals } from './approvals.js';
 import { abortedError, runGuarded } from './guard.js';
-import { decide, OWNER_PROFILE, type Profile } from './profile.js';
+import { decide, type Mode } from './profile.js';
+import { profileFor } from './profiles.js';
 import { createRecorder, type Caller } from './recorder.js';
 import { beforeRun } from './not-approved.js';
 
@@ -28,7 +29,6 @@ export interface GateOptions {
   demo?: boolean;
   /** Where `vault.capture` saves notes. Unset: the tool is not registered. */
   vault?: VaultOptions;
-  profile?: Profile;
   /** Asks the owner before an `ask` tool runs. Without it, `ask` tools are refused. */
   approvals?: Approvals;
   logger?: Pick<Logger, 'error'>;
@@ -79,11 +79,19 @@ function checkTools(tools: readonly ToolDefinition[]): void {
  * exactly one audit row, after the run, so the row records how it went.
  */
 export function createGate(options: GateOptions): Gate {
-  const { db, profile = OWNER_PROFILE, approvals, logger } = options;
+  const { db, approvals, logger } = options;
   const tools = options.tools ?? defaultTools(options);
   const timeoutMs = options.toolTimeoutMs ?? 30_000;
   checkTools(tools);
   const recorder = createRecorder(db, logger);
+
+  /** The person's profile on this chat decides; a chat nobody linked gets `off`. */
+  async function decisionFor(caller: Caller, tool: ToolDefinition): Promise<Mode> {
+    const owner = await ownerOf(db, caller);
+    if (owner === undefined) return 'off';
+    const { modes } = await profileFor(db, owner, caller);
+    return decide(modes, tool.actionType);
+  }
 
   async function invoke(
     tool: ToolDefinition,
@@ -91,7 +99,7 @@ export function createGate(options: GateOptions): Gate {
     args: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<string | EngineToolOutput> {
-    const decision = decide(profile, tool.actionType);
+    const decision = await decisionFor(caller, tool);
     const call = { caller, tool, args, decision };
     const stopped = await beforeRun(
       { decision, approvals, signal },

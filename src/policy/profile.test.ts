@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ACTION_TYPES, type ActionType } from '../tools/index.js';
-import { decide, OWNER_PROFILE, type Mode, type Profile } from './profile.js';
+import { decide, type Mode, type Profile } from './profile.js';
 
 describe('decide', () => {
   const all = (mode: Mode): Profile =>
@@ -12,11 +12,7 @@ describe('decide', () => {
     expect(decide(all(mode), type)).toBe(mode);
   });
 
-  it.each(ACTION_TYPES)('the owner profile decides %s', (type) => {
-    expect(decide(OWNER_PROFILE, type)).toBe(type === 'read' ? 'auto' : 'ask');
-  });
-
   it.each(['toString', '__proto__', 'surprise'])('an unlisted type %s is off', (type) => {
-    expect(decide(OWNER_PROFILE, type as ActionType)).toBe('off');
+    expect(decide(all('auto'), type as ActionType)).toBe('off');
   });
 });

@@ -118,21 +118,11 @@ it('a refused ask tells the model plainly, and a turned-off tool is refused too'
   const refusal = await asked?.run({});
   expect(refusal).toMatchObject({ isError: true });
   expect(JSON.stringify(refusal)).toContain('approve');
-  const off = createGate({
-    db,
-    tools: [tool],
-    profile: {
-      read: 'off',
-      create: 'off',
-      overwrite: 'off',
-      delete: 'off',
-      send: 'off',
-      execute: 'off',
-    },
-  }).toolsFor(caller)[0];
+  const stranger = { channel: 'fake', chatId: 'stranger' };
+  const off = createGate({ db, tools: [tool] }).toolsFor(stranger)[0];
   const refused = await off?.run({});
   expect(refused).toMatchObject({ isError: true });
-  expect(JSON.stringify(refused)).toContain('turned off');
+  expect(JSON.stringify(refused)).toContain('switched off');
   expect(run).not.toHaveBeenCalled();
   expect((await rows()).map((r) => [r['decision'], r['outcome']])).toEqual([
     ['ask', 'refused'],

@@ -124,16 +124,16 @@ it('stops the turn when it is aborted while waiting, and records it', async () =
   expect(await audit()).toEqual([{ outcome: 'aborted', decision: 'ask', tool: 'demo.gated' }]);
 });
 
-it('refuses when the owner cannot be asked, with one audit row', async () => {
+it('refuses a chat nobody linked as switched off, with one audit row', async () => {
   const { tool, call } = setup();
   const refused = await call({ note: 'x' }, undefined, { channel: 'fake', chatId: 'nobody' })
     .result;
   expect(refused).toMatchObject({
     isError: true,
-    text: expect.stringContaining('could not be asked') as string,
+    text: expect.stringContaining('switched off') as string,
   });
   expect(tool.run).not.toHaveBeenCalled();
-  expect(await audit()).toEqual([{ outcome: 'refused', decision: 'ask', tool: 'demo.gated' }]);
+  expect(await audit()).toEqual([{ outcome: 'refused', decision: 'off', tool: 'demo.gated' }]);
 });
 
 it('refuses and audits an error when the question cannot be put', async () => {

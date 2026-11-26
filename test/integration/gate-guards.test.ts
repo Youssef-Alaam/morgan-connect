@@ -80,21 +80,31 @@ it('a tool that takes too long is stopped, the model is told, and one error row 
   expect(await outcomes()).toEqual(['error']);
 });
 
+/** Run `body` while the audit table is out of the way, so every audit write fails. */
+async function withBrokenAudit(body: () => Promise<void>): Promise<void> {
+  await sql`alter table audit_log rename to audit_log_away`.execute(db);
+  try {
+    await body();
+  } finally {
+    await sql`alter table audit_log_away rename to audit_log`.execute(db);
+  }
+}
+
 it('a failed audit write after a good run is logged and the answer still comes back', async () => {
-  const broken = createDb('postgres://nobody:x@127.0.0.1:1/none');
   const error = vi.fn();
-  const tool = createGate({ db: broken, logger: { error } }).toolsFor(caller)[0];
-  expect(await tool?.run({})).toContain('(UTC)');
+  const tool = createGate({ db, logger: { error } }).toolsFor(caller)[0];
+  await withBrokenAudit(async () => {
+    expect(await tool?.run({})).toContain('(UTC)');
+  });
   expect(error).toHaveBeenCalledOnce();
-  await broken.destroy();
 });
 
 it('a failed audit write on a refusal is not swallowed', async () => {
-  const broken = createDb('postgres://nobody:x@127.0.0.1:1/none');
   const ask = { ...readTool(() => Promise.resolve('x')), actionType: 'overwrite' } as const;
-  const tool = createGate({ db: broken, tools: [ask] }).toolsFor(caller)[0];
-  await expect(tool?.run({})).rejects.toThrow();
-  await broken.destroy();
+  const tool = createGate({ db, tools: [ask] }).toolsFor(caller)[0];
+  await withBrokenAudit(async () => {
+    await expect(tool?.run({})).rejects.toThrow();
+  });
 });
 
 it('a tool name the model made up is refused through the gate and recorded', async () => {
