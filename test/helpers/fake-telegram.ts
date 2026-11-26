@@ -4,6 +4,10 @@ export interface FakeTelegram {
   apiRoot: string;
   /** Bodies of every sendMessage call. */
   sent: unknown[];
+  /** Bodies of every answerCallbackQuery call. */
+  answers: unknown[];
+  /** Hand Telegram another update to deliver on the next poll. */
+  push: (update: unknown) => void;
   /** Bodies of every sendChatAction call. */
   actions: unknown[];
   stop: () => Promise<void>;
@@ -22,7 +26,9 @@ export async function startFakeTelegram(options: {
 }): Promise<FakeTelegram> {
   const sent: unknown[] = [];
   const actions: unknown[] = [];
-  let served = false;
+  const queue: unknown[] = [updateWith(options.messageId ?? 5)];
+  const answers: unknown[] = [];
+  const recorded = { sendMessage: sent, sendChatAction: actions, answerCallbackQuery: answers };
   const server: Server = createServer((req, res) => {
     const chunks: Buffer[] = [];
     req.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -37,15 +43,12 @@ export async function startFakeTelegram(options: {
       } else if (method === 'getMe')
         reply({ id: 1, is_bot: true, first_name: 'Fake', username: 'FakeBot' });
       else if (method === 'getUpdates') {
-        reply(served ? [] : [updateWith(options.messageId ?? 5)], served ? 300 : 0);
-        served = true;
-      } else if (method === 'sendMessage') {
-        const body: unknown = JSON.parse(Buffer.concat(chunks).toString());
-        sent.push(body);
-        reply({ message_id: 6, date: 1, chat, text: 'echo' });
+        const batch = queue.splice(0);
+        reply(batch, batch.length > 0 ? 0 : 300);
       } else {
-        if (method === 'sendChatAction') actions.push(JSON.parse(Buffer.concat(chunks).toString()));
-        reply(true);
+        const body: unknown = JSON.parse(Buffer.concat(chunks).toString());
+        (recorded as Record<string, unknown[] | undefined>)[method ?? '']?.push(body);
+        reply(method === 'sendMessage' ? { message_id: 6, date: 1, chat, text: 'echo' } : true);
       }
     });
   });
@@ -56,6 +59,8 @@ export async function startFakeTelegram(options: {
     apiRoot: `http://127.0.0.1:${String(port)}`,
     sent,
     actions,
+    answers,
+    push: (update) => queue.push(update),
     stop: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections();
