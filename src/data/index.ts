@@ -20,7 +20,7 @@ export {
   turnOwner,
 } from './system.js';
 export { accountOf, createSession, endSession, type Account } from './accounts.js';
-export { changePassword, createAccount, createInvite } from './invites.js';
+export { createAccount, createInvite } from './invites.js';
 export { migrateToLatest } from './migrator.js';
 export { assertRlsApplies, ensureAppRole } from './roles.js';
 export {

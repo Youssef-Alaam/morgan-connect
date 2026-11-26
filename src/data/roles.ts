@@ -70,8 +70,9 @@ export async function ensureAppRole(owner: Db, databaseUrl: string): Promise<voi
     }
     // Every name is schema-qualified, so nothing the app makes can stand in for these tables.
     await sql`revoke update, delete, truncate on public.audit_log from ${who}`.execute(trx);
-    // No app path changes a user row; a member must not be able to set their own role.
-    await sql`revoke update on public.users from ${who}`.execute(trx);
+    // No app path changes a user row (role, workspace, limit, notice) or a spent invite: only the
+    // named functions do, so a member cannot promote themselves and an admin cannot re-arm a token.
+    await sql`revoke update on public.users, public.invites from ${who}`.execute(trx);
     // The migration books are the owner's alone to write.
     await sql`revoke insert, update, delete, truncate on public.schema_info, public.kysely_migration,
       public.kysely_migration_lock from ${who}`.execute(trx);

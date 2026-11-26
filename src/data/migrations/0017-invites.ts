@@ -45,15 +45,15 @@ async function createAdminFunctions(db: Kysely<unknown>): Promise<void> {
     end $$`.execute(db);
   // A member with a temporary password, which must be changed at once.
   await sql`create function public.admin_create_account(p_email text, p_password_hash text,
-    p_limit numeric) returns boolean language plpgsql ${SAFE} as $$
+    p_limit numeric) returns uuid language plpgsql ${SAFE} as $$
     declare v_ws uuid := ${ADMIN_WORKSPACE}; v_user uuid;
     begin
-      if v_ws is null then return false; end if;
+      if v_ws is null then return null; end if;
       insert into public.users (role, workspace_id, monthly_limit_usd) values ('member', v_ws, p_limit)
         returning id into v_user;
       insert into public.credentials (user_id, workspace_id, email, password_hash, must_change)
         values (v_user, v_ws, lower(p_email), p_password_hash, true);
-      return true;
+      return v_user;
     end $$`.execute(db);
   // The person set on the transaction says they were told; it touches their own row and nothing else.
   await sql`create function public.member_accept_notice() returns void language sql ${SAFE} as $$
