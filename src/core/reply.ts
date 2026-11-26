@@ -201,7 +201,10 @@ async function ask(
   timedOut: () => boolean,
 ): Promise<string> {
   const chat = { channel: turn.channel, chatId: turn.chatId };
-  const history = await loadHistory(deps.db, chat, HISTORY_TURNS, HISTORY_CHARS);
+  const history = await loadHistory(deps.db, owner(turn), chat, {
+    turns: HISTORY_TURNS,
+    maxChars: HISTORY_CHARS,
+  });
   const conversationId = await conversationFor(deps.db, chat, owner(turn));
   for (let attempt = 0; ; attempt += 1) {
     const pending: Promise<void>[] = [];
@@ -236,8 +239,8 @@ async function ask(
 /** `/new`: forget the chat, then tell the engine the conversation is over. A failure there never blocks `/new`. */
 async function startOver(deps: ReplyDeps, turn: Turn): Promise<void> {
   const chat = { channel: turn.channel, chatId: turn.chatId };
-  const ended = await endConversation(deps.db, chat);
-  await clearHistory(deps.db, chat);
+  const ended = await endConversation(deps.db, owner(turn), chat);
+  await clearHistory(deps.db, owner(turn), chat);
   if (ended === undefined || deps.engine.end === undefined) return;
   try {
     await deps.engine.end(ended);
@@ -254,7 +257,10 @@ export function createReplier(deps: ReplyDeps): Replier {
       return NEW_REPLY;
     }
     if (isCommand(turn.text, 'usage')) {
-      return formatUsage(await usageSince(deps.db, new Date(), deps.timezone), deps.timezone);
+      return formatUsage(
+        await usageSince(deps.db, owner(turn), new Date(), deps.timezone),
+        deps.timezone,
+      );
     }
     const limit = AbortSignal.timeout(deps.turnTimeoutMs);
     const both = AbortSignal.any(signal === undefined ? [limit] : [signal, limit]);

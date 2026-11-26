@@ -1,5 +1,5 @@
 import type { Db } from './db.js';
-import type { Owner } from './tenancy.js';
+import { type Owner, withOwner } from './tenancy.js';
 
 export interface StoredToolCall {
   id: string;
@@ -91,11 +91,11 @@ function isWellFormed(turn: readonly ChatMessage[]): boolean {
  */
 export async function loadHistory(
   db: Db,
+  owner: Owner,
   chat: ChatKey,
-  turns: number,
-  maxChars: number,
+  { turns, maxChars }: { turns: number; maxChars: number },
 ): Promise<ChatMessage[]> {
-  const rows = await newestRows(db, chat, turns);
+  const rows = await withOwner(db, owner, (trx) => newestRows(trx, chat, turns));
   const kept: ChatMessage[] = [];
   let used = 0;
   for (const row of rows) {
@@ -162,27 +162,31 @@ export async function appendHistory(
   owner: Owner,
 ): Promise<void> {
   if (messages.length === 0) return;
-  await db
-    .insertInto('chat_messages')
-    .values(
-      messages.map((m) => ({
-        user_id: owner.userId,
-        workspace_id: owner.workspaceId,
-        channel: chat.channel,
-        chat_id: chat.chatId,
-        role: m.role,
-        text: m.role === 'tool' ? capped(m.text) : m.text,
-        data: toData(m),
-      })),
-    )
-    .execute();
+  await withOwner(db, owner, (trx) =>
+    trx
+      .insertInto('chat_messages')
+      .values(
+        messages.map((m) => ({
+          user_id: owner.userId,
+          workspace_id: owner.workspaceId,
+          channel: chat.channel,
+          chat_id: chat.chatId,
+          role: m.role,
+          text: m.role === 'tool' ? capped(m.text) : m.text,
+          data: toData(m),
+        })),
+      )
+      .execute(),
+  );
 }
 
 /** `/new`: forget the conversation in this chat. */
-export async function clearHistory(db: Db, chat: ChatKey): Promise<void> {
-  await db
-    .deleteFrom('chat_messages')
-    .where('channel', '=', chat.channel)
-    .where('chat_id', '=', chat.chatId)
-    .execute();
+export async function clearHistory(db: Db, owner: Owner, chat: ChatKey): Promise<void> {
+  await withOwner(db, owner, (trx) =>
+    trx
+      .deleteFrom('chat_messages')
+      .where('channel', '=', chat.channel)
+      .where('chat_id', '=', chat.chatId)
+      .execute(),
+  );
 }

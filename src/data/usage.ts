@@ -1,6 +1,6 @@
 import { sql } from 'kysely';
 import type { Db, UsageStatus } from './db.js';
-import type { Owner } from './tenancy.js';
+import { type Owner, withOwner } from './tenancy.js';
 
 export interface UsageEntry extends Owner {
   channel: string;
@@ -16,23 +16,25 @@ export interface UsageEntry extends Owner {
 
 /** Add one ledger row. A call that failed is recorded too, with what was billed. */
 export async function recordUsage(db: Db, entry: UsageEntry): Promise<void> {
-  await db
-    .insertInto('usage_ledger')
-    .values({
-      user_id: entry.userId,
-      workspace_id: entry.workspaceId,
-      channel: entry.channel,
-      chat_id: entry.chatId,
-      model: entry.model,
-      status: entry.status,
-      input_tokens: entry.inputTokens,
-      output_tokens: entry.outputTokens,
-      cache_read_tokens: entry.cacheReadTokens,
-      cache_write_tokens: entry.cacheWriteTokens,
-      // Money goes in as a rounded decimal string, never as a float.
-      cost_usd: entry.costUsd.toFixed(8),
-    })
-    .execute();
+  await withOwner(db, entry, (trx) =>
+    trx
+      .insertInto('usage_ledger')
+      .values({
+        user_id: entry.userId,
+        workspace_id: entry.workspaceId,
+        channel: entry.channel,
+        chat_id: entry.chatId,
+        model: entry.model,
+        status: entry.status,
+        input_tokens: entry.inputTokens,
+        output_tokens: entry.outputTokens,
+        cache_read_tokens: entry.cacheReadTokens,
+        cache_write_tokens: entry.cacheWriteTokens,
+        // Money goes in as a rounded decimal string, never as a float.
+        cost_usd: entry.costUsd.toFixed(8),
+      })
+      .execute(),
+  );
 }
 
 export interface UsageTotals {
@@ -59,11 +61,8 @@ interface Row {
   month_cost: string;
 }
 
-/**
- * Totals for the local day and the local month that contain `now`, in `timezone`. The edges are
- * found on the local clock, so a 23 or 25 hour day (a clock change) is still one day.
- */
-export async function usageSince(db: Db, now: Date, timezone: string): Promise<UsageReport> {
+/** The one row of day and month totals; the edges are found on the local clock. */
+async function totalsRow(db: Db, now: Date, timezone: string): Promise<Row | undefined> {
   const { rows } = await sql<Row>`
     with local as (
       select
@@ -90,7 +89,20 @@ export async function usageSince(db: Db, now: Date, timezone: string): Promise<U
       coalesce(sum(cost_usd), 0)::text as month_cost
     from usage_ledger, bounds
     where created_at >= month_start and created_at < month_end`.execute(db);
-  const r = rows[0];
+  return rows[0];
+}
+
+/**
+ * Totals for the local day and the local month that contain `now`, in `timezone`. The edges are
+ * found on the local clock, so a 23 or 25 hour day (a clock change) is still one day.
+ */
+export async function usageSince(
+  db: Db,
+  owner: Owner,
+  now: Date,
+  timezone: string,
+): Promise<UsageReport> {
+  const r = await withOwner(db, owner, (trx) => totalsRow(trx, now, timezone));
   if (r === undefined) throw new Error('The usage query returned no row');
   return {
     today: {
