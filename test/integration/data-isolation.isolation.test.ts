@@ -127,6 +127,10 @@ describe('user-data tables', () => {
     await expectIsolated('sessions', ctx);
   });
 
+  it('invites', async () => {
+    await expectIsolated('invites', ctx);
+  });
+
   it('password_links', async () => {
     await expectIsolated('password_links', ctx);
   });

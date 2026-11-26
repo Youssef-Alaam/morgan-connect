@@ -77,7 +77,7 @@ it('opens a session with a web device, finds it by hash, and ends both', async (
     tokenHash: 'tok',
     expiresAt: new Date(Date.now() + 60_000),
   });
-  expect(await sessionOwner(app, 'tok')).toEqual({ ...bob, sessionId: id });
+  expect(await sessionOwner(app, 'tok')).toEqual({ ...bob, sessionId: id, mustChange: false });
   const devices = await withOwner(app, bob, (trx) =>
     trx.selectFrom('devices').select('channel').where('chat_id', '=', id).execute(),
   );

@@ -26,6 +26,7 @@ export interface Database {
     role: Generated<string>;
     workspace_id: Generated<string>;
     told_admin_can_read_at: Date | null;
+    monthly_limit_usd: string | null;
     created_at: Generated<Date>;
   };
   devices: {
@@ -40,7 +41,19 @@ export interface Database {
     workspace_id: string;
     email: string;
     password_hash: string;
+    must_change: Generated<boolean>;
     created_at: Generated<Date>;
+  };
+  invites: {
+    id: Generated<string>;
+    user_id: string;
+    workspace_id: string;
+    token_hash: string;
+    role: string;
+    monthly_limit_usd: string | null;
+    created_at: Generated<Date>;
+    expires_at: Date;
+    used_at: Date | null;
   };
   sessions: {
     id: Generated<string>;

@@ -14,6 +14,8 @@ export interface AuditEntry {
   argsSha256: string;
   decision: 'auto' | 'ask' | 'off';
   outcome: AuditOutcome;
+  /** The person the action was about, when it was about one (an account the admin made). */
+  subjectUserId?: string | undefined;
 }
 
 /**
@@ -36,6 +38,7 @@ export async function appendAudit(db: Db, entry: AuditEntry): Promise<void> {
     args_sha256: entry.argsSha256,
     decision: entry.decision,
     outcome: entry.outcome,
+    subject_user_id: entry.subjectUserId ?? null,
   };
   // A stranger's row has no person; the table takes inserts from the app role either way.
   if (owner === undefined) await db.insertInto('audit_log').values(row).execute();
