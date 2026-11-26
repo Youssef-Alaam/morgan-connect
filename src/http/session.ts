@@ -6,6 +6,7 @@ import { createMiddleware } from 'hono/factory';
 import { createSession, sessionOwner, type Db, type Owner } from '../data/index.js';
 import { sha256 } from '../identity/admin-link.js';
 import type { FailureLimiter } from '../identity/limiter.js';
+import type { RelyingParty } from '../identity/passkeys.js';
 import type { PasswordHasher } from '../identity/password.js';
 import type { Logger } from '../ops/index.js';
 
@@ -19,6 +20,8 @@ export interface AuthDeps {
   now?: () => number;
   /** Seals authenticator secrets and keys backup-code hashes (config TWO_FACTOR_KEY); undefined: no second factor. */
   twoFactorKey?: Buffer | undefined;
+  /** Where passkeys are valid (config WEBAUTHN_RP_ID and WEBAUTHN_ORIGIN); undefined: no passkeys. */
+  passkeys?: RelyingParty | undefined;
 }
 
 /** What every auth route shares: the hasher and the per-address failure bucket. */
@@ -56,7 +59,14 @@ export async function openSession(
 /** Where `authRoutes` is mounted; the gate below matches paths after it. */
 export const API_PREFIX = '/api';
 /** The only paths open without a session; every other path under the prefix is refused by default. */
-const PUBLIC = ['/sign-in', '/sign-in/second-factor', '/set-password', '/join'];
+const PUBLIC = [
+  '/sign-in',
+  '/sign-in/second-factor',
+  '/sign-in/passkey/options',
+  '/sign-in/passkey',
+  '/set-password',
+  '/join',
+];
 /** The only paths a person still on a temporary password may call. */
 const TEMPORARY_OK = ['/change-password', '/sign-out'];
 

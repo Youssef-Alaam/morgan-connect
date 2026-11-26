@@ -53,7 +53,14 @@ const cookieOf = (response: Response) =>
 const invite = (token: string, monthlyLimitUsd: number | null = null) =>
   createInvite(ctx.app, ctx.alice, { tokenHash: sha256(token), ttlSeconds: 600, monthlyLimitUsd });
 
-const OPEN = ['/api/sign-in', '/api/sign-in/second-factor', '/api/set-password', '/api/join'];
+const OPEN = [
+  '/api/sign-in',
+  '/api/sign-in/second-factor',
+  '/api/sign-in/passkey/options',
+  '/api/sign-in/passkey',
+  '/api/set-password',
+  '/api/join',
+];
 const TEMPORARY_OK = ['/api/change-password', '/api/sign-out'];
 
 /** Every registered route under /api: without a session only the open ones answer; on a temporary password only the two listed. */
