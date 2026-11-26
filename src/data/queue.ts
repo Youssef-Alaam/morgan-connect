@@ -37,6 +37,8 @@ export function createTurnQueue(
 ): TurnQueue {
   const boss = new PgBoss({
     connectionString: databaseUrl,
+    // Wake the worker the moment a turn is queued; the default poll waits up to 2 s (perf budget).
+    useListenNotify: true,
     // Installed by the owner role already: the app role has no right to create or alter it.
     ...(options.schemaInstalled ? { createSchema: false, migrate: false } : {}),
     ...(tuning === undefined ? {} : { superviseIntervalSeconds: tuning.superviseIntervalSeconds }),
@@ -46,20 +48,28 @@ export function createTurnQueue(
     start: async () => {
       await boss.start();
       await boss.createQueue(QUEUE, {
+        notify: true,
         // One redelivery is enough: a redelivered turn is claimed once and never re-sent, and
         // failed sends already retry in-process. More job retries would only repeat that no-op.
         retryLimit: 1,
         retryDelay: 5,
         expireInSeconds: tuning?.expireInSeconds ?? TURN_EXPIRE_SECONDS,
       });
+      // createQueue leaves an existing queue alone, so turn notify on for installs made before it.
+      await boss.updateQueue(QUEUE, { notify: true });
     },
     enqueue: async (turnId) => {
       await boss.send(QUEUE, { turnId });
     },
     work: async (handler) => {
-      await boss.work<{ turnId: string }>(QUEUE, async (jobs) => {
-        for (const job of jobs) await handler(job.data.turnId);
-      });
+      // With notify on, polling is only a backstop and would default to 30 s: keep it short.
+      await boss.work<{ turnId: string }>(
+        QUEUE,
+        { notifyPollingIntervalSeconds: 2 },
+        async (jobs) => {
+          for (const job of jobs) await handler(job.data.turnId);
+        },
+      );
     },
     stop: (options) => boss.stop({ graceful: options?.graceful ?? true, timeout: 10_000 }),
   };

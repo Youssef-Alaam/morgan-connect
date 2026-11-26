@@ -23,7 +23,14 @@ export default defineConfig({
           hookTimeout: 180_000,
         },
       },
-      { test: { name: 'perf', include: ['test/perf/**/*.test.ts'] } },
+      {
+        test: {
+          name: 'perf',
+          include: ['test/perf/**/*.test.ts'],
+          testTimeout: 180_000,
+          hookTimeout: 180_000,
+        },
+      },
     ],
   },
 });

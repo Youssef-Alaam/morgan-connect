@@ -82,6 +82,6 @@ jobs:
           # shellcheck disable=SC2086
           pipx run --spec diff-cover==11.0.4 diff-cover $reports \
             --compare-branch=origin/main --fail-under=90
-      # No perf tests exist yet, so this passes with no tests.
-      - name: 16. Speed budgets (perf; none yet)
-        run: npx vitest run --project perf --passWithNoTests
+      # Median turn overhead and typing signal budgets (test/perf).
+      - name: 16. Speed budgets (perf)
+        run: npx vitest run --project perf
