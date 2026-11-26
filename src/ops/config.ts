@@ -13,6 +13,9 @@ const schema = z
       .string()
       .refine((value) => Buffer.from(value, 'base64').length === 32, 'must be 32 bytes, base64')
       .optional(),
+    // Passkeys: the relying-party id (a domain) and the exact browser origin people sign in at. Set both or neither.
+    WEBAUTHN_RP_ID: z.string().min(1).optional(),
+    WEBAUTHN_ORIGIN: z.url().optional(),
     PORT: z.coerce.number().int().min(0).max(65535).default(3000),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
@@ -95,10 +98,36 @@ const schema = z
     };
     if (value.ENGINE === 'http')
       need(['ENGINE_URL', 'ENGINE_TOKEN'], 'required when ENGINE is http');
+    passkeyIssues(value, ctx);
     if (value.VAULT_REMOTE_URL !== undefined || value.VAULT_TOKEN !== undefined) {
       need(['VAULT_REMOTE_URL', 'VAULT_TOKEN'], 'set VAULT_REMOTE_URL and VAULT_TOKEN together');
     }
   });
+
+interface PasskeyConfig {
+  WEBAUTHN_RP_ID?: string | undefined;
+  WEBAUTHN_ORIGIN?: string | undefined;
+}
+
+/** Both or neither, and the origin must sit on the relying-party id: a mismatch fails at boot, not at first sign-in. */
+function passkeyIssues(value: PasskeyConfig, ctx: z.RefinementCtx): void {
+  const { WEBAUTHN_RP_ID: rpId, WEBAUTHN_ORIGIN: origin } = value;
+  if (rpId === undefined && origin === undefined) return;
+  const add = (key: string, message: string) => {
+    ctx.addIssue({ code: 'custom', path: [key], message });
+  };
+  if (rpId === undefined || origin === undefined) {
+    add('WEBAUTHN_RP_ID', 'set WEBAUTHN_RP_ID and WEBAUTHN_ORIGIN together');
+    return;
+  }
+  const { protocol, hostname } = new URL(origin);
+  if (protocol !== 'https:' && hostname !== 'localhost') {
+    add('WEBAUTHN_ORIGIN', 'must be https unless the host is localhost');
+  }
+  if (hostname !== rpId && !hostname.endsWith(`.${rpId}`)) {
+    add('WEBAUTHN_ORIGIN', 'host must be WEBAUTHN_RP_ID or a subdomain of it');
+  }
+}
 
 export type Config = z.infer<typeof schema>;
 
