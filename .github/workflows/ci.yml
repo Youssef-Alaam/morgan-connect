@@ -59,7 +59,7 @@ jobs:
       - name: 9. Unused code and dependencies
         run: npx knip
       - name: 10. Licences
-        run: npm run licences
+        run: npm run licences && npm run licences:web
       - name: 11. Audit
         run: npm audit --audit-level=high
       - name: 12. Unit tests (with coverage)
