@@ -46,8 +46,8 @@ describe('Table', () => {
       caption: 'People',
       columns: ['Name', 'Role'],
       rows: [
-        ['Youssef', 'Owner'],
-        ['Narimane', 'Member'],
+        { key: 'y', cells: ['Youssef', 'Owner'] },
+        { key: 'n', cells: ['Narimane', 'Member'] },
       ],
     }),
   );

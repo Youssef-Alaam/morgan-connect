@@ -43,8 +43,8 @@ export function BannerSection() {
 export function TableSection() {
   const { t } = useTranslation();
   const rows = [
-    [t('gallery.table.youssef'), t('gallery.badge.owner')],
-    [t('gallery.table.narimane'), t('gallery.table.member')],
+    { key: 'youssef', cells: [t('gallery.table.youssef'), t('gallery.badge.owner')] },
+    { key: 'narimane', cells: [t('gallery.table.narimane'), t('gallery.table.member')] },
   ];
   return (
     <GallerySection name={TABLE} title={t('gallery.table.title')}>

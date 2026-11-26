@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 interface TableProps {
   caption: string;
   columns: string[];
-  rows: ReactNode[][];
+  // Each row has a stable key (an id), so rows keep their place when the list changes.
+  rows: { key: string; cells: ReactNode[] }[];
 }
 
 export function Table({ caption, columns, rows }: TableProps) {
@@ -20,8 +21,8 @@ export function Table({ caption, columns, rows }: TableProps) {
         </tr>
       </thead>
       <tbody>
-        {rows.map((cells, row) => (
-          <tr key={row}>
+        {rows.map(({ key, cells }) => (
+          <tr key={key}>
             {cells.map((cell, column) => (
               <td key={columns[column]}>{cell}</td>
             ))}
