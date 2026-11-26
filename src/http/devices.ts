@@ -4,7 +4,6 @@ import { issueLinkCode, listDevices, unlinkDevice } from '../data/index.js';
 import { sha256 } from '../identity/admin-link.js';
 import { createFailureLimiter } from '../identity/limiter.js';
 import { LINK_CODE_TTL_SECONDS, newLinkCode, normaliseLinkCode } from '../identity/link-code.js';
-import { audit } from './members.js';
 import { type AuthDeps, type Signed } from './session.js';
 
 /** A person may ask for this many codes in the window; each new code replaces the last. */
@@ -39,7 +38,6 @@ export function deviceRoutes(routes: Hono<Signed>, { db, now = Date.now }: AuthD
     const id = deviceId.safeParse(c.req.param('id'));
     if (!id.success) return c.json({ error: 'not_found' }, 404);
     const owner = await unlinkDevice(db, session, id.data);
-    await audit(db, session, 'device.unlink', { ok: owner !== undefined, subjectUserId: owner });
     return owner === undefined ? c.json({ error: 'not_found' }, 404) : c.body(null, 204);
   });
 }

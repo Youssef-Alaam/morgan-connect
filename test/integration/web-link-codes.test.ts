@@ -49,8 +49,13 @@ const ownerOfChat = async (chatId: string) =>
   )?.user_id;
 const auditRows = async (tool: string) =>
   (
-    await sql<{ user_id: string | null; outcome: string; subject_user_id: string | null }>`
-      select user_id, outcome, subject_user_id from audit_log
+    await sql<{
+      user_id: string | null;
+      outcome: string;
+      subject_user_id: string | null;
+      reason: string | null;
+    }>`
+      select user_id, outcome, subject_user_id, reason from audit_log
       where tool = ${tool} order by created_at`.execute(ctx.owner)
   ).rows;
 
@@ -71,6 +76,10 @@ it('a new code replaces the last unused one', async () => {
   expect(await createIdentity(ctx.app).link('fake', 'w2', first.code)).toBe('refused');
 });
 
+const unlink = async (cookie: string, id: string) =>
+  (await call('DELETE', `devices/${id}`, cookie)).status;
+const idAt = (list: { id: string }[], index: number) => list[index]?.id ?? '';
+
 it('lists a person own chats, and unlinking by the member or the admin writes an audit row', async () => {
   await ctx.owner
     .insertInto('devices')
@@ -86,20 +95,20 @@ it('lists a person own chats, and unlinking by the member or the admin writes an
   const theirs = (await (await call('GET', 'devices', alice)).json()) as { id: string }[];
   expect(theirs).toHaveLength(1);
   // A member cannot remove another person's chat; the answer is the same as for no chat at all.
-  expect((await call('DELETE', `devices/${theirs[0]?.id ?? ''}`, bob)).status).toBe(404);
+  expect(await unlink(bob, idAt(theirs, 0))).toBe(404);
   expect((await call('DELETE', 'devices/not-an-id', bob)).status).toBe(404);
   expect(await ownerOfChat('a')).toBe(ctx.alice.userId);
-  const [first, second] = mine;
-  expect((await call('DELETE', `devices/${first?.id ?? ''}`, bob)).status).toBe(204);
-  expect((await call('DELETE', `devices/${second?.id ?? ''}`, alice)).status).toBe(204);
-  expect((await call('DELETE', `devices/${first?.id ?? ''}`, bob)).status).toBe(404);
+  const [first, second] = [idAt(mine, 0), idAt(mine, 1)];
+  expect(await unlink(bob, first)).toBe(204);
+  expect(await unlink(alice, second)).toBe(204);
+  expect(await unlink(bob, first)).toBe(404);
   // A browser session's own device cannot be removed this way.
   const web = await ctx.owner
     .selectFrom('devices')
     .select('id')
     .where('channel', '=', 'web')
     .executeTakeFirstOrThrow();
-  expect((await call('DELETE', `devices/${web.id}`, alice)).status).toBe(404);
+  expect(await unlink(alice, web.id)).toBe(404);
   const rows = await auditRows('device.unlink');
   expect(rows.map((r) => [r.user_id, r.outcome])).toEqual([
     [ctx.bob.userId, 'refused'],
@@ -108,7 +117,15 @@ it('lists a person own chats, and unlinking by the member or the admin writes an
     [ctx.bob.userId, 'refused'],
     [ctx.alice.userId, 'refused'],
   ]);
-  expect(rows[2]?.subject_user_id).toBe(ctx.bob.userId);
+  expect(rows.map((r) => r.subject_user_id)).toEqual([
+    null,
+    ctx.bob.userId,
+    ctx.bob.userId,
+    null,
+    null,
+  ]);
+  // Refused tries name the device that was asked for.
+  expect(rows.map((r) => r.reason)).toEqual([idAt(theirs, 0), first, second, first, web.id]);
 });
 
 it('limits how many codes one person may ask for', async () => {
@@ -130,4 +147,15 @@ it('limits how many codes one person may ask for', async () => {
   const statuses: number[] = [];
   for (let i = 0; i < 6; i += 1) statuses.push((await call('POST', 'link-codes', cookie)).status);
   expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
+});
+
+it('removes nothing when no person is set on the transaction', async () => {
+  const before = await ctx.owner.selectFrom('devices').select('id').execute();
+  const bare = await ctx.app.transaction().execute((trx) =>
+    sql<{
+      owner: string | null;
+    }>`select member_unlink_device(${before[0]?.id ?? ''}::uuid) as owner`.execute(trx),
+  );
+  expect(bare.rows[0]?.owner).toBeNull();
+  expect(await ctx.owner.selectFrom('devices').select('id').execute()).toHaveLength(before.length);
 });
