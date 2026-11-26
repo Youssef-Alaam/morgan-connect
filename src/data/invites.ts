@@ -40,3 +40,35 @@ export async function createAccount(
     return rows[0]?.id ?? undefined;
   });
 }
+
+/**
+ * Set a new password, record that the person was told the admin can read their chats, and end
+ * every other session of theirs (the one making the change stays).
+ */
+export function changePassword(
+  db: Db,
+  owner: Owner,
+  change: { passwordHash: string; noticeAccepted: boolean; keepSessionId: string },
+): Promise<void> {
+  return withOwner(db, owner, async (trx) => {
+    await trx
+      .updateTable('credentials')
+      .set({ password_hash: change.passwordHash, must_change: false })
+      .where('user_id', '=', owner.userId)
+      .execute();
+    if (change.noticeAccepted) await sql`select member_accept_notice()`.execute(trx);
+    const others = await trx
+      .selectFrom('sessions')
+      .select('id')
+      .where('id', '<>', change.keepSessionId)
+      .execute();
+    const ids = others.map((row) => row.id);
+    if (ids.length === 0) return;
+    await trx
+      .deleteFrom('devices')
+      .where('channel', '=', 'web')
+      .where('chat_id', 'in', ids)
+      .execute();
+    await trx.deleteFrom('sessions').where('id', 'in', ids).execute();
+  });
+}
