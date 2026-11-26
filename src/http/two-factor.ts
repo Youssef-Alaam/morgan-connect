@@ -6,6 +6,7 @@ import {
   activeTotp,
   confirmTotp,
   pendingTotp,
+  removeTotp,
   spendBackupCode,
   spendTotpStep,
   startTotp,
@@ -31,6 +32,7 @@ const CHALLENGE_AAD = 'sign-in';
 const code = z.object({ code: z.string().max(32) });
 const challengeBody = z.object({ challenge: z.string().max(500), code: z.string().max(32) });
 const challengeData = z.object({
+  jti: z.string(),
   userId: z.string(),
   workspaceId: z.string(),
   real: z.boolean(),
@@ -47,12 +49,21 @@ export interface TwoFactor {
    * caller's address.
    */
   limiter: FailureLimiter;
+  /** Spend a challenge id; false when it was spent already (kept in memory until it expires). */
+  spend: (jti: string, until: number) => boolean;
   /** True for a live authenticator code (each step once) or an unused backup code (once). */
   verify: (owner: Owner, code: string) => Promise<boolean>;
 }
 
 export function createTwoFactor({ db, twoFactorKey: key, now = Date.now }: AuthDeps): TwoFactor {
   const limiter = createFailureLimiter({ max: MAX_WRONG_CODES, windowMs: WINDOW_MS, now });
+  const spent = new Map<string, number>();
+  const spend = (jti: string, until: number): boolean => {
+    for (const [id, end] of spent) if (end <= now()) spent.delete(id);
+    if (spent.has(jti)) return false;
+    spent.set(jti, until);
+    return true;
+  };
   const verify = async (owner: Owner, given: string): Promise<boolean> => {
     if (key === undefined) return false;
     const sealed = await activeTotp(db, owner);
@@ -63,7 +74,7 @@ export function createTwoFactor({ db, twoFactorKey: key, now = Date.now }: AuthD
     }
     return spendBackupCode(db, owner, hashBackupCode(key, given));
   };
-  return { key, limiter, verify };
+  return { key, limiter, spend, verify };
 }
 
 /**
@@ -88,22 +99,36 @@ export async function challengeIfNeeded(
   }
   if (owner !== undefined && !on) return undefined;
   const { userId, workspaceId } = who;
-  const data = { userId, workspaceId, real: owner !== undefined, until: now + CHALLENGE_MS };
+  const real = owner !== undefined;
+  const data = { jti: randomUUID(), userId, workspaceId, real, until: now + CHALLENGE_MS };
   const challenge = sealSecret(two.key, CHALLENGE_AAD, JSON.stringify(data));
   return { step: 'second_factor', challenge };
 }
 
 /** The person a challenge was made for, if it is genuine, live and came from a right password. */
-function challengeOwner(two: TwoFactor, challenge: string, now: number): Owner | undefined {
+function challengeOwner(
+  two: TwoFactor,
+  challenge: string,
+  now: number,
+): { owner: Owner; jti: string; until: number } | undefined {
   try {
     const raw = openSecret(two.key ?? Buffer.alloc(32), CHALLENGE_AAD, challenge);
     const data = challengeData.parse(JSON.parse(raw));
-    return data.real && data.until > now
-      ? { userId: data.userId, workspaceId: data.workspaceId }
-      : undefined;
+    if (!data.real || data.until <= now) return undefined;
+    const { jti, until } = data;
+    return { owner: { userId: data.userId, workspaceId: data.workspaceId }, jti, until };
   } catch {
     return undefined;
   }
+}
+
+/** A challenge opens one sign-in: it is spent only once a code has passed, so a typo can be retried. */
+async function passes(
+  two: TwoFactor,
+  { owner, jti, until }: { owner: Owner; jti: string; until: number },
+  code: string,
+): Promise<boolean> {
+  return (await two.verify(owner, code)) && two.spend(jti, until);
 }
 
 /** Second half of a sign-in: the challenge from `/sign-in` plus an authenticator or backup code. */
@@ -119,21 +144,21 @@ export function secondStepRoute(
     const parsed = challengeBody.safeParse(await c.req.json().catch(() => undefined));
     if (!parsed.success) return c.json({ error: 'invalid_request' }, 400);
     const address = addressOf(c);
-    const owner = challengeOwner(two, parsed.data.challenge, now());
-    const bucket = owner?.userId ?? address;
+    const opened = challengeOwner(two, parsed.data.challenge, now());
+    const bucket = opened?.owner.userId ?? address;
     if (two.limiter.blocked(bucket) || shared.byAddress.blocked(address)) {
       return c.json({ error: 'too_many_attempts' }, 429);
     }
     // Counted before the check, so concurrent tries cannot skip the limit.
     two.limiter.fail(bucket);
-    if (owner === undefined || !(await two.verify(owner, parsed.data.code))) {
+    if (opened === undefined || !(await passes(two, opened, parsed.data.code))) {
       shared.byAddress.fail(address);
       logger.warn('web sign-in refused');
       return c.json({ error: 'invalid_credentials' }, 401);
     }
     two.limiter.reset(bucket);
-    await openSession(c, { db, now }, owner);
-    logger.info({ userId: owner.userId }, 'web sign-in with second factor');
+    await openSession(c, { db, now }, opened.owner);
+    logger.info({ userId: opened.owner.userId }, 'web sign-in with second factor');
     return c.json({ ok: true });
   });
 }
@@ -155,10 +180,26 @@ const refusal = (status: 401 | 429) => ({
   error: status === 429 ? 'too_many_attempts' : 'invalid_code',
 });
 
+/** Turning it off takes a current code (authenticator or backup), so a stolen session cannot do it. */
+function disableRoute(routes: Hono<Signed>, { db }: AuthDeps, two: TwoFactor): void {
+  routes.post('/two-factor/disable', async (c) => {
+    if (two.key === undefined) return c.json(unavailable, 501);
+    const parsed = code.safeParse(await c.req.json().catch(() => undefined));
+    if (!parsed.success) return c.json({ error: 'invalid_request' }, 400);
+    const session = c.get('session');
+    const status = await tried(two.limiter, session.userId, () =>
+      two.verify(session, parsed.data.code),
+    );
+    if (status !== 200) return c.json(refusal(status), status);
+    await removeTotp(db, session, session.sessionId);
+    return c.json({ ok: true });
+  });
+}
+
 /**
- * Turning an authenticator app on (M2-6): `setup` hands out a secret and the address for
- * its QR code; `confirm` takes the first code, switches it on and shows the backup codes once.
- * Without `TWO_FACTOR_KEY` there is nowhere safe to keep the secret.
+ * Turning an authenticator app on and off (M2-6): `setup` hands out a secret and the address for
+ * its QR code; `confirm` takes the first code, switches it on and shows the backup codes once;
+ * `disable` needs a current code. Without `TWO_FACTOR_KEY` there is nowhere safe to keep the secret.
  */
 export function twoFactorRoutes(routes: Hono<Signed>, deps: AuthDeps, two: TwoFactor): void {
   const { db, now = Date.now } = deps;
@@ -198,4 +239,5 @@ export function twoFactorRoutes(routes: Hono<Signed>, deps: AuthDeps, two: TwoFa
     });
     return status === 200 ? c.json({ backupCodes }) : c.json(refusal(status), status);
   });
+  disableRoute(routes, deps, two);
 }
