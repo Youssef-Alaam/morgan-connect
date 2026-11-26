@@ -37,6 +37,8 @@ export function createTurnQueue(
 ): TurnQueue {
   const boss = new PgBoss({
     connectionString: databaseUrl,
+    // Wake the worker the moment a turn is queued; the default poll waits up to 2 s (perf budget).
+    useListenNotify: true,
     // Installed by the owner role already: the app role has no right to create or alter it.
     ...(options.schemaInstalled ? { createSchema: false, migrate: false } : {}),
     ...(tuning === undefined ? {} : { superviseIntervalSeconds: tuning.superviseIntervalSeconds }),
@@ -46,6 +48,7 @@ export function createTurnQueue(
     start: async () => {
       await boss.start();
       await boss.createQueue(QUEUE, {
+        notify: true,
         // One redelivery is enough: a redelivered turn is claimed once and never re-sent, and
         // failed sends already retry in-process. More job retries would only repeat that no-op.
         retryLimit: 1,
