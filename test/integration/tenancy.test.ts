@@ -14,6 +14,7 @@ const SYSTEM_TABLES = [
   'users',
   'devices',
   'setup_codes',
+  'access_profiles',
 ];
 /** Tables that must exist and be covered, so renaming one cannot slip past the scan. */
 const USER_DATA_TABLES = [
