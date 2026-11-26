@@ -36,6 +36,13 @@ export interface Gate {
   unknownTool: (caller: Caller) => (name: string, args: Record<string, unknown>) => Promise<string>;
 }
 
+/** A tool's error message can carry outside text too, so the model sees it fenced. */
+function fencedError(tool: ToolDefinition, error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  const source = `tool ${engineName(tool.name)} error`;
+  return new Error(wrapUntrusted(untrusted(message), source), { cause: error });
+}
+
 /** Refuse a bad registry at startup, not on the first call. */
 function checkTools(tools: readonly ToolDefinition[]): void {
   const names = new Set<string>();
@@ -85,7 +92,8 @@ export function createGate(options: GateOptions): Gate {
     if (ran.kind === 'ok')
       return wrapUntrusted(untrusted(ran.output), `tool ${engineName(tool.name)}`);
     if (ran.kind === 'timeout') return { text: TIMEOUT_MESSAGE, isError: true };
-    throw ran.kind === 'aborted' ? abortedError() : ran.error;
+    if (ran.kind === 'aborted') throw abortedError();
+    throw fencedError(tool, ran.error);
   }
 
   return {

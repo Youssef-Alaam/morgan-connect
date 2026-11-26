@@ -30,12 +30,23 @@ export function untrusted(text: string): Untrusted {
   return Object.freeze(box) as unknown as Untrusted;
 }
 
-const textOf = (value: Untrusted): string =>
-  (value as unknown as Record<symbol, string>)[TEXT] ?? '';
+const textOf = (value: Untrusted): string => {
+  const text: unknown = (value as unknown as Record<symbol, unknown>)[TEXT];
+  if (typeof text !== 'string') throw new TypeError('Not an Untrusted made by untrusted()');
+  return text;
+};
 
-/** Break up anything that looks like a fence so the content cannot close or open one. */
+/** Invisible characters that could hide a delimiter or hold its halves apart. */
+const INVISIBLE = /[\u200b-\u200f\u2060\ufeff]/g;
+
+/** Make a fence impossible: strip invisibles, turn look-alike brackets plain, then split every run. */
 const defang = (text: string): string =>
-  text.replaceAll(OPEN, '<<\u200b<').replaceAll(CLOSE, '>\u200b>>');
+  text
+    .replace(INVISIBLE, '')
+    .replace(/[\u2039\uff1c\u226a\u00ab]/g, '<')
+    .replace(/[\u203a\uff1e\u226b\u00bb]/g, '>')
+    .replace(/<(?=<)/g, '<\u200b')
+    .replace(/>(?=>)/g, '>\u200b');
 
 /** A label for the fence: letters, digits and a few separators only. */
 const label = (source: string): string => source.replace(/[^\w .:/-]/g, '').slice(0, 60);
@@ -52,11 +63,6 @@ export function wrapUntrusted(value: Untrusted, source: string): string {
 /** A literal written in the source. A string computed at run time does not compile here. */
 export function trusted<const T extends string>(text: string extends T ? never : T): SystemPrompt;
 export function trusted(text: string): SystemPrompt {
-  return text as SystemPrompt;
-}
-
-/** Text the owner put in this install's own configuration: trusted, but named so it is easy to find. */
-export function operatorText(text: string): SystemPrompt {
   return text as SystemPrompt;
 }
 

@@ -1,6 +1,5 @@
 export {
   joinSystem,
-  operatorText,
   trusted,
   untrusted,
   wrapUntrusted,
