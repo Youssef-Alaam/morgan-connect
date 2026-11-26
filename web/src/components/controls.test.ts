@@ -40,21 +40,14 @@ describe('PasswordInput', () => {
     expect(markup).toContain('type="password"');
     expect(markup).toContain('aria-pressed="false"');
     expect(markup).toContain('Show');
-  });
-
-  it('tells password managers and keyboards to leave it alone', () => {
-    const markup = render(
-      createElement(PasswordInput, {
-        label: 'Password',
-        showLabel: 'Show',
-        hideLabel: 'Hide',
-        autoComplete: 'new-password',
-      }),
-    );
-    expect(markup).toContain('autoComplete="new-password"');
-    expect(markup).toContain('spellCheck="false"');
-    expect(markup).toContain('autoCapitalize="off"');
-    expect(markup).toContain('autoCorrect="off"');
+    for (const attribute of [
+      'autoComplete="new-password"',
+      'spellCheck="false"',
+      'autoCapitalize="off"',
+      'autoCorrect="off"',
+    ]) {
+      expect(markup).toContain(attribute);
+    }
   });
 });
 
