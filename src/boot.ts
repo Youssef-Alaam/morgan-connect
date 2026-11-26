@@ -1,5 +1,5 @@
 import { serve } from '@hono/node-server';
-import { createTelegramAdapter } from './channels/index.js';
+import { type ChannelAdapter, createTelegramAdapter } from './channels/index.js';
 import {
   assertFitsJobExpiry,
   createReplier,
@@ -15,21 +15,27 @@ import {
   createDb,
   createTurnQueue,
   dbVersion,
+  closeOrphanedApprovals,
   ensureAppRole,
   installQueueSchema,
   migrateToLatest,
   type Db,
+  type TurnQueue,
 } from './data/index.js';
 import { createApp } from './http/index.js';
 import {
   createAnthropicEngine,
+  createApprovals,
   createGate,
   createHttpEngine,
+  type Approvals,
   type Engine,
 } from './policy/index.js';
 import { type Config, createLogger, loadConfig, type Logger } from './ops/index.js';
 
 const TIMING = { retryDelayMs: 2000, typingIntervalMs: 4000, turnTimeoutMs: 120_000 };
+/** The turn waits for the owner inside its time limit, so a question closes before the turn does. */
+const APPROVAL_TTL_MS = 90_000;
 
 export interface Running {
   port: number;
@@ -52,12 +58,17 @@ function chooseEngine(config: Config): Engine | undefined {
   return apiKey === undefined ? undefined : createAnthropicEngine({ apiKey, modelId });
 }
 
+interface ReplierParts {
+  db: Db;
+  logger: Logger;
+  engine: Engine | undefined;
+  approvals: Approvals;
+}
+
 /** The model that answers: the one passed in, else the one the config names, else none (echo). */
 function buildReplier(
   config: Config,
-  db: Db,
-  logger: Logger,
-  engine: Engine | undefined,
+  { db, logger, engine, approvals }: ReplierParts,
 ): Replier | undefined {
   const model = engine ?? chooseEngine(config);
   return model === undefined
@@ -67,11 +78,38 @@ function buildReplier(
         logger,
         engine: model,
         model: config.ENGINE === 'http' ? 'http-engine' : config.ANTHROPIC_MODEL,
-        gate: createGate({ db, logger, timezone: config.TIMEZONE }),
+        gate: createGate({
+          db,
+          logger,
+          timezone: config.TIMEZONE,
+          approvals,
+          demo: config.DEMO_TOOLS,
+        }),
         timezone: config.TIMEZONE,
         ...TIMING,
       });
 }
+
+async function openQueue(config: Config, logger: Logger): Promise<TurnQueue> {
+  const queue = createTurnQueue(
+    config.DATABASE_URL,
+    (error) => {
+      logger.error({ kind: error.name }, 'queue error');
+    },
+    undefined,
+    { schemaInstalled: ownerUrl(config) !== undefined },
+  );
+  await queue.start();
+  return queue;
+}
+
+/** Questions to the owner go out as a Telegram message with Approve and Deny buttons. */
+const telegramApprovals = (db: Db, telegram: ChannelAdapter): Approvals =>
+  createApprovals({
+    db,
+    ttlMs: APPROVAL_TTL_MS,
+    prompt: ({ caller, text, id }) => telegram.askApproval(caller.chatId, text, id),
+  });
 
 /** With a Telegram token set, start the queue, the worker and the poller. Returns its stop. */
 async function startTelegram(
@@ -82,23 +120,15 @@ async function startTelegram(
 ): Promise<() => Promise<void>> {
   if (config.TELEGRAM_BOT_TOKEN === undefined) return () => Promise.resolve();
   assertFitsJobExpiry(TIMING, TURN_EXPIRE_SECONDS);
-  const separateRoles = ownerUrl(config) !== undefined;
-  const queue = createTurnQueue(
-    config.DATABASE_URL,
-    (error) => {
-      logger.error({ kind: error.name }, 'queue error');
-    },
-    undefined,
-    { schemaInstalled: separateRoles },
-  );
-  await queue.start();
+  const queue = await openQueue(config, logger);
   const telegram = createTelegramAdapter(
     config.TELEGRAM_BOT_TOKEN,
     logger,
     config.TELEGRAM_API_ROOT,
   );
   const identity = createIdentity(db);
-  const reply = buildReplier(config, db, logger, engine);
+  const approvals = telegramApprovals(db, telegram);
+  const reply = buildReplier(config, { db, logger, engine, approvals });
   const aborts = createTurnAborts();
   const deps = {
     db,
@@ -111,10 +141,14 @@ async function startTelegram(
     aborts,
   };
   try {
+    await closeOrphanedApprovals(db);
     await announceSetupCode(identity, logger);
     await startWorker(deps);
     await requeueStuckTurns(deps);
-    await telegram.start((message) => ingest(deps, message));
+    await telegram.start(
+      (message) => ingest(deps, message),
+      (answer) => approvals.decide(answer.id, answer.decision, answer),
+    );
   } catch (error) {
     await queue.stop();
     throw error;
