@@ -1,5 +1,5 @@
 import { sql } from 'kysely';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { start } from '../../src/boot.js';
 import {
   appendAudit,
@@ -8,10 +8,12 @@ import {
   createTurnQueue,
   ensureAppRole,
   finishTurn,
+  installQueueSchema,
   insertTurn,
   migrateToLatest,
   type Db,
 } from '../../src/data/index.js';
+import { startFakeTelegram } from '../helpers/fake-telegram.js';
 import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 const PRIVILEGE_ERROR = { code: '42501' };
@@ -19,22 +21,20 @@ let postgres: TestPostgres;
 let owner: Db;
 let app: Db;
 
-/** The container's own connection string with another role in it. */
-function asRole(user: string, password: string): string {
-  const url = new URL(postgres.url);
-  url.username = user;
+/** A connection string to the given container as the app role. */
+function appUrl(container: TestPostgres = postgres, password = 'app-pass-1'): string {
+  const url = new URL(container.url);
+  url.username = 'morgan_app';
   url.password = password;
   return url.toString();
 }
-
-const APP_URL = (): string => asRole('morgan_app', 'app-pass-1');
 
 beforeAll(async () => {
   postgres = await startPostgres();
   owner = createDb(postgres.url);
   await migrateToLatest(owner);
-  await ensureAppRole(owner, APP_URL());
-  app = createDb(APP_URL());
+  await ensureAppRole(owner, appUrl());
+  app = createDb(appUrl());
 });
 
 afterAll(async () => {
@@ -76,7 +76,7 @@ it('cannot switch the audit triggers off or drop the table', async () => {
   await expect(sql`drop table audit_log`.execute(app)).rejects.toThrow('must be owner');
 });
 
-it('still runs the normal flows: turns, tables made later, and the queue', async () => {
+it('still runs the normal flows: turns and tables made later', async () => {
   const turn = await insertTurn(app, {
     idempotencyKey: 'k1',
     channel: 'fake',
@@ -88,33 +88,44 @@ it('still runs the normal flows: turns, tables made later, and the queue', async
   await app.deleteFrom('chat_messages').execute();
 
   await sql`create table later_table (id int)`.execute(owner);
-  await ensureAppRole(owner, APP_URL());
+  await ensureAppRole(owner, appUrl());
   await sql`insert into later_table values (1)`.execute(app);
-
-  const queue = createTurnQueue(APP_URL(), () => undefined);
-  await queue.start();
-  await queue.enqueue(turn.id);
-  await queue.stop();
 });
 
-it('takes over a queue schema the owner role made first, and follows a new password', async () => {
+it('cannot write the migration books', async () => {
+  await sql`select * from schema_info`.execute(app);
+  await expect(sql`delete from schema_info`.execute(app)).rejects.toMatchObject(PRIVILEGE_ERROR);
+  await expect(sql`delete from kysely_migration`.execute(app)).rejects.toMatchObject(
+    PRIVILEGE_ERROR,
+  );
+});
+
+it('cannot make a decoy schema, so a rerun still guards public.audit_log', async () => {
+  const decoy = sql`create schema morgan`;
+  await expect(decoy.execute(app)).rejects.toMatchObject(PRIVILEGE_ERROR);
+  await sql`create schema decoy`.execute(owner);
+  await sql`create table decoy.audit_log (id int)`.execute(owner);
+  await ensureAppRole(owner, appUrl());
+  await expect(sql`update public.audit_log set tool = 'x'`.execute(app)).rejects.toMatchObject(
+    PRIVILEGE_ERROR,
+  );
+});
+
+it('runs the queue as the app role in a schema the owner installed, and follows a new password', async () => {
   const other = await startPostgres();
   const first = createDb(other.url);
   try {
     await migrateToLatest(first);
-    const ownerQueue = createTurnQueue(other.url, () => undefined);
-    await ownerQueue.start();
-    await ownerQueue.stop();
-    const url = new URL(other.url);
-    url.username = 'morgan_app';
-    url.password = 'old-pass';
-    await ensureAppRole(first, url.toString());
-    url.password = 'new-pass';
-    await ensureAppRole(first, url.toString());
-    const queue = createTurnQueue(url.toString(), () => undefined);
+    await installQueueSchema(other.url);
+    await ensureAppRole(first, appUrl(other, 'old-pass'));
+    await ensureAppRole(first, appUrl(other, 'new-pass'));
+    const queue = createTurnQueue(appUrl(other, 'new-pass'), () => undefined, undefined, {
+      schemaInstalled: true,
+    });
     await queue.start();
+    await queue.enqueue('00000000-0000-0000-0000-000000000001');
     await queue.stop();
-    const stale = createDb(asRoleAt(other.url, 'old-pass'));
+    const stale = createDb(appUrl(other, 'old-pass'));
     await expect(sql`select 1`.execute(stale)).rejects.toThrow();
     await stale.destroy();
   } finally {
@@ -123,28 +134,33 @@ it('takes over a queue schema the owner role made first, and follows a new passw
   }
 });
 
-function asRoleAt(base: string, password: string): string {
-  const url = new URL(base);
-  url.username = 'morgan_app';
-  url.password = password;
-  return url.toString();
-}
-
 it('refuses to set up the owner role as the app role', async () => {
   await expect(ensureAppRole(owner, postgres.url)).rejects.toThrow('different roles');
 });
 
-it('boots with both connection strings and serves as the app role', async () => {
+it('boots with both connection strings and answers a Telegram message as the app role', async () => {
+  await sql`insert into users (id) values ('00000000-0000-0000-0000-000000000042')`.execute(owner);
+  await sql`insert into devices (user_id, channel, chat_id) values ('00000000-0000-0000-0000-000000000042', 'telegram', '42')`.execute(
+    owner,
+  );
+  const telegram = await startFakeTelegram({ rejectToken: false });
   const running = await start({
-    DATABASE_URL: APP_URL(),
+    DATABASE_URL: appUrl(),
     MIGRATION_DATABASE_URL: postgres.url,
     PORT: '0',
+    TELEGRAM_BOT_TOKEN: '123:fake-token',
+    TELEGRAM_API_ROOT: telegram.apiRoot,
     LOG_LEVEL: 'silent',
   });
   try {
-    const response = await fetch(`http://127.0.0.1:${String(running.port)}/health`);
-    expect(response.status).toBe(200);
+    await vi.waitFor(
+      () => {
+        expect(telegram.sent).toMatchObject([{ chat_id: '42', text: 'ping' }]);
+      },
+      { timeout: 30_000 },
+    );
   } finally {
     await running.stop();
+    await telegram.stop();
   }
 });

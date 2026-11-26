@@ -27,6 +27,8 @@ export async function ensureAppRole(owner: Db, databaseUrl: string): Promise<voi
   const { user, password } = appCredentials(databaseUrl);
   const who = sql.id(user);
   await owner.transaction().execute(async (trx) => {
+    // Two boots at once must not fight over one role.
+    await sql`select pg_advisory_xact_lock(hashtext('morgan.ensure_app_role'))`.execute(trx);
     const { rows } = await sql<{ me: string; db: string; found: boolean; boss: boolean }>`
       select current_user as me, current_database() as db,
         exists (select 1 from pg_roles where rolname = ${user}) as found,
@@ -41,19 +43,23 @@ export async function ensureAppRole(owner: Db, databaseUrl: string): Promise<voi
       select format(${verb + ' with login nosuperuser nocreatedb nocreaterole nobypassrls password %L'}::text,
         ${user}::text, ${password}::text) as text`.execute(trx);
     await sql.raw(statement.rows[0]?.text ?? '').execute(trx);
-    // CREATE on the database lets the queue (pg-boss) make its own schema; public stays closed.
-    await sql`grant connect, create on database ${sql.id(state.db)} to ${who}`.execute(trx);
+    // No CREATE on the database: the app cannot make a schema that shadows public.
+    await sql`grant connect on database ${sql.id(state.db)} to ${who}`.execute(trx);
     await sql`grant usage on schema public to ${who}`.execute(trx);
     await sql`grant select, insert, update, delete on all tables in schema public to ${who}`.execute(
       trx,
     );
     await sql`grant usage, select on all sequences in schema public to ${who}`.execute(trx);
-    await sql`revoke update, delete, truncate on audit_log from ${who}`.execute(trx);
+    // Every name is schema-qualified, so nothing the app makes can stand in for these tables.
+    await sql`revoke update, delete, truncate on public.audit_log from ${who}`.execute(trx);
+    // The migration books are the owner's alone to write.
+    await sql`revoke insert, update, delete, truncate on public.schema_info, public.kysely_migration,
+      public.kysely_migration_lock from ${who}`.execute(trx);
     if (state.boss) await grantQueueSchema(trx, who);
   });
 }
 
-/** A queue schema made earlier by the owner role: the app role runs the queue in it. */
+/** The queue schema the owner role installed (installQueueSchema): the app role runs the queue in it. */
 async function grantQueueSchema(
   trx: QueryExecutorProvider,
   who: ReturnType<typeof sql.id>,
