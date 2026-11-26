@@ -12,6 +12,7 @@ describe('Dialog', () => {
       open: false,
       onClose: () => undefined,
       title: 'Delete this chat?',
+      closeLabel: 'Close',
       children: 'It cannot be undone.',
     }),
   );
@@ -20,6 +21,10 @@ describe('Dialog', () => {
     const labelled = /aria-labelledby="([^"]+)"/.exec(markup)?.[1];
     expect(labelled).toBeDefined();
     expect(markup).toContain(`<h2 id="${labelled ?? ''}">Delete this chat?</h2>`);
+  });
+
+  it('has a visible close button', () => {
+    expect(markup).toContain('>Close</button>');
   });
 
   it('starts closed and holds its content', () => {

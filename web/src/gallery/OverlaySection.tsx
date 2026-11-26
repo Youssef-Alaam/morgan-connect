@@ -25,7 +25,12 @@ export function DialogSection() {
       >
         {t('gallery.dialog.open')}
       </Button>
-      <Dialog open={open} onClose={close} title={t('gallery.dialog.heading')}>
+      <Dialog
+        open={open}
+        onClose={close}
+        title={t('gallery.dialog.heading')}
+        closeLabel={t('gallery.dialog.close')}
+      >
         <p>{t('gallery.dialog.text')}</p>
         <div className="dialog-actions">
           <Button variant="secondary" onClick={close}>

@@ -80,7 +80,8 @@
       "heading": "Delete this chat?",
       "text": "The messages in it are removed for good.",
       "cancel": "Cancel",
-      "confirm": "Delete"
+      "confirm": "Delete",
+      "close": "Close"
     },
     "toast": {
       "title": "Toast",

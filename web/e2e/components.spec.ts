@@ -129,14 +129,19 @@ test('the dialog traps focus, closes with Escape and gives focus back', async ({
   await page.keyboard.press('Enter');
   const dialog = page.getByRole('dialog', { name: 'Delete this chat?' });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await expect(dialog.getByRole('button', { name: 'Close' })).toBeFocused();
   await expect(dialog).toHaveScreenshot('dialog-open.png');
 
   const result = await new AxeBuilder({ page }).include('dialog').analyze();
   expect(result.violations).toEqual([]);
 
   await page.keyboard.press('Tab');
-  await expect(dialog.getByRole('button', { name: 'Delete' })).toBeFocused();
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(opener).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(dialog).toBeVisible();
 
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
