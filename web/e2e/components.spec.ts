@@ -98,3 +98,23 @@ test('inputs, select, checkbox and switch work from the keyboard', async ({ page
   await page.getByText('Notifications', { exact: true }).click();
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
 });
+
+test('the code input keeps six digits and the three-way control moves with arrows', async ({
+  page,
+}) => {
+  const code = page.getByLabel('Authenticator code');
+  await code.fill('');
+  await code.pressSequentially('12ab34567');
+  await expect(code).toHaveValue('123456');
+
+  const rtl = (await page.evaluate(() => document.documentElement.dir)) === 'rtl';
+  const forward = rtl ? 'ArrowLeft' : 'ArrowRight';
+  const group = page.getByRole('radiogroup', { name: 'Send email' });
+  await group.getByRole('radio', { name: 'Ask' }).focus();
+  await page.keyboard.press(forward);
+  await expect(group.getByRole('radio', { name: 'Auto' })).toBeChecked();
+  await expect(page.getByText('Auto sends without asking')).toBeVisible();
+  await page.keyboard.press('Home');
+  await expect(group.getByRole('radio', { name: 'Off' })).toBeChecked();
+  await expect(page.getByText('Auto sends without asking')).toBeHidden();
+});
