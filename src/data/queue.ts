@@ -20,14 +20,25 @@ export interface QueueTuning {
   superviseIntervalSeconds: number;
 }
 
+/** Install or upgrade the queue's tables. Run as the owner role, so the app role never needs CREATE on the database. */
+export async function installQueueSchema(ownerUrl: string): Promise<void> {
+  const boss = new PgBoss({ connectionString: ownerUrl });
+  boss.on('error', () => undefined);
+  await boss.start();
+  await boss.stop({ graceful: false });
+}
+
 /** The job queue (pg-boss) on the same Postgres, in its own `pgboss` schema. */
 export function createTurnQueue(
   databaseUrl: string,
   onError: (error: Error) => void,
   tuning?: QueueTuning,
+  options: { schemaInstalled: boolean } = { schemaInstalled: false },
 ): TurnQueue {
   const boss = new PgBoss({
     connectionString: databaseUrl,
+    // Installed by the owner role already: the app role has no right to create or alter it.
+    ...(options.schemaInstalled ? { createSchema: false, migrate: false } : {}),
     ...(tuning === undefined ? {} : { superviseIntervalSeconds: tuning.superviseIntervalSeconds }),
   });
   boss.on('error', onError);

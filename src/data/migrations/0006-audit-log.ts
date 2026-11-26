@@ -5,9 +5,9 @@ import { type Kysely, sql } from 'kysely';
  * remove a row, so a bug in the app cannot rewrite history. Holds argument names and a hash,
  * never argument values.
  *
- * Limit: the triggers guard against app bugs, not a compromised app, because the app's database
- * role can still disable them. Planned: an owner role for migrations and an app role that may
- * only INSERT and SELECT here (docs/adr/0008-audit-log-guards.md).
+ * With separate roles (MIGRATION_DATABASE_URL) the app role may only INSERT and SELECT here, so the
+ * triggers are the second lock. With one role the app can still disable them
+ * (docs/adr/0008-audit-log-guards.md).
  */
 export async function up(db: Kysely<unknown>): Promise<void> {
   await db.schema

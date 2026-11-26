@@ -2,7 +2,10 @@ import { z } from 'zod';
 
 const schema = z
   .object({
+    // The app's connection. With MIGRATION_DATABASE_URL set, this role may only INSERT and SELECT on audit_log.
     DATABASE_URL: z.url(),
+    // The owner role that runs migrations and sets up the app role. Unset: one role does both (warned).
+    MIGRATION_DATABASE_URL: z.url().optional(),
     PORT: z.coerce.number().int().min(0).max(65535).default(3000),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])

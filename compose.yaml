@@ -17,7 +17,9 @@ services:
     build: .
     env_file: .env
     environment:
-      DATABASE_URL: postgres://morgan:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/morgan
+      # The app connects as its own role; the owner role (morgan) runs migrations and creates it.
+      DATABASE_URL: postgres://morgan_app:${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env}@db:5432/morgan
+      MIGRATION_DATABASE_URL: postgres://morgan:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/morgan
       PORT: '3000'
     # Lets the app reach an engine you run on the host: ENGINE_URL=http://host.docker.internal:8787
     extra_hosts:
