@@ -17,6 +17,7 @@ import { createPasswordHasher } from '../identity/password.js';
 import { deviceRoutes } from './devices.js';
 import { passkeyAccountRoutes, passkeySignInRoutes } from './passkeys.js';
 import { memberRoutes } from './members.js';
+import { profileRoutes } from './profiles.js';
 import {
   addressOf,
   COOKIE,
@@ -138,6 +139,7 @@ export function authRoutes(deps: AuthDeps, chat?: Omit<ChatDeps, 'db'>): Hono<Si
   memberRoutes(routes, deps, shared);
   if (chat !== undefined) chatRoutes(routes, { ...chat, db });
   deviceRoutes(routes, deps);
+  profileRoutes(routes, deps);
   twoFactorRoutes(routes, deps, two);
   passkeyAccountRoutes(routes, deps, shared, two);
 

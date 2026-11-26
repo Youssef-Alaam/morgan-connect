@@ -22,6 +22,7 @@ import { up as secondFactor } from './0021-second-factor.js';
 import { up as passkeys } from './0022-passkeys.js';
 import { up as accessProfiles } from './0023-access-profiles.js';
 import { up as profileSelfRestrict } from './0024-profile-self-restrict.js';
+import { up as profilesOverview } from './0025-profiles-overview.js';
 
 /** Applied in key order. Add new migrations here with the next number. */
 export const migrations: Record<string, Migration> = {
@@ -48,4 +49,5 @@ export const migrations: Record<string, Migration> = {
   '0022-passkeys': { up: passkeys },
   '0023-access-profiles': { up: accessProfiles },
   '0024-profile-self-restrict': { up: profileSelfRestrict },
+  '0025-profiles-overview': { up: profilesOverview },
 };
