@@ -13,3 +13,10 @@ export const RLS_EXEMPT_TABLES: readonly string[] = [
 
 /** Schemas outside `public` that are install-wide as a whole: the queue (pg-boss) keeps only ids. */
 export const RLS_EXEMPT_SCHEMAS: readonly string[] = ['pgboss'];
+
+/**
+ * Tables the admin may read through the audited path (src/data/admin-read.ts). Each needs an
+ * `expectAuditedAdminRead('<table>', ...)` call in an isolation test; the checker enforces it.
+ * Memory joins this list in M4.
+ */
+export const ADMIN_READABLE_TABLES: readonly string[] = ['chat_messages', 'usage_ledger'];

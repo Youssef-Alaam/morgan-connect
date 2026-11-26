@@ -39,6 +39,16 @@ export function coverage(tables, tests) {
   }));
 }
 
+/** True when this test source asserts the audited admin read for the table. */
+function coversAdminRead(table, source) {
+  return new RegExp(String.raw`expectAuditedAdminRead\(\s*['"\x60]${table}['"\x60]`).test(source);
+}
+
+/** Admin-readable tables with no `expectAuditedAdminRead` call in any of the tests. */
+export function findUnauditedAdminReads(tables, tests) {
+  return tables.filter((table) => !tests.some((test) => coversAdminRead(table, test.source)));
+}
+
 export function findUntestedTables(tables, testSources) {
   const tests = testSources.map((source, i) => ({ name: String(i), source }));
   return coverage(tables, tests)
@@ -64,12 +74,18 @@ function readFilesWith(dir, suffixes) {
 }
 
 async function main() {
-  const { RLS_EXEMPT_TABLES } = await import('../src/data/rls.ts');
+  const { RLS_EXEMPT_TABLES, ADMIN_READABLE_TABLES } = await import('../src/data/rls.ts');
+  const tests = readFilesWith(ISOLATION_DIR, [ISOLATION_SUFFIX]);
   const { rows, missing } = checkIsolation({
     migrations: readFilesWith(MIGRATIONS_DIR, ['.sql', '.ts']).map((file) => file.source),
-    tests: readFilesWith(ISOLATION_DIR, [ISOLATION_SUFFIX]),
+    tests,
     exempt: RLS_EXEMPT_TABLES,
   });
+  const unaudited = findUnauditedAdminReads(ADMIN_READABLE_TABLES, tests);
+  if (unaudited.length > 0) {
+    console.error(`Admin-readable tables without an audited-read test: ${unaudited.join(', ')}`);
+    process.exit(1);
+  }
   for (const row of rows) console.log(`${row.table.padEnd(22)} ${row.file ?? 'NO ISOLATION TEST'}`);
   if (missing.length > 0) {
     console.error(`Tables without an isolation test: ${missing.join(', ')}`);

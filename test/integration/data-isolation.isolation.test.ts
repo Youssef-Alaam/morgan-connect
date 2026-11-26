@@ -12,9 +12,12 @@ import {
   loadHistory,
   usageSince,
 } from '../../src/data/index.js';
+import { ADMIN_READABLE_TABLES } from '../../src/data/rls.js';
 import {
   COVERED,
+  expectAuditedAdminRead,
   expectIsolated,
+  auditedSoFar,
   isolatedSoFar,
   startIsolation,
   type Isolation,
@@ -108,6 +111,12 @@ describe('user-data tables', () => {
 
   it('devices', async () => {
     await expectIsolated('devices', ctx);
+  });
+
+  it('the admin reads chats and usage only through the audited path', async () => {
+    await expectAuditedAdminRead('chat_messages', ctx);
+    await expectAuditedAdminRead('usage_ledger', ctx);
+    expect(auditedSoFar()).toEqual([...ADMIN_READABLE_TABLES].sort());
   });
 
   it('has run for every table in COVERED', () => {
