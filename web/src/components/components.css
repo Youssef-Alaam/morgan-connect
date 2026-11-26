@@ -308,6 +308,46 @@
   font-weight: 700;
 }
 
+.bubble {
+  display: grid;
+  gap: var(--space-1);
+  max-inline-size: 80%;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--card-border);
+  border-radius: var(--radius);
+}
+
+.page .bubble p {
+  color: var(--text);
+}
+
+.bubble-user {
+  justify-self: end;
+  background: var(--surface);
+}
+
+.bubble-morgan {
+  justify-self: start;
+}
+
+.bubble-author {
+  font-size: var(--font-size-sm);
+  color: var(--muted);
+}
+
+.composer {
+  display: flex;
+  align-items: end;
+  gap: var(--space-2);
+  justify-self: stretch;
+}
+
+.composer-text {
+  flex: 1;
+  padding-block: var(--space-2);
+  resize: vertical;
+}
+
 .approval {
   display: grid;
   justify-self: stretch;
