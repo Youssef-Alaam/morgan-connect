@@ -12,6 +12,7 @@ it('applies defaults and treats empty values as unset', () => {
     ANTHROPIC_MODEL: 'claude-sonnet-5-5',
     ENGINE: 'pi',
     DEMO_TOOLS: false,
+    VAULT_BRANCH: 'main',
     TIMEZONE: 'UTC',
   });
 });
@@ -84,4 +85,27 @@ it('takes an optional owner connection for migrations', () => {
   expect(() => loadConfig({ DATABASE_URL: URL, MIGRATION_DATABASE_URL: 'nope' })).toThrow(
     /MIGRATION_DATABASE_URL/,
   );
+});
+
+it('registers the vault only when its URL and token come together', () => {
+  const vault = { VAULT_REMOTE_URL: 'https://github.com/o/v.git', VAULT_TOKEN: 'abc' };
+  expect(loadConfig({ DATABASE_URL: URL, ...vault })).toMatchObject({
+    ...vault,
+    VAULT_BRANCH: 'main',
+  });
+  expect(() => loadConfig({ DATABASE_URL: URL, VAULT_TOKEN: 'abc' })).toThrow(/VAULT_REMOTE_URL/);
+  expect(() => loadConfig({ DATABASE_URL: URL, VAULT_REMOTE_URL: vault.VAULT_REMOTE_URL })).toThrow(
+    /VAULT_TOKEN/,
+  );
+});
+
+it('keeps the vault token off http hosts and out of the URL', () => {
+  const env = { DATABASE_URL: URL, VAULT_TOKEN: 'abc' };
+  const load = (url: string) => () => loadConfig({ ...env, VAULT_REMOTE_URL: url });
+  expect(load('http://github.com/o/v.git')).toThrow(/VAULT_REMOTE_URL/);
+  expect(load('https://me:secret@github.com/o/v.git')).toThrow(/VAULT_REMOTE_URL/);
+  expect(load('http://localhost:9/v.git')).not.toThrow();
+  expect(() =>
+    loadConfig({ ...env, VAULT_REMOTE_URL: 'https://h/v.git', VAULT_BRANCH: '-x' }),
+  ).toThrow(/VAULT_BRANCH/);
 });

@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { serve } from '@hono/node-server';
 import { type ChannelAdapter, createTelegramAdapter } from './channels/index.js';
 import {
@@ -30,6 +32,7 @@ import {
   createHttpEngine,
   type Approvals,
   type Engine,
+  type VaultOptions,
 } from './policy/index.js';
 import { type Config, createLogger, loadConfig, type Logger } from './ops/index.js';
 
@@ -58,6 +61,14 @@ function chooseEngine(config: Config): Engine | undefined {
   return apiKey === undefined ? undefined : createAnthropicEngine({ apiKey, modelId });
 }
 
+/** The vault tool is registered only when its URL and token are both set. */
+function vaultFrom(config: Config): { vault?: VaultOptions } {
+  const { VAULT_REMOTE_URL: remoteUrl, VAULT_TOKEN: token } = config;
+  if (remoteUrl === undefined || token === undefined) return {};
+  const dir = config.VAULT_DIR ?? join(tmpdir(), 'morgan-vault');
+  return { vault: { remoteUrl, token, branch: config.VAULT_BRANCH, dir } };
+}
+
 interface ReplierParts {
   db: Db;
   logger: Logger;
@@ -84,6 +95,7 @@ function buildReplier(
           timezone: config.TIMEZONE,
           approvals,
           demo: config.DEMO_TOOLS,
+          ...vaultFrom(config),
         }),
         timezone: config.TIMEZONE,
         ...TIMING,
