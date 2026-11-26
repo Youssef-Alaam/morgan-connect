@@ -131,7 +131,7 @@ const approvalsFor = (db: Db, telegram: ChannelAdapter | undefined): Approvals =
 
 interface Chat {
   /** The web chat's way into the pipeline, the same one Telegram uses. */
-  chat: Omit<ChatDeps, 'logger'>;
+  chat: Omit<ChatDeps, 'logger' | 'db'>;
   stop: () => Promise<void>;
 }
 

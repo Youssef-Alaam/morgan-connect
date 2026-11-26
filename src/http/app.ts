@@ -11,7 +11,7 @@ export interface AppDeps {
   /** The web account API (`/api/*`); left out, there are no web accounts. */
   auth?: Omit<AuthDeps, 'logger'>;
   /** The web chat (`/api/chat`), behind the same session gate; needs `auth`. */
-  chat?: Omit<ChatDeps, 'logger'>;
+  chat?: Omit<ChatDeps, 'logger' | 'db'>;
 }
 
 export function createApp(deps: AppDeps): Hono {

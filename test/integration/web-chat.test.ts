@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { createWebChannel } from '../../src/channels/index.js';
 import { ingest, processTurn, type PipelineDeps } from '../../src/core/index.js';
-import { createSession, type TurnQueue } from '../../src/data/index.js';
+import { createSession, endSession, type TurnQueue } from '../../src/data/index.js';
 import { createApp, type ChatDeps } from '../../src/http/index.js';
 import { sha256 } from '../../src/identity/admin-link.js';
 import { createIdentity } from '../../src/identity/index.js';
@@ -43,7 +43,7 @@ afterAll(async () => {
   await ctx.stop();
 });
 
-const appWith = (chat: Omit<ChatDeps, 'logger'>) =>
+const appWith = (chat: Omit<ChatDeps, 'logger' | 'db'>) =>
   createApp({
     dbVersion: () => Promise.resolve('17'),
     logger: createLogger('silent'),
@@ -155,4 +155,20 @@ it('ends a stream whose read fails with a fixed word, and cannot send to an ende
   const response = await broken.request('/api/chat/events', { headers: { cookie: cookies.alice } });
   expect(await response.text()).toBe('event: error\ndata: stream_failed\n\n');
   await expect(web.send('no-such-session', 'hi')).rejects.toThrow(/ended/);
+});
+
+it('closes a stream at the next keep-alive once its session has ended', async () => {
+  const expiresAt = new Date(Date.now() + 3_600_000);
+  const id = await createSession(ctx.app, ctx.alice, { tokenHash: sha256('gone'), expiresAt });
+  const quiet = appWith({
+    events: createWebChannel(ctx.app),
+    ingest: () => Promise.resolve(),
+    keepAliveMs: 20,
+  });
+  const response = await quiet.request('/api/chat/events', {
+    headers: { cookie: 'morgan_session=gone', 'last-event-id': '999999999' },
+  });
+  await endSession(ctx.app, ctx.alice, id);
+  // The body ends by itself; a stream that stayed open would hang this until the test times out.
+  expect((await response.text()).replaceAll(': keep-alive\n\n', '')).toBe('');
 });
