@@ -87,3 +87,23 @@ it('stops handing out sign-in challenges to an address that keeps failing', asyn
   }
   expect((await post('sign-in/passkey/options', {})).status).toBe(429);
 });
+
+it('adds without a code when no authenticator is on, and refuses a sign-in challenge as a registration one', async () => {
+  app = serve();
+  await createInvite(ctx.app, ctx.alice, {
+    tokenHash: sha256('pk3-tok'),
+    ttlSeconds: 600,
+    monthlyLimitUsd: null,
+  });
+  const body = { token: 'pk3-tok', email: 'pk3@example.test', password: 'a brand new password' };
+  const joined = await post('join', { ...body, acceptedNotice: true });
+  const cookie = /morgan_session=[^;]+/.exec(joined.headers.get('set-cookie') ?? '')?.[0] ?? '';
+  const bare = await app.request('/api/passkeys/options', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+  });
+  expect(bare.status).toBe(200);
+  const signIn = await json(await post('sign-in/passkey/options', {}));
+  const response = newAuthenticator(SITE).create({ challenge: signIn['challenge'] ?? '' });
+  expect((await post('passkeys', { response }, cookie)).status).toBe(400);
+});
