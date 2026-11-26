@@ -139,7 +139,7 @@ export function authRoutes(deps: AuthDeps, chat?: Omit<ChatDeps, 'db'>): Hono<Si
   if (chat !== undefined) chatRoutes(routes, { ...chat, db });
   deviceRoutes(routes, deps);
   twoFactorRoutes(routes, deps, two);
-  passkeyAccountRoutes(routes, deps, shared);
+  passkeyAccountRoutes(routes, deps, shared, two);
 
   routes.get('/me', async (c) => c.json(await accountOf(db, c.get('session'))));
 
