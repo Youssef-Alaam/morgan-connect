@@ -22,6 +22,7 @@ const USER_DATA_TABLES = [
   'chat_conversations',
   'usage_ledger',
   'audit_log',
+  'approvals',
 ];
 /** `user_id` may be null here: a refused stranger has no user, but the row still has a workspace. */
 const NULLABLE_USER_ID = ['audit_log'];

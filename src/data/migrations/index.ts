@@ -8,6 +8,7 @@ import { up as usageLedger } from './0007-usage-ledger.js';
 import { up as chatMessageToolData } from './0008-chat-message-tool-data.js';
 import { up as chatConversations } from './0009-chat-conversations.js';
 import { up as tenancy } from './0010-tenancy.js';
+import { up as approvals } from './0011-approvals.js';
 
 /** Applied in key order. Add new migrations here with the next number. */
 export const migrations: Record<string, Migration> = {
@@ -20,4 +21,5 @@ export const migrations: Record<string, Migration> = {
   '0008-chat-message-tool-data': { up: chatMessageToolData },
   '0009-chat-conversations': { up: chatConversations },
   '0010-tenancy': { up: tenancy },
+  '0011-approvals': { up: approvals },
 };
