@@ -1,10 +1,9 @@
 import type { ChatKey } from './history.js';
 import type { Db } from './db.js';
-import { requireOwner } from './tenancy.js';
+import type { Owner } from './tenancy.js';
 
 /** The id of this chat's current conversation. It stays the same until `/new`. */
-export async function conversationFor(db: Db, chat: ChatKey): Promise<string> {
-  const owner = await requireOwner(db, chat);
+export async function conversationFor(db: Db, chat: ChatKey, owner: Owner): Promise<string> {
   await db
     .insertInto('chat_conversations')
     .values({

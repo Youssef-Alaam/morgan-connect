@@ -8,7 +8,7 @@ import {
 import { sql } from 'kysely';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { FAILURE_REPLY, STOPPED_REPLY, createReplier } from '../../src/core/index.js';
-import { createDb, migrateToLatest, type Db, type Turn } from '../../src/data/index.js';
+import { createDb, migrateToLatest, type Db, type Owner, type Turn } from '../../src/data/index.js';
 import { createLogger } from '../../src/ops/index.js';
 import {
   EngineError,
@@ -23,13 +23,14 @@ import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
 let db: Db;
+let who: Owner;
 let counter = 0;
 
 beforeAll(async () => {
   postgres = await startPostgres();
   db = createDb(postgres.url);
   await migrateToLatest(db);
-  await linkChats(db, ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7']);
+  who = await linkChats(db, ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7']);
 }, 180_000);
 
 afterAll(async () => {
@@ -96,6 +97,7 @@ const turn = (chatId: string, text: string): Turn => ({
   chatId,
   text,
   status: 'sending',
+  ...who,
 });
 const replierWith = (engine: Engine, turnTimeoutMs = 5000) =>
   createReplier({
@@ -200,5 +202,29 @@ it('still answers when the ledger cannot be written', async () => {
     expect(await replierWith(engine)(turn('L7', 'hello'), new FakeChannel())).toBe('hi');
   } finally {
     await sql`alter table usage_ledger_off rename to usage_ledger`.execute(db);
+  }
+});
+
+it('files the turn under the user stored on it, even when the chat is unlinked mid-turn', async () => {
+  await linkChats(db, ['L8']);
+  const inner = billedEngine([{ calls: [call(5, 1, 0.01)], end: 'text' }]);
+  const engine: Engine = {
+    open: (options) => {
+      const session = inner.open(options);
+      return {
+        ...session,
+        prompt: async (text, ...rest) => {
+          await sql`delete from devices where chat_id = 'L8'`.execute(db);
+          return session.prompt(text, ...rest);
+        },
+      };
+    },
+  };
+  expect(await replierWith(engine)(turn('L8', 'hello'), new FakeChannel())).toBe('hi');
+  const owned = await sql`select user_id, workspace_id from usage_ledger where chat_id = 'L8'
+    union all select user_id, workspace_id from chat_messages where chat_id = 'L8'`.execute(db);
+  expect(owned.rows).toHaveLength(3);
+  for (const row of owned.rows) {
+    expect(row).toEqual({ user_id: who.userId, workspace_id: who.workspaceId });
   }
 });

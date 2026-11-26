@@ -22,13 +22,3 @@ export async function ownerOf(
     .executeTakeFirst();
   return row === undefined ? undefined : { userId: row.user_id, workspaceId: row.workspace_id };
 }
-
-/** Like `ownerOf`, for rows that must belong to someone: an unlinked chat has no data to store. */
-export async function requireOwner(
-  db: Db,
-  chat: { channel: string; chatId: string },
-): Promise<Owner> {
-  const owner = await ownerOf(db, chat);
-  if (owner === undefined) throw new Error('No linked user for this chat');
-  return owner;
-}

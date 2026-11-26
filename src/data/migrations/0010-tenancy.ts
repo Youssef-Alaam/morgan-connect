@@ -36,19 +36,26 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     db,
   );
 
-  await sql`update turns set user_id = coalesce(
-    (select d.user_id from devices d where d.channel = turns.channel and d.chat_id = turns.chat_id),
-    (select u.id from users u where u.role = 'admin')) where user_id is null`.execute(db);
-  for (const table of ['chat_messages', 'usage_ledger', 'chat_conversations'] as const) {
-    await sql`alter table ${sql.table(table)} add column user_id uuid references users (id)`.execute(
-      db,
-    );
+  // A row's user must belong to the row's workspace: one pair, one foreign key.
+  await sql`alter table users add constraint users_id_workspace_unique unique (id, workspace_id)`.execute(
+    db,
+  );
+  await sql`alter table turns drop constraint if exists turns_user_id_fkey`.execute(db);
+  for (const table of WITH_USER) {
+    if (table !== 'turns')
+      await sql`alter table ${sql.table(table)} add column user_id uuid`.execute(db);
     await sql`update ${sql.table(table)} t set user_id = coalesce(
       (select d.user_id from devices d where d.channel = t.channel and d.chat_id = t.chat_id),
       (select u.id from users u where u.role = 'admin')) where t.user_id is null`.execute(db);
-  }
-  await sql`alter table turns add foreign key (user_id) references users (id)`.execute(db);
-  for (const table of WITH_USER) {
+    const { rows } = await sql<{ n: string }>`
+      select count(*) as n from ${sql.table(table)} where user_id is null`.execute(db);
+    if (rows[0]?.n !== '0') {
+      throw new Error(
+        `Cannot assign an owner to ${rows[0]?.n ?? '?'} rows of ${table}: no linked device and no admin user. Claim the install first, or clear the table.`,
+      );
+    }
     await sql`alter table ${sql.table(table)} alter column user_id set not null`.execute(db);
+    await sql`alter table ${sql.table(table)} add foreign key (user_id, workspace_id)
+      references users (id, workspace_id)`.execute(db);
   }
 }

@@ -7,6 +7,7 @@ export {
   type TurnStatus,
 } from './db.js';
 export { claimSetupCode, isDeviceLinked, replaceSetupCode } from './identity.js';
+export { ownerOf, type Owner } from './tenancy.js';
 export { migrateToLatest } from './migrator.js';
 export { ensureAppRole } from './roles.js';
 export {

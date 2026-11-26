@@ -1,18 +1,20 @@
 import { sql } from 'kysely';
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { createReplier } from '../../src/core/index.js';
-import { createDb, migrateToLatest, type Db } from '../../src/data/index.js';
+import { createDb, migrateToLatest, type Db, type Owner } from '../../src/data/index.js';
 import { createLogger } from '../../src/ops/index.js';
 import { createGate, type Caller } from '../../src/policy/gate.js';
 import { ACTION_TYPES, createClockTool, type ToolDefinition } from '../../src/tools/index.js';
 import { FakeChannel } from '../helpers/fake-channel.js';
 import { ScriptedEngine } from '../helpers/fake-engine.js';
+import { linkChats } from '../helpers/link-chats.js';
 import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 const USER = '00000000-0000-0000-0000-0000000000a1';
 const caller: Caller = { channel: 'fake', chatId: 'audit-chat', turnId: 'turn-1' };
 let postgres: TestPostgres;
 let db: Db;
+let who: Owner;
 
 beforeAll(async () => {
   postgres = await startPostgres();
@@ -22,6 +24,7 @@ beforeAll(async () => {
   await sql`insert into devices (user_id, channel, chat_id) values (${USER}, 'fake', 'audit-chat')`.execute(
     db,
   );
+  who = await linkChats(db, []);
 }, 180_000);
 
 afterAll(async () => {
@@ -76,6 +79,7 @@ it('clock.now through the engine: the answer comes back and the audit row says w
     chatId: 'audit-chat',
     text: 'time?',
     status: 'sending',
+    ...who,
   } as const;
   expect(await reply(turn, new FakeChannel())).toBe('It is late.');
   expect(engine.opened[0]?.tools.map((t) => t.name)).toEqual(['clock_now']);

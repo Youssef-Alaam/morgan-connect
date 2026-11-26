@@ -1,7 +1,7 @@
 import { sql } from 'kysely';
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { createReplier } from '../../src/core/index.js';
-import { createDb, migrateToLatest, type Db } from '../../src/data/index.js';
+import { createDb, migrateToLatest, type Db, type Owner } from '../../src/data/index.js';
 import { createLogger } from '../../src/ops/index.js';
 import { createGate, type Caller } from '../../src/policy/gate.js';
 import { createClockTool, type ToolDefinition } from '../../src/tools/index.js';
@@ -13,12 +13,13 @@ import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 const caller: Caller = { channel: 'fake', chatId: 'guard-chat', turnId: 'turn-g' };
 let postgres: TestPostgres;
 let db: Db;
+let who: Owner;
 
 beforeAll(async () => {
   postgres = await startPostgres();
   db = createDb(postgres.url);
   await migrateToLatest(db);
-  await linkChats(db, ['guard-chat']);
+  who = await linkChats(db, ['guard-chat']);
 }, 180_000);
 
 afterAll(async () => {
@@ -109,7 +110,14 @@ it('a tool name the model made up is refused through the gate and recorded', asy
     typingIntervalMs: 5,
     turnTimeoutMs: 5000,
   });
-  const turn = { id: 't', channel: 'fake', chatId: 'guard-chat', text: 'go', status: 'sending' };
+  const turn = {
+    id: 't',
+    channel: 'fake',
+    chatId: 'guard-chat',
+    text: 'go',
+    status: 'sending',
+    ...who,
+  };
   expect(await reply({ ...turn, status: 'sending' }, new FakeChannel())).toBe('done');
   const row = await db.selectFrom('audit_log').selectAll().executeTakeFirstOrThrow();
   expect(row).toMatchObject({ tool: 'rm_rf', action_type: 'unknown', outcome: 'refused' });

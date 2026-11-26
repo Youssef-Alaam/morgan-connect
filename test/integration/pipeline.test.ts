@@ -145,3 +145,13 @@ it('logs and rethrows an invalid payload without storing it', async () => {
     ingest(deps(new FakeChannel()), { channel: 'fake', text: 'secret' }),
   ).rejects.toThrow(/Invalid message fields/);
 });
+
+it('stores nothing when the chat lost its device after it was admitted', async () => {
+  const gone = {
+    ...deps(new FakeChannel()),
+    identity: { ...createIdentity(db), isLinked: () => Promise.resolve(true) },
+  };
+  await ingest(gone, { channel: 'fake', chatId: 'gone', messageId: '1', text: 'hello' });
+  const { rows } = await sql`select 1 from turns where chat_id = 'gone'`.execute(db);
+  expect(rows).toEqual([]);
+});

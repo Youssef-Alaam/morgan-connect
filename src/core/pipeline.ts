@@ -3,6 +3,7 @@ import {
   finishTurn,
   getTurn,
   insertTurn,
+  ownerOf,
   listQueuedTurnIds,
   type Db,
   type Turn,
@@ -45,6 +46,8 @@ export async function ingest(deps: PipelineDeps, raw: unknown): Promise<void> {
       deps.aborts?.stop(message.channel, message.chatId);
       return;
     }
+    // A device removed since admit leaves nobody to own the turn: treat it as not admitted.
+    if ((await ownerOf(deps.db, message)) === undefined) return;
     const turn = await insertTurn(deps.db, {
       idempotencyKey: idempotencyKey(message),
       channel: message.channel,

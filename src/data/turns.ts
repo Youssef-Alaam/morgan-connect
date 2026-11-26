@@ -1,5 +1,5 @@
 import type { Db, TurnStatus } from './db.js';
-import { requireOwner } from './tenancy.js';
+import { ownerOf } from './tenancy.js';
 
 export interface NewTurn {
   idempotencyKey: string;
@@ -14,9 +14,12 @@ export interface Turn {
   chatId: string;
   text: string;
   status: TurnStatus;
+  /** Fixed when the turn was stored; everything the turn writes belongs to them. */
+  userId: string;
+  workspaceId: string;
 }
 
-const columns = ['id', 'channel', 'chat_id', 'text', 'status'] as const;
+const columns = ['id', 'channel', 'chat_id', 'text', 'status', 'user_id', 'workspace_id'] as const;
 
 function toTurn(row: {
   id: string;
@@ -24,6 +27,8 @@ function toTurn(row: {
   chat_id: string;
   text: string;
   status: TurnStatus;
+  user_id: string;
+  workspace_id: string;
 }): Turn {
   return {
     id: row.id,
@@ -31,6 +36,8 @@ function toTurn(row: {
     chatId: row.chat_id,
     text: row.text,
     status: row.status,
+    userId: row.user_id,
+    workspaceId: row.workspace_id,
   };
 }
 
@@ -39,7 +46,8 @@ export async function insertTurn(
   db: Db,
   turn: NewTurn,
 ): Promise<{ id: string; status: TurnStatus; created: boolean }> {
-  const owner = await requireOwner(db, turn);
+  const owner = await ownerOf(db, turn);
+  if (owner === undefined) throw new Error('No linked user for this chat');
   const inserted = await db
     .insertInto('turns')
     .values({
