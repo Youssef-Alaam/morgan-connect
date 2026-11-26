@@ -1,3 +1,5 @@
+// The fast early check; the catalog test (test/integration/isolation-catalog.test.ts) is the
+// authority, since a regex cannot follow a renamed table or a name held in a constant.
 // Isolation coverage (STANDARDS step 14): every user-data table created by a migration must be
 // covered by an isolation test, i.e. a file ending in `isolation.test.ts` that calls
 // `expectIsolated('<table>', ...)`, the shared assertion that user A cannot read or write user B's
@@ -13,7 +15,7 @@ const ISOLATION_SUFFIX = 'isolation.test.ts';
 export function findTables(sources) {
   const tables = new Set();
   const patterns = [
-    /create\s+table\s+(?:if\s+not\s+exists\s+)?(?:"?\w+"?\.)?"?(\w+)"?/gi,
+    /create\s+(?:(?:global\s+|local\s+)?(?:temp(?:orary)?|unlogged)\s+)?table\s+(?:if\s+not\s+exists\s+)?(?:"?\w+"?\.)?"?(\w+)"?/gi,
     /createTable\(\s*['"](\w+)['"]/g,
   ];
   for (const source of sources) {

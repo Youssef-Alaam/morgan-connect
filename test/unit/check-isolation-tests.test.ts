@@ -17,6 +17,10 @@ describe('findTables', () => {
     ];
     expect(findTables(sql)).toEqual(['messages', 'notes', 'users']);
   });
+  it('lists unlogged and temporary tables too', () => {
+    const sql = ['create unlogged table a (id int);', 'CREATE TEMP TABLE b (id int);'];
+    expect(findTables(sql)).toEqual(['a', 'b']);
+  });
   it('lists tables made by the query builder in a TypeScript migration', () => {
     const ts = `await db.schema
       .createTable('chat_notes')
