@@ -126,6 +126,31 @@ it('refuses a link whose email is taken and a malformed body', async () => {
   expect(response.status).toBe(409);
 });
 
+it('takes JSON only on the auth posts', async () => {
+  const form = await app.request('/api/sign-in', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: 'email=a@b.test&password=x',
+  });
+  expect(form.status).toBe(415);
+  expect((await app.request('/api/sign-out', { method: 'POST' })).status).toBe(415);
+});
+
+it('limits one address across many emails, for sign-in and for links', async () => {
+  clock += 16 * 60 * 1000;
+  const wrong = 'wrong password here';
+  for (let i = 0; i < 20; i++) {
+    expect(
+      (await post('sign-in', { email: `u${String(i)}@example.test`, password: wrong })).status,
+    ).toBe(401);
+  }
+  expect((await post('sign-in', { email: 'fresh@example.test', password: wrong })).status).toBe(
+    429,
+  );
+  const link = { token: 'dead', email: 'fresh@example.test', password: PASSWORD };
+  expect((await post('set-password', link)).status).toBe(429);
+});
+
 it('never logs a password or a session token', () => {
   expect(logs).toContain('web sign-in');
   expect(logs).not.toContain(PASSWORD);

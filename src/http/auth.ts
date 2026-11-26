@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
-import { Hono } from 'hono';
+import { getConnInfo } from '@hono/node-server/conninfo';
+import { type Context, Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { createMiddleware } from 'hono/factory';
 import { z } from 'zod';
@@ -8,14 +9,15 @@ import {
   createSession,
   credentialsByEmail,
   endSession,
+  linkLive,
   redeemLink,
   sessionOwner,
   type Db,
   type Owner,
 } from '../data/index.js';
 import { sha256 } from '../identity/admin-link.js';
-import { createFailureLimiter } from '../identity/limiter.js';
-import { hashPassword, verifyPassword } from '../identity/password.js';
+import { createFailureLimiter, type FailureLimiter } from '../identity/limiter.js';
+import { createPasswordHasher, type PasswordHasher } from '../identity/password.js';
 import type { Logger } from '../ops/index.js';
 
 export interface AuthDeps {
@@ -27,8 +29,11 @@ export interface AuthDeps {
 const COOKIE = 'morgan_session';
 const SESSION_DAYS = 30;
 const MAX_WRONG_TRIES = 5;
+// One address may fail more often than one email (a shared office), but not without end.
+const MAX_WRONG_PER_IP = 20;
 const WINDOW_MS = 15 * 60 * 1000;
 const UNIQUE_VIOLATION = '23505';
+const JSON_TYPE = /^application\/json\s*(;|$)/i;
 
 const email = z.email().max(254);
 const password = z.string().min(12).max(200);
@@ -39,21 +44,42 @@ interface Signed {
   Variables: { session: Owner & { sessionId: string } };
 }
 
-/** Sign-in with the limiter and the decoy: wrong email and wrong password look the same. */
-function signInRoute(routes: Hono<Signed>, { db, logger, now = Date.now }: AuthDeps): void {
+/** What every auth route shares: the hasher and the per-address failure bucket. */
+interface Shared {
+  byAddress: FailureLimiter;
+  hasher: PasswordHasher;
+}
+
+/** The caller's address, or one shared bucket when the server cannot tell (a test, a socket). */
+function addressOf(c: Context): string {
+  try {
+    return getConnInfo(c).remote.address ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+/** Sign-in with two limiters (email, address) and a decoy: wrong email and wrong password look the same. */
+function signInRoute(routes: Hono<Signed>, deps: AuthDeps, shared: Shared): void {
+  const { db, logger, now = Date.now } = deps;
+  const { byAddress, hasher } = shared;
   const limiter = createFailureLimiter({ max: MAX_WRONG_TRIES, windowMs: WINDOW_MS, now });
   // A wrong email costs the same time as a wrong password.
-  const decoy = hashPassword(randomBytes(16).toString('hex'));
+  const decoy = hasher.hash(randomBytes(16).toString('hex'));
   routes.post('/sign-in', async (c) => {
     const parsed = signIn.safeParse(await c.req.json().catch(() => undefined));
     if (!parsed.success) return c.json({ error: 'invalid_request' }, 400);
     const key = parsed.data.email.toLowerCase();
-    if (limiter.blocked(key)) return c.json({ error: 'too_many_attempts' }, 429);
+    const address = addressOf(c);
+    if (limiter.blocked(key) || byAddress.blocked(address)) {
+      return c.json({ error: 'too_many_attempts' }, 429);
+    }
     // Counted before the check, so concurrent tries cannot skip the limit.
     limiter.fail(key);
     const found = await credentialsByEmail(db, key);
-    const ok = await verifyPassword(parsed.data.password, found?.passwordHash ?? (await decoy));
+    const ok = await hasher.verify(parsed.data.password, found?.passwordHash ?? (await decoy));
     if (found === undefined || !ok) {
+      byAddress.fail(address);
       logger.warn('web sign-in refused');
       return c.json({ error: 'invalid_credentials' }, 401);
     }
@@ -75,14 +101,23 @@ function signInRoute(routes: Hono<Signed>, { db, logger, now = Date.now }: AuthD
 }
 
 /** The one-time link sets the first password; the link is spent only if the login is created. */
-function setPasswordRoute(routes: Hono<Signed>, { db }: AuthDeps): void {
+function setPasswordRoute(routes: Hono<Signed>, { db }: AuthDeps, shared: Shared): void {
+  const { byAddress, hasher } = shared;
   routes.post('/set-password', async (c) => {
     const parsed = setPassword.safeParse(await c.req.json().catch(() => undefined));
     if (!parsed.success) return c.json({ error: 'invalid_request' }, 400);
+    const address = addressOf(c);
+    if (byAddress.blocked(address)) return c.json({ error: 'too_many_attempts' }, 429);
+    // Refuse a dead link before spending a hash on it.
+    const tokenHash = sha256(parsed.data.token);
+    if (!(await linkLive(db, tokenHash))) {
+      byAddress.fail(address);
+      return c.json({ error: 'link_invalid' }, 410);
+    }
     const link = {
-      tokenHash: sha256(parsed.data.token),
+      tokenHash,
       email: parsed.data.email,
-      passwordHash: await hashPassword(parsed.data.password),
+      passwordHash: await hasher.hash(parsed.data.password),
     };
     try {
       if ((await redeemLink(db, link)) === undefined) return c.json({ error: 'link_invalid' }, 410);
@@ -98,8 +133,20 @@ function setPasswordRoute(routes: Hono<Signed>, { db }: AuthDeps): void {
 export function authRoutes(deps: AuthDeps): Hono<Signed> {
   const { db } = deps;
   const routes = new Hono<Signed>();
-  signInRoute(routes, deps);
-  setPasswordRoute(routes, deps);
+  const byAddress = createFailureLimiter({
+    max: MAX_WRONG_PER_IP,
+    windowMs: WINDOW_MS,
+    now: deps.now ?? Date.now,
+  });
+  // The auth endpoints take JSON only: a form post from another site cannot reach them.
+  routes.use(async (c, next) => {
+    const json = JSON_TYPE.test(c.req.header('content-type') ?? '');
+    if (c.req.method === 'POST' && !json) return c.json({ error: 'unsupported_media_type' }, 415);
+    return next();
+  });
+  const shared = { byAddress, hasher: createPasswordHasher() };
+  signInRoute(routes, deps, shared);
+  setPasswordRoute(routes, deps, shared);
 
   /** The session cookie names a live session, or the request is refused. */
   const signedIn = createMiddleware<Signed>(async (c, next) => {
