@@ -156,6 +156,19 @@ test('a toast is announced and can be dismissed from the keyboard', async ({ pag
   await expect(live).not.toContainText('Chat saved');
 });
 
+test('the composer sends with Enter, keeps a new line with Shift+Enter', async ({ page }) => {
+  const box = page.getByRole('textbox', { name: 'Message Morgan' });
+  await box.fill('First line');
+  await box.press('Shift+Enter');
+  await box.pressSequentially('second line');
+  await expect(box).toHaveValue('First line\nsecond line');
+  await box.press('Enter');
+  await expect(page.locator('.bubble-user').last()).toContainText('second line');
+  await expect(box).toHaveValue('');
+  await box.press('Enter');
+  await expect(page.locator('.bubble-user')).toHaveCount(2);
+});
+
 test('an approval is decided from the keyboard and then shows the outcome', async ({ page }) => {
   const card = page.getByRole('group', { name: 'Send this email?' });
   await card.getByRole('button', { name: 'Approve' }).press('Enter');
