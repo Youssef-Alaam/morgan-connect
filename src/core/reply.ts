@@ -22,6 +22,7 @@ import {
 } from '../policy/index.js';
 import { joinSystem, trusted, type SystemPrompt } from '../safety/index.js';
 import { withSwitchedOffNote } from './switched-off.js';
+import { refusedForBudget, type BudgetSettings, type ReplyResult } from './budget-reply.js';
 import { compact, type BeforeCompact } from './compaction.js';
 import { isCommand } from './commands.js';
 import { toEngineHistory } from './summary-view.js';
@@ -48,6 +49,8 @@ export interface ReplyDeps {
   system?: SystemPrompt;
   /** The tools the model may call, each behind the policy gate. */
   gate?: Gate;
+  /** Spend limits (M2-10a). Unset: no limit is checked. */
+  budget?: BudgetSettings;
   /** The model id the engine uses; written to the usage ledger. */
   model: string;
   /** Where "today" starts for /usage, and the zone of the time shown to the model (an IANA name). */
@@ -77,8 +80,12 @@ export function assertFitsJobExpiry(
   }
 }
 
-/** Turns a stored turn into the text to send back. */
-export type Replier = (turn: Turn, sender: ChannelSender, signal?: AbortSignal) => Promise<string>;
+/** Turns a stored turn into the reply to send back. */
+export type Replier = (
+  turn: Turn,
+  sender: ChannelSender,
+  signal?: AbortSignal,
+) => Promise<ReplyResult>;
 
 /** Wait, but wake at once when the turn is aborted. */
 const wait = (ms: number, signal: AbortSignal): Promise<void> =>
@@ -329,6 +336,8 @@ export function createReplier(deps: ReplyDeps): Replier {
     const both = AbortSignal.any(signal === undefined ? [limit] : [signal, limit]);
     const stopTyping = keepTyping(deps, turn, sender);
     try {
+      const refused = await refusedForBudget(deps, turn);
+      if (refused !== undefined) return refused;
       const renewed = await startOverWhenIdle(deps, turn);
       const timedOut = (): boolean => limit.aborted && signal?.aborted !== true;
       const { answer, context } = await ask(deps, turn, both, timedOut);

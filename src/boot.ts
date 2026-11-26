@@ -99,6 +99,7 @@ function buildReplier(
           ...vaultFrom(config),
         }),
         timezone: config.TIMEZONE,
+        budget: { keySource: 'admin', defaultLimitUsd: config.DEFAULT_MONTHLY_LIMIT_USD },
         idleGapMs: config.IDLE_GAP_MINUTES * 60_000,
         compactAtTokens: config.COMPACT_AT_TOKENS,
         ...TIMING,

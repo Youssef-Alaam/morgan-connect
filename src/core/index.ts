@@ -19,4 +19,5 @@ export {
   type Replier,
   type ReplyDeps,
 } from './reply.js';
+export { BUDGET_REPLY } from './budget-reply.js';
 export { createTurnAborts, type TurnAborts } from './aborts.js';

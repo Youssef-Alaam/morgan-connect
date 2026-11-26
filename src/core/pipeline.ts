@@ -17,6 +17,7 @@ import type { TurnAborts } from './aborts.js';
 import { isCommand } from './commands.js';
 import { admit } from './gate.js';
 import { idempotencyKey, parseInbound } from './message.js';
+import type { ReplyResult } from './budget-reply.js';
 import type { Replier } from './reply.js';
 import { sendWithRetry } from './retry.js';
 import type { ChannelSender } from './sender.js';
@@ -77,13 +78,29 @@ async function replyTo(
   turn: Turn,
   sender: ChannelSender,
   reply: Replier,
-): Promise<string> {
+): Promise<ReplyResult> {
   const signal = deps.aborts?.begin(turn.channel, turn.chatId);
   try {
     return await reply(turn, sender, signal);
   } finally {
     deps.aborts?.end(turn.channel, turn.chatId);
   }
+}
+
+/** Send the reply, with its button when it has one and the channel can show it. Returns the text sent. */
+async function deliver(
+  deps: PipelineDeps,
+  chatId: string,
+  sender: ChannelSender,
+  reply: ReplyResult,
+): Promise<string> {
+  const text = typeof reply === 'string' ? reply : reply.text;
+  const send =
+    typeof reply !== 'string' && sender.askMore !== undefined
+      ? sender.askMore.bind(sender)
+      : sender.send.bind(sender);
+  await sendWithRetry(() => send(chatId, text), deps.retryDelayMs);
+  return text;
 }
 
 /** Run one turn: reply with the model's answer (or echo the text when no model is set). Claimed before the send, so a redelivery never resends. */
@@ -106,9 +123,9 @@ export async function processTurn(deps: PipelineDeps, turnId: string): Promise<v
     }
     const sender = deps.senders.find((s) => s.channel === turn.channel);
     if (sender === undefined) throw new PipelineError('unknown_channel', 'No sender for channel');
-    const text =
+    const reply =
       deps.reply === undefined ? turn.text : await replyTo(deps, turn, sender, deps.reply);
-    await sendWithRetry(() => sender.send(turn.chatId, text), deps.retryDelayMs);
+    const text = await deliver(deps, turn.chatId, sender, reply);
     await finishTurn(deps.db, owner, turnId, { status: 'done', replyText: text });
   } catch (error) {
     const kind = error instanceof PipelineError ? error.kind : 'send_failed';

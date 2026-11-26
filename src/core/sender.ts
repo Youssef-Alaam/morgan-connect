@@ -3,6 +3,8 @@ export interface ChannelSender {
   send: (chatId: string, text: string) => Promise<void>;
   /** Show a question with Approve and Deny buttons; the answer comes back through the channel. */
   askApproval?: (chatId: string, text: string, approvalId: string) => Promise<void>;
+  /** Send a text with an "Ask for more" button (a budget limit was reached). Without it, plain text. */
+  askMore?: (chatId: string, text: string) => Promise<void>;
   /** Show a "typing" signal on the chat, if the channel has one. */
   typing?: (chatId: string) => Promise<void>;
 }
