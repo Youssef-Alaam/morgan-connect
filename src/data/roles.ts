@@ -1,5 +1,6 @@
 import { type QueryExecutorProvider, sql } from 'kysely';
 import type { Db } from './db.js';
+import { SYSTEM_FUNCTIONS } from './system.js';
 
 export interface AppCredentials {
   user: string;
@@ -29,14 +30,25 @@ export async function ensureAppRole(owner: Db, databaseUrl: string): Promise<voi
   await owner.transaction().execute(async (trx) => {
     // Two boots at once must not fight over one role.
     await sql`select pg_advisory_xact_lock(hashtext('morgan.ensure_app_role'))`.execute(trx);
-    const { rows } = await sql<{ me: string; db: string; found: boolean; boss: boolean }>`
+    const { rows } = await sql<{
+      me: string;
+      db: string;
+      found: boolean;
+      boss: boolean;
+      bypass: boolean;
+    }>`
       select current_user as me, current_database() as db,
+        (select rolsuper or rolbypassrls from pg_roles where rolname = current_user) as bypass,
         exists (select 1 from pg_roles where rolname = ${user}) as found,
         exists (select 1 from pg_namespace where nspname = 'pgboss') as boss`.execute(trx);
     const state = rows[0];
     if (state === undefined) throw new Error('Postgres returned no role state');
     if (state.me === user) {
       throw new Error('MIGRATION_DATABASE_URL and DATABASE_URL must use different roles');
+    }
+    // The system paths run as the owner; under forced RLS they would match nothing without this.
+    if (!state.bypass) {
+      throw new Error('The MIGRATION_DATABASE_URL role must be a superuser or have BYPASSRLS');
     }
     const verb = state.found ? 'alter role %I' : 'create role %I';
     const statement = await sql<{ text: string }>`
@@ -50,6 +62,10 @@ export async function ensureAppRole(owner: Db, databaseUrl: string): Promise<voi
       trx,
     );
     await sql`grant usage, select on all sequences in schema public to ${who}`.execute(trx);
+    // Only the named system paths (migration 0012): fixed jobs that run before a person is known.
+    for (const fn of SYSTEM_FUNCTIONS) {
+      await sql`grant execute on function ${sql.raw(`public.${fn}`)} to ${who}`.execute(trx);
+    }
     // Every name is schema-qualified, so nothing the app makes can stand in for these tables.
     await sql`revoke update, delete, truncate on public.audit_log from ${who}`.execute(trx);
     // The migration books are the owner's alone to write.

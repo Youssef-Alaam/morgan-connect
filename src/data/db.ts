@@ -113,6 +113,12 @@ export type UsageStatus = 'ok' | 'failed' | 'aborted' | 'timeout';
 
 export type Db = Kysely<Database>;
 
+/** The person a query runs as: the user and their workspace. */
+export interface Owner {
+  userId: string;
+  workspaceId: string;
+}
+
 export function createDb(databaseUrl: string): Db {
   const pool = new pg.Pool({ connectionString: databaseUrl, max: 10 });
   return new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
