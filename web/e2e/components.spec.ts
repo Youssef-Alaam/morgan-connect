@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 // The interactive parts the keyboard test must reach. A roving group (radio-like) counts
 // once: only its checked member is a tab stop.
 const TABBABLE =
-  '[data-gallery] :is(a[href], button:not([role=radio]), input:not([type=radio]), select, textarea, [role=radio][aria-checked=true]):not(:disabled)';
+  '[data-gallery] :is(a[href], button:not([role=radio]), input:not([type=radio]), select, textarea, [role=radio][aria-checked=true]):not(:disabled):visible';
 
 async function openGallery(page: Page, query: string): Promise<void> {
   await page.goto(`/components${query}`);
@@ -121,4 +121,37 @@ test('the code input keeps six digits and the three-way control moves with arrow
   await page.keyboard.press('Home');
   await expect(group.getByRole('radio', { name: 'Off' })).toBeChecked();
   await expect(page.getByText('Auto sends without asking')).toHaveCount(1);
+});
+
+test('the dialog traps focus, closes with Escape and gives focus back', async ({ page }) => {
+  const opener = page.getByRole('button', { name: 'Open dialog' });
+  await opener.focus();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Delete this chat?' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Close' })).toBeFocused();
+  await expect(dialog).toHaveScreenshot('dialog-open.png');
+
+  const result = await new AxeBuilder({ page }).include('dialog').analyze();
+  expect(result.violations).toEqual([]);
+
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(opener).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(dialog).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(opener).toBeFocused();
+});
+
+test('a toast is announced and can be dismissed from the keyboard', async ({ page }) => {
+  await page.getByRole('button', { name: 'Show toast' }).press('Enter');
+  const live = page.locator('[aria-live=polite]');
+  await expect(live).toContainText('Chat saved');
+  await live.getByRole('button', { name: 'Dismiss' }).press('Enter');
+  await expect(live).not.toContainText('Chat saved');
 });

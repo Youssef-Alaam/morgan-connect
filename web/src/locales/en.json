@@ -73,6 +73,22 @@
       "heading": "No chats yet",
       "text": "Send Morgan a message and it shows up here.",
       "action": "Start a chat"
+    },
+    "dialog": {
+      "title": "Dialog",
+      "open": "Open dialog",
+      "heading": "Delete this chat?",
+      "text": "The messages in it are removed for good.",
+      "cancel": "Cancel",
+      "confirm": "Delete",
+      "close": "Close"
+    },
+    "toast": {
+      "title": "Toast",
+      "example": "Settings saved.",
+      "dismiss": "Dismiss",
+      "show": "Show toast",
+      "saved": "Chat saved."
     }
   }
 }

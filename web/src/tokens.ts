@@ -64,6 +64,8 @@ const scale = {
   'switch-height': '1.75rem',
   'switch-thumb': '1.25rem',
   'opacity-disabled': '0.5',
+  'opacity-scrim': '0.5',
+  'dialog-width': '28rem',
   'font-sans': "'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif",
   'font-mono': "'Space Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace",
 } as const;
