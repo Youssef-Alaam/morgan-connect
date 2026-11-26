@@ -1,63 +1,33 @@
 import { randomBytes } from 'node:crypto';
-import { getConnInfo } from '@hono/node-server/conninfo';
-import { type Context, Hono } from 'hono';
-import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { createMiddleware } from 'hono/factory';
+import { Hono } from 'hono';
+import { deleteCookie } from 'hono/cookie';
 import { z } from 'zod';
-import {
-  accountOf,
-  createSession,
-  credentialsByEmail,
-  endSession,
-  linkLive,
-  redeemLink,
-  sessionOwner,
-  type Db,
-  type Owner,
-} from '../data/index.js';
+import { accountOf, credentialsByEmail, endSession, linkLive, redeemLink } from '../data/index.js';
 import { sha256 } from '../identity/admin-link.js';
-import { createFailureLimiter, type FailureLimiter } from '../identity/limiter.js';
-import { createPasswordHasher, type PasswordHasher } from '../identity/password.js';
-import type { Logger } from '../ops/index.js';
+import { createFailureLimiter } from '../identity/limiter.js';
+import { createPasswordHasher } from '../identity/password.js';
+import { memberRoutes } from './members.js';
+import {
+  addressOf,
+  COOKIE,
+  openSession,
+  sessionGate,
+  UNIQUE_VIOLATION,
+  type AuthDeps,
+  type Shared,
+  type Signed,
+} from './session.js';
 
-export interface AuthDeps {
-  db: Db;
-  logger: Logger;
-  now?: () => number;
-}
-
-const COOKIE = 'morgan_session';
-const SESSION_DAYS = 30;
 const MAX_WRONG_TRIES = 5;
 // One address may fail more often than one email (a shared office), but not without end.
 const MAX_WRONG_PER_IP = 20;
 const WINDOW_MS = 15 * 60 * 1000;
-const UNIQUE_VIOLATION = '23505';
 const JSON_TYPE = /^application\/json\s*(;|$)/i;
 
 const email = z.email().max(254);
 const password = z.string().min(12).max(200);
 const signIn = z.object({ email, password: z.string().max(200) });
 const setPassword = z.object({ token: z.string().min(1).max(200), email, password });
-
-interface Signed {
-  Variables: { session: Owner & { sessionId: string } };
-}
-
-/** What every auth route shares: the hasher and the per-address failure bucket. */
-interface Shared {
-  byAddress: FailureLimiter;
-  hasher: PasswordHasher;
-}
-
-/** The caller's address, or one shared bucket when the server cannot tell (a test, a socket). */
-function addressOf(c: Context): string {
-  try {
-    return getConnInfo(c).remote.address ?? 'unknown';
-  } catch {
-    return 'unknown';
-  }
-}
 
 /** Sign-in with two limiters (email, address) and a decoy: wrong email and wrong password look the same. */
 function signInRoute(routes: Hono<Signed>, deps: AuthDeps, shared: Shared): void {
@@ -84,17 +54,7 @@ function signInRoute(routes: Hono<Signed>, deps: AuthDeps, shared: Shared): void
       return c.json({ error: 'invalid_credentials' }, 401);
     }
     limiter.reset(key);
-    const token = randomBytes(32).toString('base64url');
-    const maxAge = SESSION_DAYS * 24 * 60 * 60;
-    const expiresAt = new Date(now() + maxAge * 1000);
-    await createSession(db, found, { tokenHash: sha256(token), expiresAt });
-    setCookie(c, COOKIE, token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'Lax',
-      path: '/',
-      maxAge,
-    });
+    await openSession(c, { db, now }, found);
     logger.info({ userId: found.userId }, 'web sign-in');
     return c.json({ ok: true });
   });
@@ -148,18 +108,12 @@ export function authRoutes(deps: AuthDeps): Hono<Signed> {
   signInRoute(routes, deps, shared);
   setPasswordRoute(routes, deps, shared);
 
-  /** The session cookie names a live session, or the request is refused. */
-  const signedIn = createMiddleware<Signed>(async (c, next) => {
-    const token = getCookie(c, COOKIE);
-    const session = token === undefined ? undefined : await sessionOwner(db, sha256(token));
-    if (session === undefined) return c.json({ error: 'unauthorized' }, 401);
-    c.set('session', session);
-    return next();
-  });
+  routes.use(sessionGate(db));
+  memberRoutes(routes, deps, shared);
 
-  routes.get('/me', signedIn, async (c) => c.json(await accountOf(db, c.get('session'))));
+  routes.get('/me', async (c) => c.json(await accountOf(db, c.get('session'))));
 
-  routes.post('/sign-out', signedIn, async (c) => {
+  routes.post('/sign-out', async (c) => {
     const session = c.get('session');
     await endSession(db, session, session.sessionId);
     deleteCookie(c, COOKIE, { path: '/' });

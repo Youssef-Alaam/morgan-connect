@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Logger } from '../ops/index.js';
-import { authRoutes, type AuthDeps } from './auth.js';
+import { authRoutes } from './auth.js';
+import { API_PREFIX, type AuthDeps } from './session.js';
 
 export interface AppDeps {
   /** Resolves to the database server version, or rejects when the database is unreachable. */
@@ -21,7 +22,7 @@ export function createApp(deps: AppDeps): Hono {
     }
   });
   if (deps.auth !== undefined) {
-    app.route('/api', authRoutes({ ...deps.auth, logger: deps.logger }));
+    app.route(API_PREFIX, authRoutes({ ...deps.auth, logger: deps.logger }));
     app.onError((error, c) => {
       deps.logger.error({ err: error }, 'request failed');
       return c.json({ error: 'server_error' }, 500);
