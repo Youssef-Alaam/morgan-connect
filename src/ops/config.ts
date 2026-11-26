@@ -6,6 +6,8 @@ const schema = z
     DATABASE_URL: z.url(),
     // The owner role that runs migrations and sets up the app role. Unset: one role does both (warned).
     MIGRATION_DATABASE_URL: z.url().optional(),
+    // Where people reach this install in a browser; the first-password link starts with it. Default: http://localhost:PORT.
+    PUBLIC_URL: z.url().optional(),
     PORT: z.coerce.number().int().min(0).max(65535).default(3000),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
