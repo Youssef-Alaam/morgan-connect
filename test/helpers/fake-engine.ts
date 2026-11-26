@@ -10,7 +10,8 @@ import {
 /** One scripted model step: a tool call, a plain answer, or an error. */
 export type Step =
   | { tool: string; args: Record<string, unknown> }
-  | { text: string }
+  /** `tokens`: the context size this model call reports through `onUsage`. */
+  | { text: string; tokens?: number }
   | { error: 'transient' | 'failed' }
   | { hang: true }
   /** Answer with the last steer message, so a test can see it reached the model. */
@@ -44,12 +45,7 @@ export class ScriptedEngine implements Engine {
       system: options.system,
       conversationId: options.conversationId,
     });
-    const session = new ScriptedSession(
-      this.script,
-      options.tools ?? [],
-      this.prompts,
-      options.unknownTool,
-    );
+    const session = new ScriptedSession(this.script, this.prompts, options);
     this.sessions.push(session);
     return session;
   }
@@ -61,12 +57,14 @@ class ScriptedSession implements EngineSession {
   private tokens = 0;
   private readonly log: EngineMessage[] = [];
   private calls = 0;
+  private readonly tools: readonly EngineTool[];
   constructor(
     private readonly script: Step[],
-    private readonly tools: readonly EngineTool[],
     private readonly prompts: string[],
-    private readonly unknownTool?: (name: string, args: Record<string, unknown>) => Promise<string>,
-  ) {}
+    private readonly options: Parameters<Engine['open']>[0],
+  ) {
+    this.tools = options.tools ?? [];
+  }
 
   async prompt(text: string): Promise<string> {
     this.prompts.push(text);
@@ -78,6 +76,7 @@ class ScriptedSession implements EngineSession {
       if (this.aborted.signal.aborted) throw new EngineError('aborted', 'aborted');
       if ('text' in step) {
         this.log.push({ role: 'assistant', text: step.text });
+        if (step.tokens !== undefined) this.reportTokens(step.tokens);
         return step.text;
       }
       if ('echoSteer' in step) return this.steered.at(-1) ?? '';
@@ -87,6 +86,17 @@ class ScriptedSession implements EngineSession {
     }
   }
 
+  private reportTokens(inputTokens: number): void {
+    this.options.onUsage?.({
+      inputTokens,
+      outputTokens: 10,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      costUsd: 0.01,
+      status: 'ok',
+    });
+  }
+
   private async runTool(step: { tool: string; args: Record<string, unknown> }): Promise<void> {
     const tool = this.tools.find((t) => t.name === step.tool);
     const id = `call-${String((this.calls += 1))}`;
@@ -94,7 +104,8 @@ class ScriptedSession implements EngineSession {
     this.log.push({ role: 'assistant', text: '', toolCalls });
     let output: string | { text: string; isError: boolean };
     if (tool !== undefined) output = await tool.run(step.args, this.abortSignal());
-    else if (this.unknownTool !== undefined) output = await this.unknownTool(step.tool, step.args);
+    else if (this.options.unknownTool !== undefined)
+      output = await this.options.unknownTool(step.tool, step.args);
     else throw new EngineError('failed', 'unknown tool');
     const { text: result, isError } =
       typeof output === 'string' ? { text: output, isError: tool === undefined } : output;

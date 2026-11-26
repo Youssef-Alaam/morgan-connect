@@ -21,6 +21,7 @@ import {
   type Gate,
 } from '../policy/index.js';
 import { joinSystem, trusted, type SystemPrompt } from '../safety/index.js';
+import { compact, type BeforeCompact } from './compaction.js';
 import { isCommand } from './commands.js';
 import { toEngineHistory } from './summary-view.js';
 import type { ChannelSender } from './sender.js';
@@ -58,6 +59,10 @@ export interface ReplyDeps {
   turnTimeoutMs: number;
   /** After this long without a message the next one starts a new conversation. Unset: never. */
   idleGapMs?: number;
+  /** When one model call carries this many tokens, the older part of the chat is summarised. Unset: never. */
+  compactAtTokens?: number;
+  /** Runs before old messages are replaced by a summary. Does nothing in M2. */
+  beforeCompact?: BeforeCompact;
 }
 
 /** The time limit plus the waits before model retries must end before the queue gives up the job. */
@@ -212,24 +217,32 @@ async function startOverWhenIdle(deps: ReplyDeps, turn: Turn): Promise<boolean> 
   return true;
 }
 
+/** How full the context was: the tokens one model call carried. */
+const contextOf = (call: EngineCallUsage): number =>
+  call.inputTokens + call.cacheReadTokens + call.cacheWriteTokens;
+
 async function ask(
   deps: ReplyDeps,
   turn: Turn,
   signal: AbortSignal,
   timedOut: () => boolean,
-): Promise<string> {
+): Promise<{ answer: string; context: number }> {
   const chat = { channel: turn.channel, chatId: turn.chatId };
   const history = await loadHistory(deps.db, owner(turn), chat, {
     turns: HISTORY_TURNS,
     maxChars: HISTORY_CHARS,
   });
   const conversationId = await conversationFor(deps.db, chat, owner(turn));
+  let context = 0;
   for (let attempt = 0; ; attempt += 1) {
     const pending: Promise<void>[] = [];
     const session = deps.engine.open({
       history: toEngineHistory(history),
       conversationId,
-      onUsage: (call) => pending.push(recordCall(deps, turn, call, timedOut)),
+      onUsage: (call) => {
+        context = Math.max(context, contextOf(call));
+        pending.push(recordCall(deps, turn, call, timedOut));
+      },
       system: systemFor(deps),
       ...gateOptions(deps.gate, { ...chat, turnId: turn.id }),
     });
@@ -243,7 +256,7 @@ async function ask(
       const answer = await session.prompt(stamped(deps, turn.text));
       answered = true;
       await appendHistory(deps.db, chat, session.transcript(), owner(turn));
-      return answer;
+      return { answer, context };
     } catch (error) {
       if (answered || !(await shouldRetry(deps, turn, session, { error, attempt, signal })))
         throw error;
@@ -251,6 +264,33 @@ async function ask(
       signal.removeEventListener('abort', stop);
       await Promise.all(pending);
     }
+  }
+}
+
+/** After the answer is stored: when the context got this big, replace the older part with a summary. A failure here never costs the answer. */
+async function compactWhenFull(
+  deps: ReplyDeps,
+  turn: Turn,
+  context: number,
+  { signal, timedOut }: { signal: AbortSignal; timedOut: () => boolean },
+): Promise<void> {
+  if (deps.compactAtTokens === undefined || context < deps.compactAtTokens) return;
+  const pending: Promise<void>[] = [];
+  try {
+    await compact({
+      db: deps.db,
+      engine: deps.engine,
+      owner: owner(turn),
+      chat: { channel: turn.channel, chatId: turn.chatId },
+      thresholdTokens: deps.compactAtTokens,
+      signal,
+      onUsage: (call) => pending.push(recordCall(deps, turn, call, timedOut)),
+      beforeCompact: deps.beforeCompact,
+    });
+  } catch {
+    deps.logger.warn({ turnId: turn.id }, 'history not compacted');
+  } finally {
+    await Promise.all(pending);
   }
 }
 
@@ -285,7 +325,9 @@ export function createReplier(deps: ReplyDeps): Replier {
     const stopTyping = keepTyping(deps, turn, sender);
     try {
       const renewed = await startOverWhenIdle(deps, turn);
-      const answer = await ask(deps, turn, both, () => limit.aborted && signal?.aborted !== true);
+      const timedOut = (): boolean => limit.aborted && signal?.aborted !== true;
+      const { answer, context } = await ask(deps, turn, both, timedOut);
+      await compactWhenFull(deps, turn, context, { signal: both, timedOut });
       return renewed
         ? `${IDLE_REPLY}
 

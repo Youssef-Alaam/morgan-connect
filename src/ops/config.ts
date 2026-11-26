@@ -74,6 +74,8 @@ const schema = z
       .default('UTC'),
     // After this many idle minutes the next message starts a new conversation, as if the person had typed /new.
     IDLE_GAP_MINUTES: z.coerce.number().int().min(5).default(360),
+    // When one model call carries this many tokens, the older part of the chat is summarised.
+    COMPACT_AT_TOKENS: z.coerce.number().int().min(1000).default(8000),
   })
   .superRefine((value, ctx) => {
     const need = (
