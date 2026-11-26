@@ -22,6 +22,7 @@ import {
 } from '../policy/index.js';
 import { joinSystem, trusted, type SystemPrompt } from '../safety/index.js';
 import { isCommand } from './commands.js';
+import { toEngineHistory } from './summary-view.js';
 import type { ChannelSender } from './sender.js';
 import { formatUsage } from './usage-report.js';
 
@@ -226,7 +227,7 @@ async function ask(
   for (let attempt = 0; ; attempt += 1) {
     const pending: Promise<void>[] = [];
     const session = deps.engine.open({
-      history,
+      history: toEngineHistory(history),
       conversationId,
       onUsage: (call) => pending.push(recordCall(deps, turn, call, timedOut)),
       system: systemFor(deps),

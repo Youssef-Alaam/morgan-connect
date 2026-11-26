@@ -14,7 +14,9 @@ export interface StoredToolCall {
 export type ChatMessage =
   | { role: 'user'; text: string }
   | { role: 'assistant'; text: string; toolCalls?: StoredToolCall[] }
-  | { role: 'tool'; text: string; id: string; name: string; isError: boolean };
+  | { role: 'tool'; text: string; id: string; name: string; isError: boolean }
+  /** Morgan's own summary of older messages (M2-3b). Never written by `appendHistory`. */
+  | { role: 'summary'; text: string };
 
 export interface ChatKey {
   channel: string;
@@ -25,7 +27,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** The stored row back to a message; a tool row without its id and name is damaged and dropped. */
-function fromRow(row: {
+export function fromRow(row: {
   role: ChatMessage['role'];
   text: string;
   data: unknown;
@@ -37,7 +39,7 @@ function fromRow(row: {
     }
     return { role, text, id: data['id'], name: data['name'], isError: data['isError'] === true };
   }
-  if (role === 'user' || !isRecord(data)) return { role, text };
+  if (role === 'user' || role === 'summary' || !isRecord(data)) return { role, text };
   const calls = Array.isArray(data['toolCalls']) ? data['toolCalls'] : [];
   const toolCalls = calls.flatMap((call: unknown): StoredToolCall[] => {
     if (!isRecord(call) || typeof call['id'] !== 'string' || typeof call['name'] !== 'string') {
@@ -72,6 +74,7 @@ const capped = (text: string): string =>
 function isWellFormed(turn: readonly ChatMessage[]): boolean {
   let open = new Set<string>();
   for (const m of turn) {
+    if (m.role === 'summary') return false;
     if (m.role === 'tool') {
       if (!open.delete(m.id)) return false;
     } else if (open.size > 0) {
@@ -95,9 +98,12 @@ export async function loadHistory(
   chat: ChatKey,
   { turns, maxChars }: { turns: number; maxChars: number },
 ): Promise<ChatMessage[]> {
-  const rows = await withOwner(db, owner, (trx) => newestRows(trx, chat, turns));
+  const { summary, rows } = await withOwner(db, owner, async (trx) => {
+    const latest = await latestSummary(trx, chat);
+    return { summary: latest, rows: await newestRows(trx, chat, turns, latest?.coversTo) };
+  });
   const kept: ChatMessage[] = [];
-  let used = 0;
+  let used = summary?.text.length ?? 0;
   for (const row of rows) {
     const message = fromRow(row);
     if (message === undefined) continue;
@@ -110,15 +116,34 @@ export async function loadHistory(
     if (m.role === 'user') groups.push([m]);
     else groups.at(-1)?.push(m);
   }
-  return groups.filter(isWellFormed).flat();
+  const lead: ChatMessage[] =
+    summary === undefined ? [] : [{ role: 'summary', text: summary.text }];
+  return [...lead, ...groups.filter(isWellFormed).flat()];
 }
 
-/** Rows of the newest `turns` user turns, newest first. */
-async function newestRows(db: Db, chat: ChatKey, turns: number) {
+/** The newest summary of this chat: its text and the last message id it replaced. */
+export async function latestSummary(db: Db, chat: ChatKey) {
+  const row = await db
+    .selectFrom('chat_messages')
+    .select(['text', 'covers_to'])
+    .where('channel', '=', chat.channel)
+    .where('chat_id', '=', chat.chatId)
+    .where('role', '=', 'summary')
+    .orderBy('id', 'desc')
+    .limit(1)
+    .executeTakeFirst();
+  if (row === undefined || row.covers_to === null) return undefined;
+  return { text: row.text, coversTo: row.covers_to };
+}
+
+/** Rows of the newest `turns` user turns after the summarised part, newest first. */
+async function newestRows(db: Db, chat: ChatKey, turns: number, after = '0') {
   const mine = db
     .selectFrom('chat_messages')
     .where('channel', '=', chat.channel)
-    .where('chat_id', '=', chat.chatId);
+    .where('chat_id', '=', chat.chatId)
+    .where('role', '<>', 'summary')
+    .where('id', '>', after);
   const start = await mine
     .select('id')
     .where('role', '=', 'user')

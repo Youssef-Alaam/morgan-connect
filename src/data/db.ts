@@ -46,10 +46,13 @@ export interface Database {
     workspace_id: string;
     channel: string;
     chat_id: string;
-    role: 'user' | 'assistant' | 'tool';
+    role: 'user' | 'assistant' | 'tool' | 'summary';
     text: string;
     /** Tool calls (assistant) or the tool result details (tool); null for plain text. */
     data: ColumnType<unknown, string | null | undefined, string | null>;
+    /** On a `summary` row: the first and last message id it replaced. Null otherwise. */
+    covers_from: Generated<string | null>;
+    covers_to: Generated<string | null>;
     created_at: Generated<Date>;
   };
   chat_conversations: {
