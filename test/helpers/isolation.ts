@@ -148,6 +148,10 @@ export const COVERED: readonly string[] = [
 const NO_UPDATE: readonly string[] = ['audit_log', 'users'];
 const NO_DELETE: readonly string[] = ['audit_log'];
 
+/** Tables `expectIsolated` has run for in this file. */
+const ran = new Set<string>();
+export const isolatedSoFar = (): string[] => [...ran].sort();
+
 const RLS = /row-level security/;
 const DENIED = /permission denied/;
 
@@ -219,6 +223,7 @@ async function forgedUpdate(ctx: Isolation, table: string, set: string, to: stri
  */
 export async function expectIsolated(table: string, ctx: Isolation): Promise<void> {
   expect(COVERED).toContain(table);
+  ran.add(table);
   const { owner, app, alice, bob } = ctx;
   const who = sql.id(table === 'users' ? 'id' : 'user_id');
   const from = sql.table(table);

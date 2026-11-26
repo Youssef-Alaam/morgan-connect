@@ -12,7 +12,13 @@ import {
   loadHistory,
   usageSince,
 } from '../../src/data/index.js';
-import { expectIsolated, startIsolation, type Isolation } from '../helpers/isolation.js';
+import {
+  COVERED,
+  expectIsolated,
+  isolatedSoFar,
+  startIsolation,
+  type Isolation,
+} from '../helpers/isolation.js';
 
 // One test per user-data table. Each proves, as the app role under forced row-level security, that
 // Alice cannot read or write Bob's rows, and where a data function exists, that it agrees.
@@ -102,5 +108,9 @@ describe('user-data tables', () => {
 
   it('devices', async () => {
     await expectIsolated('devices', ctx);
+  });
+
+  it('has run for every table in COVERED', () => {
+    expect(isolatedSoFar()).toEqual([...COVERED].sort());
   });
 });
