@@ -25,7 +25,7 @@ import {
   type Db,
   type TurnQueue,
 } from './data/index.js';
-import { type ChatDeps, createApp } from './http/index.js';
+import { type AppDeps, type ChatDeps, createApp } from './http/index.js';
 import {
   createAnthropicEngine,
   createApprovals,
@@ -229,6 +229,17 @@ function listen(
   });
 }
 
+/** The optional sign-in features the config switches on: the second-factor key and passkeys. */
+function signInSettings(
+  config: Config,
+): Pick<NonNullable<AppDeps['auth']>, 'twoFactorKey' | 'passkeys'> {
+  const { TWO_FACTOR_KEY: key, WEBAUTHN_RP_ID: rpId, WEBAUTHN_ORIGIN: origin } = config;
+  return {
+    twoFactorKey: key === undefined ? undefined : Buffer.from(key, 'base64'),
+    passkeys: rpId === undefined || origin === undefined ? undefined : { rpId, origin },
+  };
+}
+
 /** Load config, migrate the database, then serve HTTP. Tests may pass their own engine. */
 export async function start(
   env: Record<string, string | undefined>,
@@ -252,12 +263,10 @@ export async function start(
     await db.destroy();
     throw error;
   });
-  const twoFactorKey =
-    config.TWO_FACTOR_KEY === undefined ? undefined : Buffer.from(config.TWO_FACTOR_KEY, 'base64');
   const app = createApp({
     dbVersion: () => dbVersion(db),
     logger,
-    auth: { db, twoFactorKey },
+    auth: { db, ...signInSettings(config) },
     chat: chat.chat,
   });
   const server = await listen(app, config.PORT);

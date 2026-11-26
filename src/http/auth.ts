@@ -15,6 +15,7 @@ import { createFailureLimiter } from '../identity/limiter.js';
 import { chatRoutes, type ChatDeps } from './chat.js';
 import { createPasswordHasher } from '../identity/password.js';
 import { deviceRoutes } from './devices.js';
+import { passkeyAccountRoutes, passkeySignInRoutes } from './passkeys.js';
 import { memberRoutes } from './members.js';
 import {
   addressOf,
@@ -130,6 +131,7 @@ export function authRoutes(deps: AuthDeps, chat?: Omit<ChatDeps, 'db'>): Hono<Si
   const two = createTwoFactor(deps);
   signInRoute(routes, deps, shared, two);
   secondStepRoute(routes, deps, shared, two);
+  passkeySignInRoutes(routes, deps, shared);
   setPasswordRoute(routes, deps, shared);
 
   routes.use(sessionGate(db));
@@ -137,6 +139,7 @@ export function authRoutes(deps: AuthDeps, chat?: Omit<ChatDeps, 'db'>): Hono<Si
   if (chat !== undefined) chatRoutes(routes, { ...chat, db });
   deviceRoutes(routes, deps);
   twoFactorRoutes(routes, deps, two);
+  passkeyAccountRoutes(routes, deps, shared);
 
   routes.get('/me', async (c) => c.json(await accountOf(db, c.get('session'))));
 
