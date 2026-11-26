@@ -17,6 +17,8 @@ export interface AuthDeps {
   db: Db;
   logger: Logger;
   now?: () => number;
+  /** Seals authenticator secrets and keys backup-code hashes (config TWO_FACTOR_KEY); undefined: no second factor. */
+  twoFactorKey?: Buffer | undefined;
 }
 
 /** What every auth route shares: the hasher and the per-address failure bucket. */

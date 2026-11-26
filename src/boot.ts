@@ -252,10 +252,12 @@ export async function start(
     await db.destroy();
     throw error;
   });
+  const twoFactorKey =
+    config.TWO_FACTOR_KEY === undefined ? undefined : Buffer.from(config.TWO_FACTOR_KEY, 'base64');
   const app = createApp({
     dbVersion: () => dbVersion(db),
     logger,
-    auth: { db },
+    auth: { db, twoFactorKey },
     chat: chat.chat,
   });
   const server = await listen(app, config.PORT);
