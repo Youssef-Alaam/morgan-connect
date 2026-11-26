@@ -231,6 +231,15 @@ it('replays an earlier tool call and its result to the model on the next turn', 
   expect(history[3]).toEqual({ role: 'assistant', text: 'It is 13:30' });
 });
 
+it('tells the model to reply in the language of the message, the same on every turn', async () => {
+  const { reply, engine } = replierFor([{ text: 'مرحبا' }, { text: 'hello' }]);
+  await reply(turn('c28', 'مرحبا، كيف حالك؟'), new FakeChannel());
+  await reply(turn('c28', 'and in English?'), new FakeChannel());
+  expect(engine.opened[0]?.system).toContain('Reply in the language of');
+  expect(engine.opened[1]?.system).toBe(engine.opened[0]?.system);
+  expect(engine.prompts[0]).toContain('مرحبا، كيف حالك؟');
+});
+
 it('keeps the system prompt static and puts the local time in front of each message', async () => {
   const { reply, engine } = clockReplier([{ text: 'ok' }, { text: 'again' }]);
   await reply(turn('c13', 'hi'), new FakeChannel());
