@@ -2,6 +2,8 @@ import { sql, type RawBuilder } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   appendAudit,
+  assignedTo,
+  assignPreset,
   claimTurn,
   clearHistory,
   closeApproval,
@@ -170,6 +172,16 @@ describe('user-data tables', () => {
     expect(await removePasskey(ctx.app, ctx.alice, bobs.id)).toBe('not_found');
     const left = await listPasskeys(ctx.app, ctx.bob);
     expect(left.map((each) => each.credentialId)).toContain('cred-b');
+  });
+
+  it('profile_assignments', async () => {
+    await expectIsolated('profile_assignments', ctx);
+    expect(await assignedTo(ctx.app, ctx.alice, undefined)).toMatchObject({
+      personPreset: 'standard',
+    });
+    const forged = { userId: ctx.alice.userId, preset: 'trusted' };
+    expect(await assignPreset(ctx.app, ctx.bob, forged)).toBeUndefined();
+    expect((await assignedTo(ctx.owner, ctx.alice, undefined)).personPreset).toBe('standard');
   });
 
   it('has run for every table in COVERED', () => {

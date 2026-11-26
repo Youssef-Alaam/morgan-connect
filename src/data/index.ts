@@ -99,3 +99,11 @@ export {
   WEB_EVENT_PAGE,
   type WebEvent,
 } from './web-events.js';
+export {
+  assignedTo,
+  assignPreset,
+  listPresets,
+  type Assigned,
+  type PresetRow,
+  type ShellGate,
+} from './profiles.js';

@@ -111,6 +111,19 @@ export interface Database {
     created_at: Generated<Date>;
     last_used_at: Date | null;
   };
+  access_profiles: {
+    preset: string;
+    modes: Record<string, string>;
+    shell_gate: 'strict' | 'risky_only' | 'off';
+  };
+  profile_assignments: {
+    id: Generated<string>;
+    user_id: string;
+    workspace_id: string;
+    device_id: string | null;
+    preset: string;
+    created_at: Generated<Date>;
+  };
   setup_codes: {
     id: Generated<string>;
     code_hash: string;

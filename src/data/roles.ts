@@ -2,6 +2,7 @@ import { type QueryExecutorProvider, sql } from 'kysely';
 import type { Db } from './db.js';
 import { ADMIN_READ_FUNCTIONS } from './admin-read.js';
 import { DEVICE_FUNCTIONS } from './devices.js';
+import { PROFILE_FUNCTIONS } from './profiles.js';
 import { ACCOUNT_FUNCTIONS } from './invites.js';
 import { SYSTEM_FUNCTIONS } from './system.js';
 
@@ -11,6 +12,7 @@ const NAMED_FUNCTIONS = [
   ...ADMIN_READ_FUNCTIONS,
   ...ACCOUNT_FUNCTIONS,
   ...DEVICE_FUNCTIONS,
+  ...PROFILE_FUNCTIONS,
 ];
 
 export interface AppCredentials {
@@ -84,11 +86,23 @@ export async function ensureAppRole(owner: Db, databaseUrl: string): Promise<voi
     await sql`revoke update on public.users, public.invites, public.link_codes from ${who}`.execute(
       trx,
     );
+    await revokeProfileWrites(trx, who);
     // The migration books are the owner's alone to write.
     await sql`revoke insert, update, delete, truncate on public.schema_info, public.kysely_migration,
       public.kysely_migration_lock from ${who}`.execute(trx);
     if (state.boss) await grantQueueSchema(trx, who);
   });
+}
+
+/** Presets are fixed, and an assignment is written only by the admin's named function. */
+async function revokeProfileWrites(
+  trx: QueryExecutorProvider,
+  who: ReturnType<typeof sql.id>,
+): Promise<void> {
+  await sql`revoke insert, update, delete, truncate on public.access_profiles from ${who}`.execute(
+    trx,
+  );
+  await sql`revoke update, delete on public.profile_assignments from ${who}`.execute(trx);
 }
 
 /** The queue schema the owner role installed (installQueueSchema): the app role runs the queue in it. */

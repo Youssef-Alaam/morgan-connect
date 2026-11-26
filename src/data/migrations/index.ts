@@ -20,6 +20,7 @@ import { up as linkCodes } from './0019-link-codes.js';
 import { up as unlinkDevice } from './0020-unlink-device.js';
 import { up as secondFactor } from './0021-second-factor.js';
 import { up as passkeys } from './0022-passkeys.js';
+import { up as accessProfiles } from './0023-access-profiles.js';
 
 /** Applied in key order. Add new migrations here with the next number. */
 export const migrations: Record<string, Migration> = {
@@ -44,4 +45,5 @@ export const migrations: Record<string, Migration> = {
   '0020-unlink-device': { up: unlinkDevice },
   '0021-second-factor': { up: secondFactor },
   '0022-passkeys': { up: passkeys },
+  '0023-access-profiles': { up: accessProfiles },
 };
