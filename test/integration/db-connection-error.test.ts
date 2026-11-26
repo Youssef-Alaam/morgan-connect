@@ -31,3 +31,20 @@ it('hands a connection the server kills to the listener instead of crashing', as
   expect(heard.mock.calls[0]?.[0]).toMatchObject({ code: '57P01' });
   await expect(sql`select 1`.execute(db)).resolves.toBeDefined();
 });
+
+it('also hears a connection that dies while it is checked out', async () => {
+  heard.mockClear();
+  await db.connection().execute(async (connection) => {
+    const killer = createDb(postgres.url);
+    try {
+      await sql`select pg_terminate_backend(pid) from pg_stat_activity
+        where datname = current_database() and pid <> pg_backend_pid()`.execute(killer);
+    } finally {
+      await killer.destroy();
+    }
+    await vi.waitFor(() => {
+      expect(heard).toHaveBeenCalled();
+    });
+    await expect(sql`select 1`.execute(connection)).rejects.toThrow();
+  });
+});

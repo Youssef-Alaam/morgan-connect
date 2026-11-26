@@ -1,5 +1,5 @@
 import { sql } from 'kysely';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { start } from '../../src/boot.js';
 import { createDb, migrateToLatest } from '../../src/data/index.js';
 import { roleUrls, startPostgres, type TestPostgres } from '../helpers/postgres.js';
@@ -40,4 +40,21 @@ it('refuses to start as a superuser, since row-level security would be off', asy
   await expect(
     start({ DATABASE_URL: postgres.url, PORT: '0', LOG_LEVEL: 'silent' }),
   ).rejects.toThrow('BYPASSRLS');
+});
+
+it('survives the server killing its connections and keeps answering', async () => {
+  const owner = createDb(postgres.url);
+  const running = await start({ ...roleUrls(postgres.url), PORT: '0', LOG_LEVEL: 'silent' });
+  try {
+    const url = `http://127.0.0.1:${String(running.port)}/health`;
+    expect((await fetch(url)).status).toBe(200);
+    await sql`select pg_terminate_backend(pid) from pg_stat_activity
+      where usename = 'morgan_app' and pid <> pg_backend_pid()`.execute(owner);
+    await vi.waitFor(async () => {
+      expect((await fetch(url)).status).toBe(200);
+    });
+  } finally {
+    await running.stop();
+    await owner.destroy();
+  }
 });
