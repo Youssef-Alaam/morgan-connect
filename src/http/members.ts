@@ -49,7 +49,7 @@ const isDuplicate = (error: unknown): boolean =>
   (error as { code?: string }).code === UNIQUE_VIOLATION;
 
 /** One audit row for an admin-only action, `ok` or `refused`, under the caller's web session. */
-function audit(
+export function audit(
   db: AuthDeps['db'],
   who: Owner & { sessionId: string },
   tool: string,

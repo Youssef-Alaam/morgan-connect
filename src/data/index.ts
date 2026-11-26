@@ -20,7 +20,13 @@ export {
   turnOwner,
 } from './system.js';
 export { accountOf, createSession, endSession, type Account } from './accounts.js';
-export { issueLinkCode, redeemLinkCode } from './devices.js';
+export {
+  issueLinkCode,
+  listDevices,
+  redeemLinkCode,
+  unlinkDevice,
+  type LinkedDevice,
+} from './devices.js';
 export { changePassword, createAccount, createInvite } from './invites.js';
 export { migrateToLatest } from './migrator.js';
 export { assertRlsApplies, ensureAppRole } from './roles.js';
