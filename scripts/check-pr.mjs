@@ -6,7 +6,7 @@ const MAX_CHANGED_LINES = 400;
 const DEP_SECTIONS = ['dependencies', 'devDependencies', 'optionalDependencies'];
 
 export function hasTicketId(title) {
-  return /^M\d+-\d+:/.test(title);
+  return /^M\d+-\d+[a-z]?:/.test(title);
 }
 
 function isExcludedFromSize(filename) {

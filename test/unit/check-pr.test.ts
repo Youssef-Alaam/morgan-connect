@@ -16,12 +16,15 @@ const file = (filename: string, additions = 1, deletions = 0, status?: string) =
 });
 
 describe('hasTicketId', () => {
-  it.each(['M0-3: CI pipeline', 'M12-40: x'])('accepts %s', (title) => {
+  it.each(['M0-3: CI pipeline', 'M12-40: x', 'M2-13a: tokens'])('accepts %s', (title) => {
     expect(hasTicketId(title)).toBe(true);
   });
-  it.each(['CI pipeline', 'm0-3: x', 'fix M0-3: x', 'M0-3 CI', 'M0: x'])('rejects %s', (title) => {
-    expect(hasTicketId(title)).toBe(false);
-  });
+  it.each(['CI pipeline', 'm0-3: x', 'fix M0-3: x', 'M0-3 CI', 'M0: x', 'M2-13ab: x', 'M2-13A: x'])(
+    'rejects %s',
+    (title) => {
+      expect(hasTicketId(title)).toBe(false);
+    },
+  );
 });
 
 describe('changedLineCount', () => {
