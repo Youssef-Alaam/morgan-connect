@@ -133,6 +133,10 @@ describe('user-data tables', () => {
     await expectIsolated('invites', ctx);
   });
 
+  it('link_codes', async () => {
+    await expectIsolated('link_codes', ctx);
+  });
+
   it('password_links', async () => {
     await expectIsolated('password_links', ctx);
   });
