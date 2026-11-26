@@ -48,3 +48,17 @@ it('also hears a connection that dies while it is checked out', async () => {
     await expect(sql`select 1`.execute(connection)).rejects.toThrow();
   });
 });
+
+it('ignores a killed connection when nobody listens, and serves the next query', async () => {
+  const quiet = createDb(postgres.url);
+  try {
+    await sql`select 1`.execute(quiet);
+    await sql`select pg_terminate_backend(pid) from pg_stat_activity
+      where datname = current_database() and pid <> pg_backend_pid()`.execute(db);
+    await vi.waitFor(async () => {
+      await expect(sql`select 1`.execute(quiet)).resolves.toBeDefined();
+    });
+  } finally {
+    await quiet.destroy();
+  }
+});
