@@ -55,14 +55,21 @@ export function createTurnQueue(
         retryDelay: 5,
         expireInSeconds: tuning?.expireInSeconds ?? TURN_EXPIRE_SECONDS,
       });
+      // createQueue leaves an existing queue alone, so turn notify on for installs made before it.
+      await boss.updateQueue(QUEUE, { notify: true });
     },
     enqueue: async (turnId) => {
       await boss.send(QUEUE, { turnId });
     },
     work: async (handler) => {
-      await boss.work<{ turnId: string }>(QUEUE, async (jobs) => {
-        for (const job of jobs) await handler(job.data.turnId);
-      });
+      // With notify on, polling is only a backstop and would default to 30 s: keep it short.
+      await boss.work<{ turnId: string }>(
+        QUEUE,
+        { notifyPollingIntervalSeconds: 2 },
+        async (jobs) => {
+          for (const job of jobs) await handler(job.data.turnId);
+        },
+      );
     },
     stop: (options) => boss.stop({ graceful: options?.graceful ?? true, timeout: 10_000 }),
   };

@@ -21,7 +21,7 @@
     "licences": "license-checker-rseidelsohn --production --excludePrivatePackages --onlyAllow \"MIT;ISC;BSD-2-Clause;BSD-3-Clause;Apache-2.0;0BSD;CC0-1.0;Unlicense;BlueOak-1.0.0\"",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
-    "test:perf": "vitest run --project perf --passWithNoTests",
+    "test:perf": "vitest run --project perf",
     "secrets": "gitleaks git --no-banner --redact",
     "commits": "commitlint --from origin/main",
     "audit": "npm audit --audit-level=high",

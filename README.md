@@ -33,6 +33,8 @@ docker compose up --build
 curl localhost:3000/health
 ```
 
+The job queue keeps one extra Postgres connection open for LISTEN/NOTIFY. Connect the app to Postgres directly, or through a pooler in session mode; PgBouncer in transaction mode breaks the wake-up and replies then wait for a 2 s backup poll.
+
 ## Contributing and security
 
 Forks are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
