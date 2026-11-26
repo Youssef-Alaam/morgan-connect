@@ -64,3 +64,26 @@ test('a button can be pressed with the keyboard', async ({ page }) => {
   await page.keyboard.press('Space');
   await expect(page.getByRole('status')).toHaveText('Pressed 2 times');
 });
+
+test('inputs, select, checkbox and switch work from the keyboard', async ({ page }) => {
+  await page.getByLabel('Display name').fill('Narimane');
+  await expect(page.getByLabel('Display name')).toHaveValue('Narimane');
+
+  const password = page.getByLabel('Password', { exact: true });
+  await expect(password).toHaveAttribute('type', 'password');
+  await page.getByRole('button', { name: 'Show password' }).press('Enter');
+  await expect(password).toHaveAttribute('type', 'text');
+
+  await page.getByLabel('Language').selectOption('ar');
+  await expect(page.getByLabel('Language')).toHaveValue('ar');
+
+  const box = page.getByRole('checkbox', { name: 'Remember this device' });
+  await box.press('Space');
+  await expect(box).toBeChecked();
+
+  const toggle = page.getByRole('switch', { name: 'Notifications' });
+  await toggle.press('Space');
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await toggle.press('Enter');
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+});
