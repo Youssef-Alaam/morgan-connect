@@ -21,6 +21,7 @@ const pairs = [
   ['muted', 'surface', 4.5],
   ['muted', 'raised', 4.5],
   ['onAccent', 'accent', 4.5],
+  ['onAccent', 'dangerText', 4.5],
   ['brand', 'surface', 3],
   ['focus', 'surface', 3],
   ['focus', 'raised', 3],

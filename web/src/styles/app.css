@@ -26,3 +26,24 @@ body {
   outline: var(--border-width) solid var(--focus);
   outline-offset: var(--space-1);
 }
+
+.gallery-section {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  padding: var(--space-3);
+  background: var(--card-background);
+  border: var(--border-width) solid var(--card-border);
+  border-radius: var(--radius);
+}
+
+.gallery-section h2 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+}
+
+.gallery-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

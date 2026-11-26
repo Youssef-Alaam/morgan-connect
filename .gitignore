@@ -5,3 +5,4 @@ dist-evals/
 .claude/
 *.log
 .env
+web/test-results/

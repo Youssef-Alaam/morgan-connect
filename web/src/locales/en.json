@@ -2,5 +2,16 @@
   "app": {
     "name": "Morgan Connect",
     "empty": "Nothing here yet."
+  },
+  "gallery": {
+    "title": "Components",
+    "button": {
+      "title": "Button",
+      "press": "Press me",
+      "secondary": "Secondary",
+      "danger": "Delete",
+      "disabled": "Unavailable",
+      "pressed": "Pressed {{times}} times"
+    }
   }
 }

@@ -55,6 +55,11 @@ const scale = {
   'space-5': '3rem',
   radius: '0.5rem',
   'border-width': '1px',
+  'font-size-sm': '0.875rem',
+  'font-size-md': '1rem',
+  'font-size-lg': '1.25rem',
+  target: '2.75rem',
+  'opacity-disabled': '0.5',
   'font-sans': "'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif",
   'font-mono': "'Space Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace",
 } as const;
@@ -63,6 +68,7 @@ const scale = {
 export const component = {
   'button-background': 'accent',
   'button-color': 'onAccent',
+  'button-danger-background': 'dangerText',
   'input-border': 'muted',
   'card-background': 'raised',
   'card-border': 'muted',
