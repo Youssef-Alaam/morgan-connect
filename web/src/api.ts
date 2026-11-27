@@ -268,3 +268,27 @@ export function setTaskCap(id: string, cap: number | null): Promise<Result<unkno
 export function setTopupStep(id: string, amountUsd: string | null): Promise<Result<unknown>> {
   return call(`/admin/people/${encodeURIComponent(id)}/topup-step`, { amountUsd }, 'PUT');
 }
+
+export interface WaitingTopup {
+  id: string;
+  memberId: string;
+  email?: string;
+  /** The amount asked for, an exact decimal string. */
+  amountUsd: string;
+  month: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/** The requests for more still waiting for an answer; a member gets 403. */
+export function listTopups(): Promise<Result<{ topups: WaitingTopup[] }>> {
+  return call('/admin/topups');
+}
+
+/** The same question Telegram shows: it counts once, whichever side answers first. A 404 `not_open` means it was answered or lapsed. */
+export function answerTopup(
+  id: string,
+  decision: 'approved' | 'refused',
+): Promise<Result<{ amountUsd: string }>> {
+  return call(`/admin/topups/${encodeURIComponent(id)}`, { decision });
+}

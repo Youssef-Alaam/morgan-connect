@@ -8,6 +8,7 @@ import { EditLimits } from './EditLimits.tsx';
 import { ErrorBanner } from './ErrorBanner.tsx';
 import { plus, reached, usd } from './money.ts';
 import { TopBar } from './TopBar.tsx';
+import { Waiting } from './Waiting.tsx';
 
 const K = 'budgets';
 /** What the server uses for a person with no cap of their own (spec D24). */
@@ -118,6 +119,7 @@ export function Budgets({ onBack, onSignedOut }: BudgetsProps) {
       ) : (
         <BudgetTable budgets={budgets} onEdit={setEditing} />
       )}
+      <Waiting onAnswered={load} />
       {editing === undefined ? null : (
         <EditLimits
           key={editing.id}

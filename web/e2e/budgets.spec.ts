@@ -37,6 +37,7 @@ const budgets = {
 
 async function script(page: Page, role: string): Promise<void> {
   await signedIn(page);
+  await page.route('**/api/admin/topups', (route) => route.fulfill({ json: { topups: [] } }));
   await page.route('**/api/me', (route) => route.fulfill({ json: { user: { role } } }));
   await page.route('**/api/admin/budgets', (route) =>
     route.fulfill(
@@ -104,4 +105,66 @@ test('the admin edits one person: only what changed is sent, and a bad box sends
   await dialog.getByRole('button', { name: 'Save' }).click();
   await expect(dialog).toBeHidden();
   expect(sent).toEqual([`${SARA}/budget {"limitUsd":"12.5"}`, `${SARA}/task-cap {"cap":null}`]);
+});
+
+const ASK = {
+  id: '44444444-4444-4444-8444-444444444444',
+  memberId: SARA,
+  email: 'sara@example.test',
+  amountUsd: '5.00000000',
+  month: '2026-11',
+  createdAt: '2026-11-27T10:05:00.000Z',
+  expiresAt: '2026-11-28T10:05:00.000Z',
+};
+
+/** One waiting request that `answer` replies to; returns what was posted. */
+async function waiting(page: Page, answer: { status: number; json: object }): Promise<string[]> {
+  const posted: string[] = [];
+  let open = true;
+  await page.route('**/api/admin/topups', (route) =>
+    route.fulfill({ json: { topups: open ? [ASK] : [] } }),
+  );
+  await page.route('**/api/admin/topups/*', async (route) => {
+    posted.push(route.request().postData() ?? '');
+    open = false;
+    await route.fulfill(answer);
+  });
+  return posted;
+}
+
+test('the admin approves a waiting request after a question that names person and amount', async ({
+  page,
+}, info) => {
+  await script(page, 'admin');
+  const posted = await waiting(page, { status: 200, json: { amountUsd: '5.00000000' } });
+  await open(page, queryOf(info.project.metadata));
+  await page.getByRole('button', { name: 'Budgets' }).click();
+  const table = page.getByRole('table', { name: 'Requests waiting for an answer' });
+  await expect(table).toContainText('sara@example.test');
+  await noViolations(page);
+  await expect(table).toHaveScreenshot('budgets-waiting.png');
+  await page.getByRole('button', { name: 'Approve $5.00 for sara@example.test' }).click();
+  const ask = page.getByRole('dialog', { name: 'Approve this request?' });
+  await expect(ask).toContainText('$5.00 is added to the limit of sara@example.test for 2026-11');
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  expect(posted).toEqual([]);
+  await page.getByRole('button', { name: 'Approve $5.00 for sara@example.test' }).click();
+  await ask.getByRole('button', { name: 'Approve', exact: true }).click();
+  await expect(page.getByText('No requests waiting.')).toBeVisible();
+  expect(posted).toEqual(['{"decision":"approved"}']);
+});
+
+test('a request answered meanwhile on Telegram says so and leaves the list current', async ({
+  page,
+}, info) => {
+  await script(page, 'admin');
+  const posted = await waiting(page, { status: 404, json: { error: 'not_open' } });
+  await open(page, queryOf(info.project.metadata));
+  await page.getByRole('button', { name: 'Budgets' }).click();
+  await page.getByRole('button', { name: 'Refuse the request of sara@example.test' }).click();
+  const ask = page.getByRole('dialog', { name: 'Refuse this request?' });
+  await ask.getByRole('button', { name: 'Refuse', exact: true }).click();
+  await expect(page.getByText('That request was already answered or has run out.')).toBeVisible();
+  await expect(page.getByText('No requests waiting.')).toBeVisible();
+  expect(posted).toEqual(['{"decision":"refused"}']);
 });
