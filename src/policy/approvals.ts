@@ -110,15 +110,18 @@ export function createApprovals({
         return 'unavailable';
       }
       const answer = await answered;
-      await closed?.({ id: question.id, caller, outcome: answer }).catch(() => undefined);
-      if (answer !== 'approved') return answer;
       // Spent on this exact call, once; a late or reused approval finds nothing to spend.
-      const spent = await consumeApproval(db, question.owner, {
-        id: question.id,
-        argsSha256: approvalHash(tool.name, args),
-        now: now(),
-      });
-      return spent ? 'approved' : 'expired';
+      const spent =
+        answer === 'approved' &&
+        (await consumeApproval(db, question.owner, {
+          id: question.id,
+          argsSha256: approvalHash(tool.name, args),
+          now: now(),
+        }));
+      const verdict = answer === 'approved' && !spent ? 'expired' : answer;
+      // The chat is told what really happened: an approval that could not be spent is not "approved".
+      await closed?.({ id: question.id, caller, outcome: verdict }).catch(() => undefined);
+      return verdict;
     },
     decide: async (id, decision, from) => {
       const applied = await decideApproval(db, { id, decision, ...from, now: now() });

@@ -40,10 +40,11 @@ const tool: ToolDefinition = {
 };
 
 /** The same wiring as boot: the question and its ending both go out on the web stream. */
-const approvalsWith = (ttlMs: number) =>
+const approvalsWith = (ttlMs: number, now?: () => Date) =>
   createApprovals({
     db: ctx.app,
     ttlMs,
+    ...(now === undefined ? {} : { now }),
     prompt: ({ caller, text, id }) => web.askApproval(caller.chatId, text, id),
     closed: ({ caller, id, outcome }) => web.approvalClosed(caller.chatId, id, outcome),
   });
@@ -257,4 +258,18 @@ it('does not fail the turn when the ending cannot be shown', async () => {
   const { pending, question } = await ask(quiet);
   expect((await answer('alice', question?.data.ref ?? '', 'approved')).status).toBe(200);
   expect(await pending).toContain('done');
+});
+
+it('shows an approval that could not be spent as expired, never as approved', async () => {
+  run.mockClear();
+  const base = Date.now();
+  let reads = 0;
+  // Asked and tapped in time; by the time it is spent the question has run out.
+  const late = approvalsWith(60_000, () => new Date(++reads <= 2 ? base : base + 120_000));
+  const { pending, question } = await ask(late);
+  expect((await answer('alice', question?.data.ref ?? '', 'approved')).status).toBe(200);
+  expect(JSON.stringify(await pending)).not.toContain('done');
+  expect(run).not.toHaveBeenCalled();
+  const [closed] = await readEvents(await stream('alice', question?.id), 1);
+  expect([closed?.event, closed?.data.text]).toEqual(['approval_closed', 'expired']);
 });
