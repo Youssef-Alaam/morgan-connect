@@ -12,10 +12,15 @@ const WS = sql`nullif(current_setting('app.workspace_id', true), '')::uuid`;
 const ADMIN_WORKSPACE = sql`(select u.workspace_id from public.users u where u.id = ${ME}
   and u.role = 'admin' and u.workspace_id = ${WS})`;
 
-export async function up(db: Kysely<unknown>): Promise<void> {
+/** Copy every legacy per-person limit into `budgets`. Exported so a test can run it on seeded rows. */
+export async function copyLegacyLimits(db: Kysely<unknown>): Promise<void> {
   await sql`insert into public.budgets (user_id, workspace_id, monthly_limit_usd)
     select id, workspace_id, monthly_limit_usd from public.users
     where monthly_limit_usd is not null`.execute(db);
+}
+
+export async function up(db: Kysely<unknown>): Promise<void> {
+  await copyLegacyLimits(db);
   await sql`create or replace function public.admin_create_account(p_email text,
     p_password_hash text, p_limit numeric) returns uuid language plpgsql ${SAFE} as $$
     declare v_ws uuid := ${ADMIN_WORKSPACE}; v_user uuid;

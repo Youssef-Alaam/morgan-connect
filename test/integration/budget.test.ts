@@ -1,3 +1,4 @@
+import type { Kysely } from 'kysely';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import {
   budgetOf,
@@ -11,6 +12,7 @@ import {
   type Db,
   type Owner,
 } from '../../src/data/index.js';
+import { copyLegacyLimits } from '../../src/data/migrations/0027-budget-limit-writes.js';
 import { checkBudget } from '../../src/policy/index.js';
 import { linkChats } from '../helpers/link-chats.js';
 import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
@@ -150,4 +152,24 @@ it('holds an invited member to the limit set on the invite, and an account to it
   expect(await budgetOf(db, { userId: id ?? '', workspaceId: admin.workspaceId })).toBe(
     '2.50000000',
   );
+});
+
+it('copies a legacy users.monthly_limit_usd into budgets, and only where one was set', async () => {
+  const legacy = await db
+    .insertInto('users')
+    .values({ role: 'member', workspace_id: admin.workspaceId, monthly_limit_usd: '12.50' })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  const none = await db
+    .insertInto('users')
+    .values({ role: 'member', workspace_id: admin.workspaceId })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  await copyLegacyLimits(db as Kysely<unknown>);
+  const rows = await db
+    .selectFrom('budgets')
+    .select(['user_id', 'monthly_limit_usd'])
+    .where('user_id', 'in', [legacy.id, none.id])
+    .execute();
+  expect(rows).toEqual([{ user_id: legacy.id, monthly_limit_usd: '12.50000000' }]);
 });
