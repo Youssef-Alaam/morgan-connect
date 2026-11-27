@@ -1,6 +1,6 @@
 import type { Db, Owner } from '../../src/data/index.js';
 
-/** A login, a session, a password link, an invite, a link code, a web event, a second factor and a passkey and a profile choice for this person. */
+/** A login, a session, a password link, an invite, a link code, a web event, a second factor, a passkey, a profile choice and a budget for this person. */
 export async function seedAccounts(owner: Db, who: Owner, chatId: string): Promise<void> {
   const person = { user_id: who.userId, workspace_id: who.workspaceId };
   await owner
@@ -44,5 +44,9 @@ export async function seedAccounts(owner: Db, who: Owner, chatId: string): Promi
   await owner
     .insertInto('profile_assignments')
     .values({ ...person, preset: 'standard' })
+    .execute();
+  await owner
+    .insertInto('budgets')
+    .values({ ...person, monthly_limit_usd: chatId === 'b' ? '9' : '1' })
     .execute();
 }

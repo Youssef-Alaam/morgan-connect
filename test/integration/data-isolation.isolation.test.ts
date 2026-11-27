@@ -4,6 +4,7 @@ import {
   appendAudit,
   assignedTo,
   assignPreset,
+  budgetOf,
   claimTurn,
   clearHistory,
   closeApproval,
@@ -17,6 +18,7 @@ import {
   removePasskey,
   usageSince,
   webEventsAfter,
+  withOwner,
 } from '../../src/data/index.js';
 import { ADMIN_READABLE_TABLES } from '../../src/data/rls.js';
 import {
@@ -182,6 +184,29 @@ describe('user-data tables', () => {
     const forged = { userId: ctx.alice.userId, preset: 'trusted' };
     expect(await assignPreset(ctx.app, ctx.bob, forged)).toBeUndefined();
     expect((await assignedTo(ctx.owner, ctx.alice, undefined)).personPreset).toBe('standard');
+  });
+
+  it('budgets', async () => {
+    await expectIsolated('budgets', ctx);
+    expect(await budgetOf(ctx.app, ctx.alice)).toBe('1.00000000');
+    expect(await budgetOf(ctx.app, ctx.bob)).toBe('9.00000000');
+    // A member can read their own limit but never write it, to raise it or to move it.
+    const raise = withOwner(ctx.app, ctx.bob, (trx) =>
+      trx
+        .insertInto('budgets')
+        .values({
+          user_id: ctx.bob.userId,
+          workspace_id: ctx.bob.workspaceId,
+          monthly_limit_usd: '1000',
+        })
+        .execute(),
+    );
+    await expect(raise).rejects.toThrow(/row-level security/);
+    const edit = withOwner(ctx.app, ctx.bob, (trx) =>
+      trx.updateTable('budgets').set({ monthly_limit_usd: '1000' }).execute(),
+    );
+    await expect(edit).rejects.toThrow(/permission denied/);
+    expect(await budgetOf(ctx.app, ctx.bob)).toBe('9.00000000');
   });
 
   it('has run for every table in COVERED', () => {
