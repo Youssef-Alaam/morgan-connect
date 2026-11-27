@@ -11,7 +11,7 @@ import { COOKIE, type Signed } from './session.js';
 
 /** What the chat routes need from the web channel (wired in boot; http never imports channels). */
 export interface ChatEvents {
-  acknowledge: (owner: Owner, chatId: string, messageId: string) => Promise<void>;
+  acknowledge: (owner: Owner, chatId: string, messageId: string, text: string) => Promise<void>;
   eventsAfter: (owner: Owner, chatId: string, afterId: string) => Promise<WebEvent[]>;
   subscribe: (owner: Owner, chatId: string, wake: () => void) => () => void;
 }
@@ -139,7 +139,7 @@ export function chatRoutes(routes: Hono<Signed>, deps: ChatDeps): void {
     if (!parsed.success) return c.json({ error: 'invalid_request' }, 400);
     const session = c.get('session');
     const chatId = session.sessionId;
-    await deps.events.acknowledge(session, chatId, parsed.data.messageId);
+    await deps.events.acknowledge(session, chatId, parsed.data.messageId, parsed.data.text);
     await deps.ingest({ channel: 'web', chatId, ...parsed.data });
     return c.json({ ok: true, messageId: parsed.data.messageId }, 202);
   });

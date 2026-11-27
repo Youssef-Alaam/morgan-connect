@@ -22,10 +22,18 @@ export interface ApprovalPrompt {
   expiresAt: Date;
 }
 
+/** How a question ended: the owner's answer, no answer in time, or the turn gave up. */
+type Outcome = 'approved' | 'denied' | 'expired' | 'aborted';
+
 export interface ApprovalsOptions {
   db: Db;
   /** Show the question to the chat with Approve and Deny. A failure means nobody could be asked. */
   prompt: (prompt: ApprovalPrompt) => Promise<void>;
+  /**
+   * Show the chat that a question is over, so a card that is still on screen can settle. Best
+   * effort: a failure here never changes the verdict.
+   */
+  closed?: (ended: { id: string; caller: Caller; outcome: Outcome }) => Promise<void>;
   /** How long a question stays open. */
   ttlMs: number;
   now?: () => Date;
@@ -82,6 +90,7 @@ async function openQuestion(
 export function createApprovals({
   db,
   prompt,
+  closed,
   ttlMs,
   now = () => new Date(),
 }: ApprovalsOptions): Approvals {
@@ -101,14 +110,18 @@ export function createApprovals({
         return 'unavailable';
       }
       const answer = await answered;
-      if (answer !== 'approved') return answer;
       // Spent on this exact call, once; a late or reused approval finds nothing to spend.
-      const spent = await consumeApproval(db, question.owner, {
-        id: question.id,
-        argsSha256: approvalHash(tool.name, args),
-        now: now(),
-      });
-      return spent ? 'approved' : 'expired';
+      const spent =
+        answer === 'approved' &&
+        (await consumeApproval(db, question.owner, {
+          id: question.id,
+          argsSha256: approvalHash(tool.name, args),
+          now: now(),
+        }));
+      const verdict = answer === 'approved' && !spent ? 'expired' : answer;
+      // The chat is told what really happened: an approval that could not be spent is not "approved".
+      await closed?.({ id: question.id, caller, outcome: verdict }).catch(() => undefined);
+      return verdict;
     },
     decide: async (id, decision, from) => {
       const applied = await decideApproval(db, { id, decision, ...from, now: now() });

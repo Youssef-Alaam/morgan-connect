@@ -10,7 +10,7 @@ export const WEB_EVENT_PAGE = 100;
 export interface WebEvent {
   /** Its place in the stream; grows with every event, so "after this id" has no duplicates. */
   id: string;
-  kind: 'ack' | 'message' | 'approval';
+  kind: 'ack' | 'message' | 'approval' | 'approval_closed';
   ref: string | null;
   text: string;
 }
