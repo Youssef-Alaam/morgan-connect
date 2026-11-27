@@ -35,6 +35,7 @@ beforeAll(async () => {
         subscribe: () => () => undefined,
       },
       ingest: () => Promise.resolve(),
+      decide: () => Promise.resolve(false),
     },
   });
 }, 180_000);

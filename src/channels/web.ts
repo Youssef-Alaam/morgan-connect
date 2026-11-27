@@ -11,6 +11,8 @@ import {
 /** The web chat: a browser session is a device; its events are stored, then pushed to its stream. */
 export interface WebChannel extends ChannelSender {
   readonly channel: 'web';
+  /** Show the owner's question as an `approval` event: `text` holds the exact arguments. */
+  askApproval: NonNullable<ChannelSender['askApproval']>;
   /** Note that a posted message arrived. A resent message is noted once. */
   acknowledge: (owner: Owner, chatId: string, messageId: string) => Promise<void>;
   /** This person's events on one session after `afterId`, oldest first. */
@@ -33,6 +35,12 @@ export function createWebChannel(db: Db): WebChannel {
       const owner = await ownerOf(db, { channel: 'web', chatId });
       if (owner === undefined) throw new Error('The web session has ended');
       await recordWebEvent(db, owner, chatId, { kind: 'message', text });
+      notify(owner, chatId);
+    },
+    askApproval: async (chatId, text, approvalId) => {
+      const owner = await ownerOf(db, { channel: 'web', chatId });
+      if (owner === undefined) throw new Error('The web session has ended');
+      await recordWebEvent(db, owner, chatId, { kind: 'approval', ref: approvalId, text });
       notify(owner, chatId);
     },
     acknowledge: async (owner, chatId, messageId) => {

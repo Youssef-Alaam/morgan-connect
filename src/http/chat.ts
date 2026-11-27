@@ -16,10 +16,18 @@ export interface ChatEvents {
   subscribe: (owner: Owner, chatId: string, wake: () => void) => () => void;
 }
 
+/** The owner's answer to a question; false when it does not count (see `Approvals.decide`). */
+export type DecideApproval = (
+  id: string,
+  decision: 'approved' | 'denied',
+  from: { channel: string; chatId: string },
+) => Promise<boolean>;
+
 export interface ChatDeps {
   db: Db;
   logger: Logger;
   events: ChatEvents;
+  decide: DecideApproval;
   /** The same pipeline entry the Telegram channel uses. */
   ingest: (message: InboundMessage) => Promise<void>;
   /** How long a quiet stream waits before a keep-alive line. */
@@ -37,6 +45,9 @@ const post = z.object({
     .max(100)
     .default(() => randomUUID()),
 });
+
+const answer = z.object({ decision: z.enum(['approved', 'denied']) });
+const APPROVAL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** An event id is a number; anything else means "from the start". */
 function cursorOf(value: string | undefined): string {
@@ -131,6 +142,20 @@ export function chatRoutes(routes: Hono<Signed>, deps: ChatDeps): void {
     await deps.events.acknowledge(session, chatId, parsed.data.messageId);
     await deps.ingest({ channel: 'web', chatId, ...parsed.data });
     return c.json({ ok: true, messageId: parsed.data.messageId }, 202);
+  });
+  routes.post('/chat/approvals/:id', async (c) => {
+    if (!JSON_TYPE.test(c.req.header('content-type') ?? '')) {
+      return c.json({ error: 'unsupported_media_type' }, 415);
+    }
+    const parsed = answer.safeParse(await c.req.json().catch(() => undefined));
+    const id = c.req.param('id');
+    if (!parsed.success || !APPROVAL_ID.test(id)) return c.json({ error: 'invalid_request' }, 400);
+    // The answer counts only from the session the question was shown on.
+    const counted = await deps.decide(id, parsed.data.decision, {
+      channel: 'web',
+      chatId: c.get('session').sessionId,
+    });
+    return counted ? c.json({ ok: true }) : c.json({ error: 'not_open' }, 409);
   });
   routes.get('/chat/events', (c) => stream(c, deps));
 }

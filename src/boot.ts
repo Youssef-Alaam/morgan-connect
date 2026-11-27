@@ -1,7 +1,12 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from '@hono/node-server';
-import { type ChannelAdapter, createTelegramAdapter, createWebChannel } from './channels/index.js';
+import {
+  type ChannelAdapter,
+  createTelegramAdapter,
+  createWebChannel,
+  type WebChannel,
+} from './channels/index.js';
 import {
   assertFitsJobExpiry,
   createReplier,
@@ -130,15 +135,17 @@ async function openQueue(config: Config, logger: Logger): Promise<TurnQueue> {
   return queue;
 }
 
-/** Questions to the owner go out on the chat they came from; only Telegram can ask yet (web: M2-12b). */
-const approvalsFor = (db: Db, telegram: ChannelAdapter | undefined): Approvals =>
+/** Questions to the owner go out on the chat they came from: Telegram buttons or a web event. */
+const approvalsFor = (db: Db, telegram: ChannelAdapter | undefined, web: WebChannel): Approvals =>
   createApprovals({
     db,
     ttlMs: APPROVAL_TTL_MS,
-    prompt: ({ caller, text, id }) =>
-      telegram !== undefined && caller.channel === 'telegram'
+    prompt: ({ caller, text, id }) => {
+      if (caller.channel === 'web') return web.askApproval(caller.chatId, text, id);
+      return telegram !== undefined && caller.channel === 'telegram'
         ? telegram.askApproval(caller.chatId, text, id)
-        : Promise.reject(new Error('This channel cannot ask for approval yet')),
+        : Promise.reject(new Error('This channel cannot ask for approval yet'));
+    },
   });
 
 /** "Ask for more" goes to the admin's Telegram chat, the only place that can show the buttons yet. */
@@ -178,7 +185,7 @@ async function startChat(
       : createTelegramAdapter(config.TELEGRAM_BOT_TOKEN, logger, config.TELEGRAM_API_ROOT);
   const web = createWebChannel(db);
   const identity = createIdentity(db, { onClaimed });
-  const approvals = approvalsFor(db, telegram);
+  const approvals = approvalsFor(db, telegram, web);
   const reply = buildReplier(config, { db, logger, engine, approvals });
   const aborts = createTurnAborts();
   const senders = telegram === undefined ? [web] : [telegram, web];
@@ -208,7 +215,11 @@ async function startChat(
     throw error;
   }
   return {
-    chat: { events: web, ingest: (message) => ingest(deps, message) },
+    chat: {
+      events: web,
+      ingest: (message) => ingest(deps, message),
+      decide: (id, decision, from) => approvals.decide(id, decision, from),
+    },
     stop: async () => {
       stopWatching();
       await telegram?.stop();

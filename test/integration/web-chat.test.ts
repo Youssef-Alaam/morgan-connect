@@ -38,7 +38,11 @@ beforeAll(async () => {
     retryDelayMs: 1,
     identity: createIdentity(ctx.app),
   };
-  app = appWith({ events: web, ingest: (message) => ingest(deps, message) });
+  app = appWith({
+    events: web,
+    ingest: (message) => ingest(deps, message),
+    decide: () => Promise.resolve(false),
+  });
 }, 180_000);
 afterAll(async () => {
   await ctx.stop();
@@ -68,7 +72,7 @@ it('refuses a form post and a bad body', async () => {
 
 it('puts every chat route behind the session gate, and a temporary password gets a 403', async () => {
   const routes = app.routes.filter((r) => r.path.startsWith('/api/chat') && r.method !== 'ALL');
-  expect(routes).toHaveLength(2);
+  expect(routes).toHaveLength(3);
   const call = (method: string, path: string, cookie: string) =>
     app.request(path, {
       method,
@@ -136,6 +140,7 @@ it('keeps a quiet stream alive with a comment line', async () => {
   const quiet = appWith({
     events: createWebChannel(ctx.app),
     ingest: () => Promise.resolve(),
+    decide: () => Promise.resolve(false),
     keepAliveMs: 20,
   });
   const response = await quiet.request('/api/chat/events', {
@@ -152,7 +157,11 @@ it('keeps a quiet stream alive with a comment line', async () => {
 it('ends a stream whose read fails with a fixed word, and cannot send to an ended session', async () => {
   const web = createWebChannel(ctx.app);
   const eventsAfter = () => Promise.reject(new Error('database is down'));
-  const broken = appWith({ events: { ...web, eventsAfter }, ingest: () => Promise.resolve() });
+  const broken = appWith({
+    events: { ...web, eventsAfter },
+    ingest: () => Promise.resolve(),
+    decide: () => Promise.resolve(false),
+  });
   const response = await broken.request('/api/chat/events', { headers: { cookie: cookies.alice } });
   expect(await response.text()).toBe('event: error\ndata: stream_failed\n\n');
   await expect(web.send('no-such-session', 'hi')).rejects.toThrow(/ended/);
@@ -164,6 +173,7 @@ it('closes a stream at the next keep-alive once its session has ended', async ()
   const quiet = appWith({
     events: createWebChannel(ctx.app),
     ingest: () => Promise.resolve(),
+    decide: () => Promise.resolve(false),
     keepAliveMs: 20,
   });
   const response = await quiet.request('/api/chat/events', {
