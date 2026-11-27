@@ -6,6 +6,8 @@ interface ConfirmDialogProps {
   title: string;
   message: string;
   confirmLabel: string;
+  /** `danger` (the default) for what cannot be taken back; `primary` for an action that only adds. */
+  tone?: 'danger' | 'primary';
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -15,6 +17,7 @@ export function ConfirmDialog({
   title,
   message,
   confirmLabel,
+  tone = 'danger',
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -22,7 +25,7 @@ export function ConfirmDialog({
   return (
     <Dialog open title={title} closeLabel={t('users.cancel')} onClose={onCancel}>
       <p>{message}</p>
-      <Button variant="danger" onClick={onConfirm}>
+      <Button variant={tone} onClick={onConfirm}>
         {confirmLabel}
       </Button>
     </Dialog>

@@ -60,7 +60,8 @@
     "link_invalid": "This link has expired or was already used. Ask for a new one.",
     "email_taken": "That email already has an account.",
     "forbidden": "Only the admin can do that.",
-    "not_found": "That is already gone. Reload the page."
+    "not_found": "That is already gone. Reload the page.",
+    "not_open": "That request was already answered or has run out. Reload the page."
   },
   "gallery": {
     "title": "Components",
@@ -350,6 +351,24 @@
       "limitInvalid": "Enter a dollar amount with up to 8 decimals.",
       "capInvalid": "Enter a whole number from 1 to 1000.",
       "stepInvalid": "Enter a dollar amount above 0."
+    },
+    "waiting": {
+      "title": "Requests for more",
+      "none": "No requests waiting.",
+      "caption": "Requests waiting for an answer",
+      "person": "Person",
+      "amount": "Asked for",
+      "month": "For month",
+      "asked": "Asked (UTC)",
+      "actions": "Actions",
+      "approve": "Approve",
+      "refuse": "Refuse",
+      "approveNamed": "Approve {{amount}} for {{person}}",
+      "refuseNamed": "Refuse the request of {{person}}",
+      "confirmApprove": "Approve this request?",
+      "confirmApproveText": "{{amount}} is added to the limit of {{person}} for {{month}}. The question sent to you on Telegram is closed.",
+      "confirmRefuse": "Refuse this request?",
+      "confirmRefuseText": "{{person}} is told no for this month and can ask again. The question sent to you on Telegram is closed."
     }
   }
 }

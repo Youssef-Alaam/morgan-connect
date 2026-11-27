@@ -13,6 +13,7 @@ const KNOWN = new Set([
   'email_taken',
   'forbidden',
   'not_found',
+  'not_open',
   'network',
 ]);
 
