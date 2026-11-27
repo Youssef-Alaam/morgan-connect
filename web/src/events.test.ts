@@ -113,6 +113,14 @@ describe('followEvents', () => {
     expect(FakeSource.all[2]?.url).toBe('/api/chat/events?after=12');
   });
 
+  it('encodes the last id into the address', async () => {
+    setup('in');
+    emit('message', '1&x=2', '{"text":"Hi"}');
+    die(0);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(FakeSource.all[1]?.url).toBe('/api/chat/events?after=1%26x%3D2');
+  });
+
   it('leaves a browser retry alone (still connecting)', async () => {
     const { h, check } = setup('in');
     FakeSource.all[0]?.onerror?.();

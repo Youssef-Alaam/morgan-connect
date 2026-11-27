@@ -62,7 +62,9 @@ export function followEvents(h: Handlers, check: () => Promise<Standing>): () =>
   let last: string | undefined;
   const connect = (): void => {
     const opened = new EventSource(
-      last === undefined ? '/api/chat/events' : `/api/chat/events?after=${last}`,
+      last === undefined
+        ? '/api/chat/events'
+        : `/api/chat/events?after=${encodeURIComponent(last)}`,
     );
     source = opened;
     opened.onopen = () => {
