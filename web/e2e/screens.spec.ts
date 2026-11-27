@@ -26,6 +26,7 @@ async function serve(page: Page, answers: Record<string, Answer | Answer[]>): Pr
 }
 
 const out: Answer = { status: 401, body: { error: 'unauthorized' } };
+const mustChange: Answer = { status: 403, body: { error: 'password_change_required' } };
 const ok: Answer = { status: 200, body: { ok: true } };
 
 async function open(page: Page, query: string): Promise<void> {
@@ -127,4 +128,35 @@ test('a backup code can be used instead, and the code step has a way back', asyn
   expect(seen).toContain(
     `/sign-in/second-factor ${JSON.stringify({ challenge: 'chal-2', code: 'abcd-efgh-ijkl' })}`,
   );
+});
+
+test('a temporary password ends on the change-password screen', async ({ page }, info) => {
+  const seen = await serve(page, {
+    '/me': [out, mustChange, { status: 200, body: {} }],
+    '/sign-in': ok,
+    '/change-password': ok,
+  });
+  await open(page, queryOf(info.project.metadata));
+  await page.getByLabel('Email').fill('narimane@example.test');
+  await page.getByLabel('Password', { exact: true }).fill('temporary-pass');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Choose your password' })).toBeVisible();
+  await expect(page.locator('main')).toHaveScreenshot('change-password.png');
+  await noViolations(page);
+  await page.getByLabel('Current password').fill('temporary-pass');
+  await page.getByLabel('New password').fill('my own long password');
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Save password' }).click();
+  await expect(page.getByText('Nothing here yet.')).toBeVisible();
+  expect(seen).toContain(
+    `/change-password ${JSON.stringify({ current: 'temporary-pass', password: 'my own long password', acceptedNotice: true })}`,
+  );
+});
+
+test('a browser that is already on the temporary password lands on change-password', async ({
+  page,
+}, info) => {
+  await serve(page, { '/me': mustChange });
+  await open(page, queryOf(info.project.metadata));
+  await expect(page.getByRole('heading', { name: 'Choose your password' })).toBeVisible();
 });

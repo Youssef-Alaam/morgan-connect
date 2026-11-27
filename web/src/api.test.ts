@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { secondFactor, signIn, standing } from './api.ts';
+import { changePassword, secondFactor, signIn, standing } from './api.ts';
 import { errorKey } from './errors.ts';
 
 function answer(status: number, body: unknown): void {
@@ -34,6 +34,15 @@ describe('the account calls', () => {
     await secondFactor('c1', '123456');
     expect(sent().path).toBe('/api/sign-in/second-factor');
     expect(sent().init.body).toBe(JSON.stringify({ challenge: 'c1', code: '123456' }));
+  });
+
+  it('sends the notice flag with a password change', async () => {
+    answer(200, { ok: true });
+    await changePassword('old', 'new-password-12', true);
+    expect(sent().path).toBe('/api/change-password');
+    expect(sent().init.body).toBe(
+      JSON.stringify({ current: 'old', password: 'new-password-12', acceptedNotice: true }),
+    );
   });
 
   it('turns an error answer into its status and error word', async () => {
@@ -97,6 +106,8 @@ describe('standing when the server cannot be asked', () => {
 describe('errorKey', () => {
   it('maps a known word and falls back for the rest', () => {
     expect(errorKey('too_many_attempts')).toBe('errors.too_many_attempts');
+    expect(errorKey('same_password')).toBe('errors.same_password');
+    expect(errorKey('notice_required')).toBe('errors.notice_required');
     expect(errorKey('something_new')).toBe('errors.generic');
   });
 });

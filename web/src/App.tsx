@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { standing, type Standing } from './api.ts';
 import { Button } from './components/Button.tsx';
+import { ChangePassword } from './screens/ChangePassword.tsx';
 import { SignIn } from './screens/SignIn.tsx';
 
 const STATUS = {
@@ -21,6 +22,7 @@ export function App() {
   };
   useEffect(refresh, []);
   if (where === 'out') return <SignIn onDone={setWhere} />;
+  if (where === 'change') return <ChangePassword onDone={refresh} />;
   return (
     <main className="page">
       <h1>{t('app.name')}</h1>
