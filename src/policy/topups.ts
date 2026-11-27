@@ -22,7 +22,7 @@ export interface TopupsOptions {
   defaultLimitUsd?: string | undefined;
   timezone: string;
   ttlMs: number;
-  /** The channel the admin is asked on: the only one that can show Approve and Refuse yet. */
+  /** The channel the admin is asked on: the only one that can show Approve and Deny yet. */
   adminChannel: string;
   /** Show the admin the question with its buttons. A failure means nobody could be asked. */
   askAdmin: (chatId: string, text: string, approvalId: string) => Promise<void>;
@@ -66,7 +66,8 @@ export function createTopups(options: TopupsOptions): Topups {
       try {
         await options.askAdmin(request.adminChatId, text, request.approvalId);
       } catch {
-        // Failing to close it must not turn into an error for the person: it lapses at its time.
+        // Close it so the member can ask again. If closing fails too, log it and let it lapse:
+        // the person is told "Not available", never an error.
         await cancelTopup(db, member, request.topupId).catch(() => {
           options.logger?.warn({ topupId: request.topupId }, 'top-up request not cancelled');
         });
