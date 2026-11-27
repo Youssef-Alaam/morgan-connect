@@ -233,5 +233,26 @@
     "title": "Set your password",
     "intro": "Choose the email and password you will sign in with.",
     "submit": "Set password"
+  },
+  "users": {
+    "title": "People",
+    "open": "People",
+    "back": "Back to chat",
+    "caption": "Everyone in your workspace",
+    "person": "Person",
+    "role": "Role",
+    "status": "Status",
+    "chats": "Linked chats",
+    "chatOnly": "Chat only, no web login",
+    "admin": "Admin",
+    "member": "Member",
+    "active": "Active",
+    "temporary_password": "Temporary password",
+    "noChats": "None",
+    "unlink": "Unlink",
+    "unlinkNamed": "Unlink {{channel}} chat of {{person}}",
+    "cancel": "Cancel",
+    "confirmUnlink": "Unlink this chat?",
+    "confirmUnlinkText": "The {{channel}} chat of {{person}} stops reaching Morgan. They can link it again with a new code."
   }
 }

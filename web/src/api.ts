@@ -117,6 +117,30 @@ export function removePasskey(id: string): Promise<Result<unknown>> {
   return call(`/passkeys/${encodeURIComponent(id)}`, undefined, 'DELETE');
 }
 
+/** Who is signed in: the Users page is offered to the admin only (the server decides, too). */
+export function whoAmI(): Promise<Result<{ user?: { role?: string } }>> {
+  return call('/me');
+}
+
+export interface Person {
+  id: string;
+  role: string;
+  email?: string;
+  status: 'active' | 'temporary_password';
+  createdAt: string;
+  devices: { id: string; channel: string; createdAt: string }[];
+}
+
+/** Everyone in the workspace with their linked chats; a member gets 403. */
+export function listPeople(): Promise<Result<{ people: Person[] }>> {
+  return call('/admin/people');
+}
+
+/** The admin unlinks a person's chat (the same call a member uses for their own). */
+export function unlinkDevice(id: string): Promise<Result<unknown>> {
+  return call(`/devices/${encodeURIComponent(id)}`, undefined, 'DELETE');
+}
+
 /** Ends this browser's session. */
 export function signOut(): Promise<Result<unknown>> {
   return call('/sign-out', {});
