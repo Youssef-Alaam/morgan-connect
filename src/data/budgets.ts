@@ -3,7 +3,10 @@ import type { Db, Owner } from './db.js';
 import { withOwner } from './tenancy.js';
 
 /** The app role may execute exactly this (ensureAppRole). */
-export const BUDGET_FUNCTIONS: readonly string[] = ['admin_set_budget(uuid, numeric)'];
+export const BUDGET_FUNCTIONS: readonly string[] = [
+  'admin_set_budget(uuid, numeric)',
+  'admin_usage_summary(timestamptz, text)',
+];
 
 /** Up to 6 whole digits and 8 decimals: what `numeric(14, 8)` holds. Anything else is a mistake. */
 const MONEY = /^\d{1,6}(\.\d{1,8})?$/;
@@ -50,4 +53,69 @@ export function isAdmin(db: Db, owner: Owner): Promise<boolean> {
       .executeTakeFirst();
     return row?.role === 'admin';
   });
+}
+
+export interface BudgetLine {
+  id: string;
+  role: string;
+  /** Undefined for someone with only a linked chat and no web login. */
+  email: string | undefined;
+  /** Their own monthly limit (a decimal string), or undefined when the install default applies. */
+  limitUsd: string | undefined;
+  /** Their own parallel-task cap, or undefined when the default applies. */
+  taskCap: number | undefined;
+  /** The top-up step the admin set for them, or undefined when the install's applies. */
+  topupStepUsd: string | undefined;
+  /** Approved top-ups for the month, a decimal string. */
+  topupUsd: string;
+  spentUsd: string;
+  calls: number;
+}
+
+export interface BudgetSummary {
+  /** The local month the totals cover, `2026-11`. */
+  month: string;
+  people: BudgetLine[];
+}
+
+/**
+ * Every person's spend this local month beside their limit, for the admin's budgets page. Undefined
+ * when the caller is not the admin. One audit row is written either way (migration 0036).
+ */
+export async function budgetSummary(
+  db: Db,
+  admin: Owner,
+  now: Date,
+  timezone: string,
+): Promise<BudgetSummary | undefined> {
+  const { rows } = await withOwner(db, admin, (trx) =>
+    sql<{
+      user_id: string;
+      role: string;
+      email: string | null;
+      limit_usd: string | null;
+      task_cap: number | null;
+      topup_step: string | null;
+      topup_usd: string;
+      spent_usd: string;
+      calls: string;
+      month: string;
+    }>`select * from admin_usage_summary(${now}::timestamptz, ${timezone})`.execute(trx),
+  );
+  const first = rows[0];
+  if (first === undefined) return undefined;
+  return {
+    month: first.month,
+    people: rows.map((row) => ({
+      id: row.user_id,
+      role: row.role,
+      email: row.email ?? undefined,
+      limitUsd: row.limit_usd ?? undefined,
+      taskCap: row.task_cap ?? undefined,
+      topupStepUsd: row.topup_step ?? undefined,
+      topupUsd: row.topup_usd,
+      spentUsd: row.spent_usd,
+      calls: Number(row.calls),
+    })),
+  };
 }

@@ -22,6 +22,16 @@ export interface AuthDeps {
   twoFactorKey?: Buffer | undefined;
   /** Where passkeys are valid (config WEBAUTHN_RP_ID and WEBAUTHN_ORIGIN); undefined: no passkeys. */
   passkeys?: RelyingParty | undefined;
+  /** What the budgets page shows beside each person's own numbers (config); unset: UTC, no default limit. */
+  budgets?: BudgetSettings | undefined;
+}
+
+interface BudgetSettings {
+  timezone: string;
+  /** The limit for a person with none of their own (config DEFAULT_MONTHLY_LIMIT_USD). */
+  defaultLimitUsd?: string | undefined;
+  /** The step an approved top-up adds (config TOPUP_AMOUNT_USD). */
+  topupAmountUsd: string;
 }
 
 /** What every auth route shares: the hasher and the per-address failure bucket. */
