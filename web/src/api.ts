@@ -253,3 +253,18 @@ export interface Budgets {
 export function listBudgets(): Promise<Result<Budgets>> {
   return call('/admin/budgets');
 }
+
+/** The monthly limit in USD as a decimal string (0 pauses them); 404 means the person is not in this workspace. */
+export function setBudget(id: string, limitUsd: string): Promise<Result<unknown>> {
+  return call(`/admin/people/${encodeURIComponent(id)}/budget`, { limitUsd }, 'PUT');
+}
+
+/** How many tasks a person runs at once; `null` goes back to the default. */
+export function setTaskCap(id: string, cap: number | null): Promise<Result<unknown>> {
+  return call(`/admin/people/${encodeURIComponent(id)}/task-cap`, { cap }, 'PUT');
+}
+
+/** What one approved top-up adds for this person; `null` goes back to the install's step. */
+export function setTopupStep(id: string, amountUsd: string | null): Promise<Result<unknown>> {
+  return call(`/admin/people/${encodeURIComponent(id)}/topup-step`, { amountUsd }, 'PUT');
+}

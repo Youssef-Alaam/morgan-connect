@@ -334,6 +334,22 @@
     "step": "Top-up step",
     "noLimit": "No limit",
     "over": "(at limit)",
-    "chatOnly": "Chat only, no web login"
+    "chatOnly": "Chat only, no web login",
+    "actions": "Actions",
+    "edit": {
+      "open": "Edit",
+      "openNamed": "Edit the limits of {{person}}",
+      "title": "Limits of {{person}}",
+      "limit": "Monthly limit (USD)",
+      "limitHint": "Empty keeps the current limit. 0 pauses the person.",
+      "cap": "Tasks at once",
+      "capHint": "Empty uses the default.",
+      "step": "Top-up step (USD)",
+      "stepHint": "What one approved top-up adds. Empty uses the install's.",
+      "save": "Save",
+      "limitInvalid": "Enter a dollar amount with up to 8 decimals.",
+      "capInvalid": "Enter a whole number from 1 to 1000.",
+      "stepInvalid": "Enter a dollar amount above 0."
+    }
   }
 }

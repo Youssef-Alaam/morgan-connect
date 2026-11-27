@@ -73,3 +73,35 @@ test('a member is not offered the page', async ({ page }, info) => {
   await open(page, queryOf(info.project.metadata));
   await expect(page.getByRole('button', { name: 'Budgets' })).toHaveCount(0);
 });
+
+const SARA = '22222222-2222-4222-8222-222222222222';
+
+test('the admin edits one person: only what changed is sent, and a bad box sends nothing', async ({
+  page,
+}, info) => {
+  await script(page, 'admin');
+  const sent: string[] = [];
+  await page.route('**/api/admin/people/*/*', async (route) => {
+    const url = new URL(route.request().url());
+    sent.push(`${url.pathname.split('/').slice(-2).join('/')} ${route.request().postData() ?? ''}`);
+    await route.fulfill({ status: 204 });
+  });
+  await open(page, queryOf(info.project.metadata));
+  await page.getByRole('button', { name: 'Budgets' }).click();
+  await page.getByRole('button', { name: 'Edit the limits of sara@example.test' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Limits of sara@example.test' });
+  await expect(dialog.getByLabel('Monthly limit (USD)')).toHaveValue('10');
+  await expect(dialog.getByLabel('Tasks at once')).toHaveValue('4');
+  await expect(dialog.getByLabel('Top-up step (USD)')).toHaveValue('2.5');
+  await noViolations(page);
+  await expect(dialog).toHaveScreenshot('budgets-edit.png');
+  await dialog.getByLabel('Tasks at once').fill('0');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog.getByText('Enter a whole number from 1 to 1000.')).toBeVisible();
+  expect(sent).toEqual([]);
+  await dialog.getByLabel('Tasks at once').fill('');
+  await dialog.getByLabel('Monthly limit (USD)').fill('12.5');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog).toBeHidden();
+  expect(sent).toEqual([`${SARA}/budget {"limitUsd":"12.5"}`, `${SARA}/task-cap {"cap":null}`]);
+});
