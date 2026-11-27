@@ -2,7 +2,13 @@ import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
 import { PgBoss } from 'pg-boss';
 import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest';
-import { type PipelineDeps, ingest, processTurn, startWorker } from '../../src/core/index.js';
+import {
+  type PipelineDeps,
+  ingest,
+  processTurn,
+  startWorker,
+  watchStuckTurns,
+} from '../../src/core/index.js';
 import {
   DEFAULT_TASK_CAP,
   claimTurn,
@@ -12,6 +18,7 @@ import {
   getTurn,
   insertTurn,
   migrateToLatest,
+  setTaskCap,
   taskCapOf,
   type Db,
   type Owner,
@@ -28,6 +35,7 @@ let postgres: TestPostgres;
 let db: Db;
 let admin: Owner;
 let member: Owner;
+let other: Owner;
 
 async function addMember(chatId: string): Promise<Owner> {
   const user = await db
@@ -48,6 +56,7 @@ beforeAll(async () => {
   await migrateToLatest(db);
   admin = await linkChats(db, ['A1']);
   member = await addMember('M1');
+  other = await addMember('O1');
 }, 180_000);
 afterEach(async () => {
   await sql`update turns set status = 'failed' where status in ('queued', 'sending')`.execute(db);
@@ -109,6 +118,30 @@ it('holds the cap across workers that share only the database', async () => {
   }
 });
 
+it("does not hold up another person's turns", async () => {
+  const [a = '', b = '', c = ''] = await queued('M1', 3);
+  await claimTurn(db, member, a);
+  await claimTurn(db, member, b);
+  const [theirs = ''] = await queued('O1', 1);
+  expect(await claimTurn(db, other, theirs)).toBeDefined();
+  expect(await claimTurn(db, member, c)).toBeUndefined();
+  for (const id of [a, b, c]) await finishTurn(db, member, id, { status: 'failed', error: 'x' });
+  await close(other, theirs);
+});
+
+it('follows the cap the admin sets, raised or lowered at any time', async () => {
+  expect(await setTaskCap(db, admin, member.userId, 1)).toBe(true);
+  expect(await taskCapOf(db, member)).toBe(1);
+  const [a = '', b = ''] = await queued('M1', 2);
+  expect(await claimTurn(db, member, a)).toBeDefined();
+  expect(await claimTurn(db, member, b)).toBeUndefined();
+  expect(await setTaskCap(db, admin, member.userId, 3)).toBe(true);
+  expect(await claimTurn(db, member, b)).toBeDefined();
+  await close(member, a);
+  await close(member, b);
+  await setTaskCap(db, admin, member.userId, null);
+});
+
 const deps = (channel: FakeChannel, queue: TurnQueue): PipelineDeps => ({
   db,
   queue,
@@ -118,19 +151,66 @@ const deps = (channel: FakeChannel, queue: TurnQueue): PipelineDeps => ({
   identity: createIdentity(db),
 });
 
-it('answers later for a turn held by the cap, and runs it when one finishes', async () => {
+it('tells the person a turn is queued behind others, and runs it when one finishes', async () => {
+  const channel = new FakeChannel();
   const queue = createTurnQueue(postgres.url, () => undefined);
   await queue.start();
   try {
-    const d = deps(new FakeChannel(), queue);
-    const [a = '', b = '', held = ''] = await queued('M1', 3);
+    const d = deps(channel, queue);
+    const [a = '', b = ''] = await queued('M1', 2);
     await claimTurn(db, member, a);
     await claimTurn(db, member, b);
-    expect(await processTurn(d, held)).toBe('later');
-    expect(await status(member, held)).toBe('queued');
+    const message = (messageId: string) => ({
+      channel: 'fake',
+      chatId: 'M1',
+      messageId,
+      text: 'hi',
+    });
+    await ingest(d, message('third'));
+    expect(channel.attempts).toEqual([
+      { chatId: 'M1', text: 'Queued behind 2 other tasks. I will start it when one finishes.' },
+    ]);
+    const held = await db
+      .selectFrom('turns')
+      .select('id')
+      .where('idempotency_key', '=', 'fake:M1:third')
+      .executeTakeFirstOrThrow();
+    expect(await processTurn(d, held.id)).toBe('later');
+    expect(await status(member, held.id)).toBe('queued');
     await close(member, a);
-    expect(await processTurn(d, held)).toBeUndefined();
-    expect(await status(member, held)).toBe('done');
+    expect(await processTurn(d, held.id)).toBeUndefined();
+    expect(await status(member, held.id)).toBe('done');
+    // A person under their cap gets no notice.
+    channel.attempts.length = 0;
+    await close(member, b);
+    await ingest(d, message('fourth'));
+    expect(channel.attempts).toEqual([]);
+  } finally {
+    await queue.stop();
+  }
+});
+
+it('does not fail the turn when the queued notice cannot be sent', async () => {
+  const channel = new FakeChannel();
+  channel.failures = 99;
+  const queue = createTurnQueue(postgres.url, () => undefined);
+  await queue.start();
+  try {
+    const [a = '', b = ''] = await queued('M1', 2);
+    await claimTurn(db, member, a);
+    await claimTurn(db, member, b);
+    await ingest(deps(channel, queue), {
+      channel: 'fake',
+      chatId: 'M1',
+      messageId: 'x',
+      text: 'hi',
+    });
+    const row = await db
+      .selectFrom('turns')
+      .select('status')
+      .where('idempotency_key', '=', 'fake:M1:x')
+      .executeTakeFirstOrThrow();
+    expect(row.status).toBe('queued');
   } finally {
     await queue.stop();
   }
@@ -192,6 +272,35 @@ it('sends one reply and keeps the cap when two jobs wait for the same turn', asy
     );
     expect(channel.attempts.filter((sent) => sent.text === 'once')).toHaveLength(1);
   } finally {
+    await queue.stop();
+  }
+});
+
+it('runs a queued turn whose job was lost, instead of blocking the line behind it', async () => {
+  const channel = new FakeChannel();
+  const queue = createTurnQueue(postgres.url, () => undefined);
+  await queue.start();
+  await setTaskCap(db, admin, member.userId, 1);
+  const stop = watchStuckTurns(deps(channel, queue), 200);
+  try {
+    const d = deps(channel, queue);
+    await ingest(d, { channel: 'fake', chatId: 'M1', messageId: 'head', text: 'first' });
+    const head = (await row('fake:M1:head')).id;
+    await sql`delete from pgboss.job where name = 'turns' and data->>'turnId' = ${head}`.execute(
+      db,
+    );
+    await ingest(d, { channel: 'fake', chatId: 'M1', messageId: 'behind', text: 'second' });
+    await startWorker(d);
+    await vi.waitFor(
+      async () => {
+        expect(await status(member, head)).toBe('done');
+        expect((await row('fake:M1:behind')).status).toBe('done');
+      },
+      { timeout: 30_000 },
+    );
+  } finally {
+    stop();
+    await setTaskCap(db, admin, member.userId, null);
     await queue.stop();
   }
 });

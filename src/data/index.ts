@@ -62,6 +62,7 @@ export {
   insertTurn,
   interruptTurn,
   listQueuedTurnIds,
+  waitingBehind,
   type NewTurn,
   type Turn,
 } from './turns.js';

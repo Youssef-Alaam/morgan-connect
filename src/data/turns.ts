@@ -89,7 +89,7 @@ const capSql = sql<number>`coalesce((select u.max_parallel_tasks from users u
  * arrived earlier (so the line keeps its order). Both counts name the person, so they hold even where row-level security is off.
  */
 const aheadSql = sql<number>`(select count(*) from turns r where r.status = 'sending'
-     and r.user_id = turns.user_id)
+     and r.user_id = turns.user_id and r.id <> turns.id)
   + (select count(*) from turns q where q.status = 'queued' and q.user_id = turns.user_id
      and (q.created_at, q.id) < (turns.created_at, turns.id))`;
 
@@ -136,6 +136,19 @@ export function interruptTurn(
       .returning('id')
       .execute();
     return rows.length > 0;
+  });
+}
+
+/** How many tasks are ahead of a just-queued turn, and the cap; used to tell the person they wait. */
+export function waitingBehind(
+  db: Db,
+  owner: Owner,
+  id: string,
+): Promise<{ ahead: number; cap: number }> {
+  return withOwner(db, owner, async (trx) => {
+    const { rows } = await sql<{ ahead: string; cap: number }>`
+      select ${aheadSql} as ahead, ${capSql} as cap from turns where id = ${id}::uuid`.execute(trx);
+    return { ahead: Number(rows[0]?.ahead ?? 0), cap: rows[0]?.cap ?? DEFAULT_TASK_CAP };
   });
 }
 
