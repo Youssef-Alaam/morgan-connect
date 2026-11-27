@@ -5,6 +5,7 @@ import { Badge } from '../components/Badge.tsx';
 import { Button } from '../components/Button.tsx';
 import { Table } from '../components/Table.tsx';
 import { FilterBar } from './AuditFilters.tsx';
+import { MemberChat } from './MemberChat.tsx';
 import { ErrorBanner } from './ErrorBanner.tsx';
 import { TopBar } from './TopBar.tsx';
 import { useAudit } from './useAudit.ts';
@@ -58,6 +59,35 @@ function Rows({ rows }: { rows: AuditRow[] }) {
   );
 }
 
+/** The button that opens the chosen member's chat, and the chat once it is open. */
+function ReadChat({ member, onRead }: { member: Person | undefined; onRead: () => void }) {
+  const { t } = useTranslation();
+  const [reading, setReading] = useState(false);
+  if (member === undefined) return null;
+  const name = member.email ?? t(`${K}.chatOnly`);
+  return (
+    <>
+      <Button
+        variant="secondary"
+        onClick={() => {
+          setReading(true);
+        }}
+      >
+        {t(`${K}.openChat`, { person: name })}
+      </Button>
+      {reading ? (
+        <MemberChat
+          member={{ id: member.id, name }}
+          onClose={() => {
+            setReading(false);
+          }}
+          onRead={onRead}
+        />
+      ) : null}
+    </>
+  );
+}
+
 interface AuditProps {
   onBack: () => void;
   onSignedOut: () => void;
@@ -73,6 +103,7 @@ export function Audit({ onBack, onSignedOut }: AuditProps) {
       if (answer.ok) setPeople(answer.data.people);
     });
   }, []);
+  const chosen = people.find((one) => one.id === page.filters.person && one.role === 'member');
   return (
     <main className="page screen screen-wide">
       <TopBar onSignedOut={onSignedOut}>
@@ -88,6 +119,7 @@ export function Audit({ onBack, onSignedOut }: AuditProps) {
         actions={page.actions}
         onChange={page.setFilters}
       />
+      <ReadChat member={chosen} onRead={page.reload} />
       {page.rows === undefined ? (
         page.error === undefined ? (
           <p>{t('app.loading')}</p>
