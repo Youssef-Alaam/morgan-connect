@@ -24,6 +24,7 @@ import { up as accessProfiles } from './0023-access-profiles.js';
 import { up as profileSelfRestrict } from './0024-profile-self-restrict.js';
 import { up as profilesOverview } from './0025-profiles-overview.js';
 import { up as budgets } from './0026-budgets.js';
+import { up as budgetLimitWrites } from './0027-budget-limit-writes.js';
 
 /** Applied in key order. Add new migrations here with the next number. */
 export const migrations: Record<string, Migration> = {
@@ -52,4 +53,5 @@ export const migrations: Record<string, Migration> = {
   '0024-profile-self-restrict': { up: profileSelfRestrict },
   '0025-profiles-overview': { up: profilesOverview },
   '0026-budgets': { up: budgets },
+  '0027-budget-limit-writes': { up: budgetLimitWrites },
 };

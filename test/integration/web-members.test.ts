@@ -93,8 +93,9 @@ it('joins by an invite once: the notice first, then role and limit land, signed 
   expect(await me.json()).toMatchObject({ user: { role: 'member', email: 'joiner@example.test' } });
   const row = await ctx.owner
     .selectFrom('users')
-    .select('told_admin_can_read_at')
-    .where('monthly_limit_usd', '=', '7.50')
+    .innerJoin('budgets', 'budgets.user_id', 'users.id')
+    .select('users.told_admin_can_read_at')
+    .where('budgets.monthly_limit_usd', '=', '7.50')
     .executeTakeFirstOrThrow();
   expect(row.told_admin_can_read_at).toBeInstanceOf(Date);
   expect((await post('join', { ...body, acceptedNotice: true })).status).toBe(410);

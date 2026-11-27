@@ -25,7 +25,8 @@ const userRow = (email: string) =>
   ctx.owner
     .selectFrom('credentials')
     .innerJoin('users', 'users.id', 'credentials.user_id')
-    .select(['users.id', 'users.role', 'users.workspace_id', 'users.monthly_limit_usd'])
+    .leftJoin('budgets', 'budgets.user_id', 'users.id')
+    .select(['users.id', 'users.role', 'users.workspace_id', 'budgets.monthly_limit_usd'])
     .select(['users.told_admin_can_read_at', 'credentials.must_change'])
     .where('email', '=', email)
     .executeTakeFirst();
@@ -41,7 +42,11 @@ it('lets only the admin make an invite; role and limit land on the new member, t
   expect(await inviteLive(ctx.app, 'h1')).toBe(true);
   expect((await spend('h1', 'New@x.test'))?.workspaceId).toBe(ctx.alice.workspaceId);
   const made = await userRow('new@x.test');
-  expect(made).toMatchObject({ role: 'member', monthly_limit_usd: '12.50', must_change: false });
+  expect(made).toMatchObject({
+    role: 'member',
+    monthly_limit_usd: '12.50000000',
+    must_change: false,
+  });
   expect(made?.told_admin_can_read_at).toBeInstanceOf(Date);
   // The invite dies when the account is created.
   expect(await inviteLive(ctx.app, 'h1')).toBe(false);
@@ -73,7 +78,12 @@ it('makes a temporary-password account that must change it, and the notice is re
   expect(await credentialsByEmail(app, 'temp@x.test')).toBeUndefined();
   const id = await createAccount(app, alice, account);
   const made = await userRow('temp@x.test');
-  expect(made).toMatchObject({ id, role: 'member', monthly_limit_usd: '3.00', must_change: true });
+  expect(made).toMatchObject({
+    id,
+    role: 'member',
+    monthly_limit_usd: '3.00000000',
+    must_change: true,
+  });
   expect(made?.told_admin_can_read_at).toBeNull();
   const me = { userId: made?.id ?? '', workspaceId: made?.workspace_id ?? '' };
   const expiresAt = new Date(Date.now() + 60_000);

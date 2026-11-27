@@ -74,10 +74,11 @@ it('makes an invite that joins with its role and limit, stored only as a hash', 
   expect((await post('join', { ...join, acceptedNotice: true })).status).toBe(200);
   const joined = await ctx.owner
     .selectFrom('users')
-    .select(['role', 'monthly_limit_usd'])
-    .where('monthly_limit_usd', '=', '7.50')
+    .innerJoin('budgets', 'budgets.user_id', 'users.id')
+    .select(['users.role', 'budgets.monthly_limit_usd'])
+    .where('budgets.monthly_limit_usd', '=', '7.50')
     .execute();
-  expect(joined).toEqual([{ role: 'member', monthly_limit_usd: '7.50' }]);
+  expect(joined).toEqual([{ role: 'member', monthly_limit_usd: '7.50000000' }]);
   expect(logs).not.toContain(token);
 });
 

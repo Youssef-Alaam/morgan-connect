@@ -1,13 +1,18 @@
+import type { Kysely } from 'kysely';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import {
   budgetOf,
+  createAccount,
   createDb,
+  createInvite,
   migrateToLatest,
   recordUsage,
+  redeemInvite,
   setBudget,
   type Db,
   type Owner,
 } from '../../src/data/index.js';
+import { copyLegacyLimits } from '../../src/data/migrations/0027-budget-limit-writes.js';
 import { checkBudget } from '../../src/policy/index.js';
 import { linkChats } from '../helpers/link-chats.js';
 import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
@@ -123,4 +128,48 @@ it('lets only an admin set a limit, and audits every attempt', async () => {
     { user_id: who.userId, subject_user_id: admin.userId, outcome: 'refused' },
     { user_id: who.userId, subject_user_id: who.userId, outcome: 'refused' },
   ]);
+});
+
+it('holds an invited member to the limit set on the invite, and an account to its own', async () => {
+  expect(
+    await createInvite(db, admin, { tokenHash: 'inv1', ttlSeconds: 600, monthlyLimitUsd: 1 }),
+  ).toBe(true);
+  const joined = await redeemInvite(db, {
+    tokenHash: 'inv1',
+    email: 'i@x.test',
+    passwordHash: 'p',
+  });
+  if (joined === undefined) throw new Error('the invite was not accepted');
+  expect(await budgetOf(db, joined)).toBe('1.00000000');
+  expect(await check({}, joined)).toEqual({ allowed: true });
+  await spend(joined, 1);
+  expect(await check({}, joined)).toMatchObject({ allowed: false, limitUsd: '1.00000000' });
+  const id = await createAccount(db, admin, {
+    email: 'a@x.test',
+    passwordHash: 'p',
+    monthlyLimitUsd: 2.5,
+  });
+  expect(await budgetOf(db, { userId: id ?? '', workspaceId: admin.workspaceId })).toBe(
+    '2.50000000',
+  );
+});
+
+it('copies a legacy users.monthly_limit_usd into budgets, and only where one was set', async () => {
+  const legacy = await db
+    .insertInto('users')
+    .values({ role: 'member', workspace_id: admin.workspaceId, monthly_limit_usd: '12.50' })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  const none = await db
+    .insertInto('users')
+    .values({ role: 'member', workspace_id: admin.workspaceId })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  await copyLegacyLimits(db as Kysely<unknown>);
+  const rows = await db
+    .selectFrom('budgets')
+    .select(['user_id', 'monthly_limit_usd'])
+    .where('user_id', 'in', [legacy.id, none.id])
+    .execute();
+  expect(rows).toEqual([{ user_id: legacy.id, monthly_limit_usd: '12.50000000' }]);
 });
