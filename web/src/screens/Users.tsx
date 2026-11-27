@@ -7,6 +7,7 @@ import { Table } from '../components/Table.tsx';
 import { ConfirmDialog } from './ConfirmDialog.tsx';
 import { ErrorBanner } from './ErrorBanner.tsx';
 import { Invites } from './Invites.tsx';
+import { NewAccount } from './NewAccount.tsx';
 import { TopBar } from './TopBar.tsx';
 
 const K = 'users';
@@ -139,6 +140,7 @@ export function Users({ onBack, onSignedOut }: UsersProps) {
         }}
       />
       <Invites />
+      <NewAccount onCreated={load} />
     </main>
   );
 }

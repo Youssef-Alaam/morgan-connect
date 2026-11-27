@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   changePassword,
+  createAccount,
   createInvite,
   decideApproval,
   listPasskeys,
@@ -100,11 +101,17 @@ describe('the account calls', () => {
     expect(vi.mocked(fetch).mock.calls[1]?.[0]).toBe('/api/passkeys/a%2Fb');
   });
 
-  it('makes invites, lists and revokes open invites', async () => {
+  it('makes invites and accounts, lists and revokes open invites', async () => {
     answer(200, { token: 't', ttlHours: 72 });
     await createInvite(5, 72);
     expect(sent().path).toBe('/api/invites');
     expect(sent().init.body).toBe(JSON.stringify({ monthlyLimitUsd: 5, ttlHours: 72 }));
+    answer(200, { temporaryPassword: 'p' });
+    await createAccount('a@example.test', null);
+    expect(sent().path).toBe('/api/accounts');
+    expect(sent().init.body).toBe(
+      JSON.stringify({ email: 'a@example.test', monthlyLimitUsd: null }),
+    );
     answer(200, { invites: [] });
     await listInvites();
     expect(sent().path).toBe('/api/admin/invites');

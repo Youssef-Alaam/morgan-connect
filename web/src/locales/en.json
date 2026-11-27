@@ -272,7 +272,16 @@
       "copy": "Copy link",
       "copied": "Copied.",
       "confirmRevoke": "Revoke this invite?",
-      "confirmRevokeText": "The link that expires {{when}} stops working. Anyone you sent it to can no longer join with it."
+      "confirmRevokeText": "The link that expires {{when}} stops working. Anyone you sent it to can no longer join with it.",
+      "hoursInvalid": "Enter a whole number of hours, from 1 to 720."
+    },
+    "account": {
+      "title": "Account with a temporary password",
+      "email": "Email",
+      "create": "Create account",
+      "password": "Temporary password",
+      "passwordHint": "Give it to the person. It is not shown again, and they must change it when they first sign in.",
+      "copy": "Copy password"
     }
   }
 }
