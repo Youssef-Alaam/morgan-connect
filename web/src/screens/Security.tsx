@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Button } from '../components/Button.tsx';
 import { Authenticator } from './Authenticator.tsx';
+import { Passkeys } from './Passkeys.tsx';
 import { TopBar } from './TopBar.tsx';
 
 interface SecurityProps {
@@ -20,6 +21,7 @@ export function Security({ onBack, onSignedOut }: SecurityProps) {
       </TopBar>
       <h2>{t('security.title')}</h2>
       <Authenticator />
+      <Passkeys />
     </main>
   );
 }
