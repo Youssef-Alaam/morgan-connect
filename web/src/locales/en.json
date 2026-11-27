@@ -12,7 +12,15 @@
     "password": "Password",
     "show": "Show password",
     "hide": "Hide password",
-    "submit": "Sign in"
+    "submit": "Sign in",
+    "code": "Authenticator code",
+    "codeHint": "Six digits from your authenticator app.",
+    "verify": "Verify",
+    "backup": "Backup code",
+    "backupHint": "One of the backup codes you saved.",
+    "useBackup": "Use a backup code",
+    "useApp": "Use the authenticator app",
+    "back": "Back to password"
   },
   "errors": {
     "label": "Problem",
