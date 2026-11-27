@@ -3,10 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { changePassword } from '../api.ts';
 import { Button } from '../components/Button.tsx';
 import { PasswordInput } from '../components/TextInput.tsx';
+import { MIN_PASSWORD_LENGTH } from '../password.ts';
 import { Checkbox } from '../components/Toggle.tsx';
 import { ErrorBanner, typed } from './ErrorBanner.tsx';
-
-const MIN_LENGTH = 12;
 
 interface ChangePasswordProps {
   onDone: () => void;
@@ -19,7 +18,7 @@ export function ChangePassword({ onDone }: ChangePasswordProps) {
   const [next, setNext] = useState('');
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState<string>();
-  const ready = accepted && next.length >= MIN_LENGTH;
+  const ready = accepted && next.length >= MIN_PASSWORD_LENGTH;
   const toggle = { showLabel: t('signIn.show'), hideLabel: t('signIn.hide') };
 
   const submit = async (event: SyntheticEvent) => {

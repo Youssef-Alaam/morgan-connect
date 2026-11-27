@@ -47,6 +47,16 @@ export function setPassword(
   return call('/set-password', { token, email, password });
 }
 
+/** An invite link's one-time token, with the new login and the admin-read notice accepted. */
+export function join(
+  token: string,
+  email: string,
+  password: string,
+  acceptedNotice: boolean,
+): Promise<Result<unknown>> {
+  return call('/join', { token, email, password, acceptedNotice });
+}
+
 export function changePassword(
   current: string,
   password: string,

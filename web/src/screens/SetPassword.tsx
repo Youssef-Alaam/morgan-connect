@@ -3,18 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { setPassword, signIn, standing, type Standing } from '../api.ts';
 import { Button } from '../components/Button.tsx';
 import { PasswordInput, TextInput } from '../components/TextInput.tsx';
-import { tokenFromHash } from '../link.ts';
+import { takeToken } from '../link.ts';
+import { MIN_PASSWORD_LENGTH } from '../password.ts';
 import { ErrorBanner, typed } from './ErrorBanner.tsx';
 
-const MIN_LENGTH = 12;
 const LINK_INVALID = 'link_invalid';
-
-/** Read the token once and take it out of the address bar, so it is not left in history or a screenshot. */
-function takeToken(): string {
-  const token = tokenFromHash(window.location.hash);
-  window.history.replaceState(null, '', window.location.pathname + window.location.search);
-  return token;
-}
 
 interface SetPasswordProps {
   onDone: (next: Standing) => void;
@@ -64,7 +57,7 @@ export function SetPassword({ onDone }: SetPasswordProps) {
           value={password}
           onChange={typed(setPasswordText)}
         />
-        <Button type="submit" disabled={token === '' || password.length < MIN_LENGTH}>
+        <Button type="submit" disabled={token === '' || password.length < MIN_PASSWORD_LENGTH}>
           {t('setPassword.submit')}
         </Button>
       </form>
