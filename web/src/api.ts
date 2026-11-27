@@ -8,7 +8,7 @@ export type Standing = 'in' | 'out' | 'change' | 'unknown';
 
 const PASSWORD_CHANGE = 'password_change_required';
 
-async function call<T>(path: string, body?: unknown, method?: string): Promise<Result<T>> {
+export async function call<T>(path: string, body?: unknown, method?: string): Promise<Result<T>> {
   const init: RequestInit =
     body === undefined
       ? method === undefined
@@ -184,7 +184,7 @@ export function createAccount(
   return call('/accounts', { email, monthlyLimitUsd });
 }
 
-type Preset = 'restricted' | 'standard' | 'trusted';
+export type Preset = 'restricted' | 'standard' | 'trusted';
 export type Mode = 'off' | 'ask' | 'auto';
 
 /** What each preset allows, per action type. */
