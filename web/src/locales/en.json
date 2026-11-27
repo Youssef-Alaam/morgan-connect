@@ -404,6 +404,22 @@
       "action": "Any action",
       "decision": "Any decision",
       "outcome": "Any outcome"
+    },
+    "openChat": "Read {{person}}'s chat",
+    "read": {
+      "title": "Chat of {{person}}",
+      "close": "Close",
+      "reason": "Why are you reading it?",
+      "reasonHint": "The reason is written to the audit log before any message is shown. The person was told at joining that you can do this.",
+      "open": "Open chat",
+      "log": "Chat of {{person}}",
+      "empty": "No messages yet.",
+      "role": {
+        "user": "Them",
+        "assistant": "Morgan",
+        "tool": "Tool",
+        "summary": "Summary"
+      }
     }
   }
 }

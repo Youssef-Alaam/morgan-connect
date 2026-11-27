@@ -262,6 +262,21 @@ export function listAudit(filters: AuditFilters, before?: string): Promise<Resul
   return call(`/admin/audit?${query.toString()}`);
 }
 
+export interface MemberMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'tool' | 'summary';
+  text: string;
+  createdAt: string;
+}
+
+/** Opens a member's chat. The server writes the audit row with `reason` before it answers. */
+export function readMemberChat(
+  id: string,
+  reason: string,
+): Promise<Result<{ messages: MemberMessage[] }>> {
+  return call(`/admin/people/${encodeURIComponent(id)}/chat`, { reason });
+}
+
 /** Ends this browser's session. */
 export function signOut(): Promise<Result<unknown>> {
   return call('/sign-out', {});

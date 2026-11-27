@@ -11,6 +11,7 @@ export async function consoleAudit(): Promise<{ tool: string; outcome: string }[
         'admin.account.create',
         'admin.invite.create',
         'admin.invite.revoke',
+        'admin.read.chat',
         'device.unlink',
       ])
       .orderBy('id')

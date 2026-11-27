@@ -54,11 +54,23 @@ test('the admin runs the People page for real, and each action is in the audit l
   await page.getByRole('dialog').getByRole('button', { name: 'Unlink', exact: true }).click();
   await expect(page.getByRole('button', { name: /^Unlink/ })).toHaveCount(0);
 
+  // Reading a member's chat from the audit log writes its own row before the chat is shown.
+  await page.getByRole('button', { name: 'Back to chat' }).click();
+  await page.getByRole('button', { name: 'Audit' }).click();
+  await page.getByLabel('Person').selectOption({ label: JOINER.email });
+  await page.getByRole('button', { name: `Read ${JOINER.email}'s chat` }).click();
+  await page.getByLabel('Why are you reading it?').fill('stack check');
+  await page.getByRole('button', { name: 'Open chat' }).click();
+  await expect(page.getByRole('log', { name: `Chat of ${JOINER.email}` })).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByRole('row', { name: /admin\.read stack check/ })).toBeVisible();
+
   expect((await consoleAudit()).map((row) => `${row.tool} ${row.outcome}`)).toEqual([
     'admin.account.create ok',
     'admin.invite.create ok',
     'admin.invite.revoke ok',
     'admin.invite.create ok',
     'device.unlink ok',
+    'admin.read.chat ok',
   ]);
 });
