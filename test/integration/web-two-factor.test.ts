@@ -146,3 +146,19 @@ it('turning it on ends the other sessions but keeps this one', async () => {
   expect((await app.request('/api/me', { headers: { cookie: other } })).status).toBe(401);
   expect((await app.request('/api/me', { headers: { cookie } })).status).toBe(200);
 });
+
+it('says whether an authenticator is on and whether this install can have one', async () => {
+  const status = async (cookie: string, server = app) =>
+    (await server.request('/api/two-factor', { headers: { cookie } })).json();
+  expect((await app.request('/api/two-factor')).status).toBe(401);
+  const cookie = await member('status');
+  expect(await status(cookie)).toEqual({ available: true, enabled: false });
+  const setup = await post('two-factor/setup', {}, cookie);
+  const { secret } = (await setup.json()) as { secret: string };
+  // A started setup is not switched on until its first code is given.
+  expect(await status(cookie)).toEqual({ available: true, enabled: false });
+  const confirmed = await post('two-factor/confirm', { code: codeFor(secret) }, cookie);
+  expect(confirmed.status).toBe(200);
+  expect(await status(cookie)).toEqual({ available: true, enabled: true });
+  expect(await status(cookie, bare)).toEqual({ available: false, enabled: true });
+});

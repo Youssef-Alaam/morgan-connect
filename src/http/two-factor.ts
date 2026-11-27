@@ -215,13 +215,18 @@ function disableRoute(routes: Hono<Signed>, { db }: AuthDeps, two: TwoFactor): v
 }
 
 /**
- * Turning an authenticator app on and off (M2-6): `setup` hands out a secret and the address for
- * its QR code; `confirm` takes the first code, switches it on and shows the backup codes once;
- * `disable` needs a current code. Without `TWO_FACTOR_KEY` there is nowhere safe to keep the secret.
+ * Turning an authenticator app on and off (M2-6): `GET` says whether it is on and possible; `setup`
+ * hands out a secret and the address for its QR code; `confirm` takes the first code, switches it
+ * on and shows the backup codes once; `disable` needs a current code. Without `TWO_FACTOR_KEY` there is nowhere safe to keep the secret.
  */
 export function twoFactorRoutes(routes: Hono<Signed>, deps: AuthDeps, two: TwoFactor): void {
   const { db, now = Date.now } = deps;
   const { key } = two;
+
+  routes.get('/two-factor', async (c) => {
+    const enabled = (await activeTotp(db, c.get('session'))) !== undefined;
+    return c.json({ available: key !== undefined, enabled });
+  });
 
   routes.post('/two-factor/setup', async (c) => {
     if (key === undefined) return c.json(unavailable, 501);
