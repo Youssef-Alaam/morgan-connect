@@ -30,7 +30,18 @@
     "send": "Send",
     "log": "Conversation",
     "reconnecting": "Reconnecting.",
-    "failed": "not sent"
+    "failed": "not sent",
+    "approval": {
+      "title": "Morgan asks your approval",
+      "approve": "Approve",
+      "deny": "Deny",
+      "sending": "Sending your answer",
+      "approved": "Approved",
+      "denied": "Denied",
+      "expired": "Expired, nothing was done",
+      "aborted": "Cancelled",
+      "invalid": "No longer valid"
+    }
   },
   "errors": {
     "label": "Problem",

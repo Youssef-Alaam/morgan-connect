@@ -3,7 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { sendMessage, standing } from '../api.ts';
 import { ChatBubble } from '../components/ChatBubble.tsx';
 import { Composer } from '../components/Composer.tsx';
+import { ApprovalLine } from './ApprovalLine.tsx';
+import { ErrorBanner } from './ErrorBanner.tsx';
 import { TopBar } from './TopBar.tsx';
+import { useDecide } from './useDecide.ts';
 import { apply, followEvents, type Line } from '../events.ts';
 
 interface ChatProps {
@@ -38,6 +41,7 @@ export function Chat({ onSignedOut }: ChatProps) {
   const { t } = useTranslation();
   const [lines, setLines] = useState<Line[]>([]);
   const broken = useStream(setLines, onSignedOut);
+  const { decide, error } = useDecide(setLines);
 
   const send = (text: string) => {
     const id = crypto.randomUUID();
@@ -54,17 +58,27 @@ export function Chat({ onSignedOut }: ChatProps) {
     <main className="page chat">
       <TopBar onSignedOut={onSignedOut} />
       <p role="status">{broken ? t('chat.reconnecting') : ''}</p>
+      <ErrorBanner error={error} />
       <div className="chat-log" role="log" aria-label={t('chat.log')}>
-        {lines.map((line) => (
-          <ChatBubble
-            key={line.id}
-            from={line.from}
-            author={t(line.from === 'user' ? 'chat.you' : 'chat.morgan')}
-          >
-            {line.text}
-            {line.state === 'failed' ? ` (${t('chat.failed')})` : ''}
-          </ChatBubble>
-        ))}
+        {lines.map((line) =>
+          line.approval === undefined ? (
+            <ChatBubble
+              key={line.id}
+              from={line.from}
+              author={t(line.from === 'user' ? 'chat.you' : 'chat.morgan')}
+            >
+              {line.text}
+              {line.state === 'failed' ? ` (${t('chat.failed')})` : ''}
+            </ChatBubble>
+          ) : (
+            <ApprovalLine
+              key={line.id}
+              approval={line.approval}
+              text={line.text}
+              onDecide={decide}
+            />
+          ),
+        )}
       </div>
       <Composer label={t('chat.message')} sendLabel={t('chat.send')} onSend={send} />
     </main>
