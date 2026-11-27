@@ -48,12 +48,7 @@ function PageButtons({
   onUsers,
   onProfiles,
   onBudgets,
-}: {
-  onSecurity: () => void;
-  onUsers: (() => void) | undefined;
-  onProfiles: (() => void) | undefined;
-  onBudgets: (() => void) | undefined;
-}) {
+}: Pick<ChatProps, 'onSecurity' | 'onUsers' | 'onProfiles' | 'onBudgets'>) {
   const { t } = useTranslation();
   return (
     <>
@@ -80,7 +75,7 @@ function PageButtons({
 }
 
 // Talk to Morgan: your messages go out over POST, Morgan's answers arrive on the live stream.
-export function Chat({ onSignedOut, onSecurity, onUsers, onProfiles, onBudgets }: ChatProps) {
+export function Chat({ onSignedOut, ...pages }: ChatProps) {
   const { t } = useTranslation();
   const [lines, setLines] = useState<Line[]>([]);
   const broken = useStream(setLines, onSignedOut);
@@ -100,12 +95,7 @@ export function Chat({ onSignedOut, onSecurity, onUsers, onProfiles, onBudgets }
   return (
     <main className="page chat">
       <TopBar onSignedOut={onSignedOut}>
-        <PageButtons
-          onSecurity={onSecurity}
-          onUsers={onUsers}
-          onProfiles={onProfiles}
-          onBudgets={onBudgets}
-        />
+        <PageButtons {...pages} />
       </TopBar>
       <p role="status">{broken ? t('chat.reconnecting') : ''}</p>
       <ErrorBanner error={error} />
