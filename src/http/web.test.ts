@@ -1,8 +1,8 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createLogger } from '../ops/index.js';
+import { atomicWrite, createLogger } from '../ops/index.js';
 import { createApp } from './app.js';
 
 const PAGE = '<!doctype html><title>Morgan</title><div id="root"></div>';
@@ -13,13 +13,13 @@ let app: ReturnType<typeof createApp>;
 beforeAll(async () => {
   const base = await mkdtemp(join(tmpdir(), 'web-dist-'));
   outside = join(base, 'secret.txt');
-  await writeFile(outside, 'secret');
+  await atomicWrite(outside, 'secret');
   dir = join(base, 'dist');
   await mkdir(join(dir, 'assets'), { recursive: true });
-  await writeFile(join(dir, 'index.html'), PAGE);
-  await writeFile(join(dir, 'assets', 'app-abc123.js'), 'console.log(1)');
-  await writeFile(join(dir, 'favicon.ico'), 'ico');
-  await writeFile(join(dir, 'blob.bin'), 'x');
+  await atomicWrite(join(dir, 'index.html'), PAGE);
+  await atomicWrite(join(dir, 'assets', 'app-abc123.js'), 'console.log(1)');
+  await atomicWrite(join(dir, 'favicon.ico'), 'ico');
+  await atomicWrite(join(dir, 'blob.bin'), 'x');
   app = createApp({
     dbVersion: () => Promise.resolve('17'),
     logger: createLogger('silent'),
