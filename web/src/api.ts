@@ -99,6 +99,19 @@ export function listPasskeys(): Promise<Result<Passkey[]>> {
   return call('/passkeys');
 }
 
+/**
+ * The options for the browser to make a passkey from. A person with an authenticator on gets a 401
+ * `invalid_code` until `code` (an authenticator or backup code) is given.
+ */
+export function passkeyOptions(code?: string): Promise<Result<unknown>> {
+  return call('/passkeys/options', code === undefined ? {} : { code });
+}
+
+/** Store the passkey the browser made (the JSON form of its answer). */
+export function addPasskey(response: object, name: string): Promise<Result<unknown>> {
+  return call('/passkeys', { response, name });
+}
+
 /** A 409 `last_sign_in_method` means it is the only way this person can sign in. */
 export function removePasskey(id: string): Promise<Result<unknown>> {
   return call(`/passkeys/${encodeURIComponent(id)}`, undefined, 'DELETE');
