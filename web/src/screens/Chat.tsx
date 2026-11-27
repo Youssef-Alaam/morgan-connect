@@ -15,6 +15,7 @@ interface ChatProps {
   onSecurity: () => void;
   /** Given only to the admin. */
   onUsers?: () => void;
+  onProfiles?: () => void;
 }
 
 /** Follow the live stream into the lines; true while it is broken. A session that ended means sign in again. */
@@ -40,13 +41,15 @@ function useStream(setLines: Dispatch<SetStateAction<Line[]>>, onSignedOut: () =
   return broken;
 }
 
-/** The buttons that open the other pages; People only for the admin. */
+/** The buttons that open the other pages; People and Access only for the admin. */
 function PageButtons({
   onSecurity,
   onUsers,
+  onProfiles,
 }: {
   onSecurity: () => void;
   onUsers: (() => void) | undefined;
+  onProfiles: (() => void) | undefined;
 }) {
   const { t } = useTranslation();
   return (
@@ -54,6 +57,11 @@ function PageButtons({
       {onUsers === undefined ? null : (
         <Button variant="secondary" onClick={onUsers}>
           {t('users.open')}
+        </Button>
+      )}
+      {onProfiles === undefined ? null : (
+        <Button variant="secondary" onClick={onProfiles}>
+          {t('profiles.open')}
         </Button>
       )}
       <Button variant="secondary" onClick={onSecurity}>
@@ -64,7 +72,7 @@ function PageButtons({
 }
 
 // Talk to Morgan: your messages go out over POST, Morgan's answers arrive on the live stream.
-export function Chat({ onSignedOut, onSecurity, onUsers }: ChatProps) {
+export function Chat({ onSignedOut, onSecurity, onUsers, onProfiles }: ChatProps) {
   const { t } = useTranslation();
   const [lines, setLines] = useState<Line[]>([]);
   const broken = useStream(setLines, onSignedOut);
@@ -84,7 +92,7 @@ export function Chat({ onSignedOut, onSecurity, onUsers }: ChatProps) {
   return (
     <main className="page chat">
       <TopBar onSignedOut={onSignedOut}>
-        <PageButtons onSecurity={onSecurity} onUsers={onUsers} />
+        <PageButtons onSecurity={onSecurity} onUsers={onUsers} onProfiles={onProfiles} />
       </TopBar>
       <p role="status">{broken ? t('chat.reconnecting') : ''}</p>
       <ErrorBanner error={error} />

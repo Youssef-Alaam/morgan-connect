@@ -288,5 +288,36 @@
       "passwordHint": "Give it to the person. It is not shown again, and they must change it when they first sign in.",
       "copy": "Copy password"
     }
+  },
+  "profiles": {
+    "title": "Access profiles",
+    "open": "Access",
+    "back": "Back to chat",
+    "caption": "What applies to {{person}} and each of their chats",
+    "person": "Person",
+    "applies": "Applies to",
+    "profile": "Profile",
+    "forPerson": "The person",
+    "forChat": "Their {{channel}} chat",
+    "chatOf": "{{channel}} chat of {{person}}",
+    "profileFor": "Profile for {{target}}",
+    "chatOnly": "Chat only, no web login",
+    "restricted": "Restricted",
+    "standard": "Standard",
+    "trusted": "Trusted",
+    "off": "Off",
+    "ask": "Ask",
+    "auto": "Auto",
+    "allows": "What {{preset}} allows",
+    "action": "Action",
+    "mode": "Setting",
+    "type": {
+      "read": "Read",
+      "create": "Create",
+      "overwrite": "Overwrite",
+      "delete": "Delete",
+      "send": "Send",
+      "execute": "Run commands"
+    }
   }
 }

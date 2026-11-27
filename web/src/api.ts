@@ -184,6 +184,33 @@ export function createAccount(
   return call('/accounts', { email, monthlyLimitUsd });
 }
 
+type Preset = 'restricted' | 'standard' | 'trusted';
+type Mode = 'off' | 'ask' | 'auto';
+
+/** What each preset allows, per action type. */
+export interface PresetRow {
+  preset: Preset;
+  modes: Record<string, Mode>;
+}
+
+/** The profile that applies to a person, and to each of their chats (`own`: chosen for that chat). */
+interface Applied {
+  preset: Preset;
+  modes: Record<string, Mode>;
+}
+export interface Profiles {
+  person: Applied;
+  devices: (Applied & { deviceId: string; channel: string; own: boolean })[];
+}
+
+export function listPresets(): Promise<Result<{ presets: PresetRow[] }>> {
+  return call('/admin/profile-presets');
+}
+
+export function profilesOf(userId: string): Promise<Result<Profiles>> {
+  return call(`/members/${encodeURIComponent(userId)}/profiles`);
+}
+
 /** Ends this browser's session. */
 export function signOut(): Promise<Result<unknown>> {
   return call('/sign-out', {});
