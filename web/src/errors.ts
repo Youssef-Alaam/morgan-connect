@@ -11,6 +11,8 @@ const KNOWN = new Set([
   'notice_required',
   'link_invalid',
   'email_taken',
+  'forbidden',
+  'not_found',
   'network',
 ]);
 

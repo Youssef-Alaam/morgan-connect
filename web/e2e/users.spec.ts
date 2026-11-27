@@ -105,3 +105,12 @@ test('a member is not offered the page', async ({ page }, info) => {
   await expect.poll(() => asked).toBe(2);
   await expect(page.getByRole('button', { name: 'People' })).toHaveCount(0);
 });
+
+test('a refused list shows the refusal and no table', async ({ page }, info) => {
+  await script(page, 'member');
+  await page.route('**/api/me', (route) => route.fulfill({ json: { user: { role: 'admin' } } }));
+  await open(page, queryOf(info.project.metadata));
+  await page.getByRole('button', { name: 'People' }).click();
+  await expect(page.getByRole('alert')).toContainText('Only the admin');
+  await expect(page.getByRole('table')).toHaveCount(0);
+});

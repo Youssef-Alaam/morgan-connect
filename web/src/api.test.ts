@@ -6,12 +6,15 @@ import {
   decideApproval,
   listPasskeys,
   listInvites,
+  listPeople,
   revokeInvite,
   removePasskey,
   secondFactor,
   signIn,
   signOut,
   standing,
+  unlinkDevice,
+  whoAmI,
 } from './api.ts';
 import { errorKey } from './errors.ts';
 
@@ -99,6 +102,24 @@ describe('the account calls', () => {
     expect(sent().init).toEqual({ method: 'DELETE' });
     await removePasskey('a/b');
     expect(vi.mocked(fetch).mock.calls[1]?.[0]).toBe('/api/passkeys/a%2Fb');
+  });
+
+  it('reads who is signed in, the people list, and unlinks a chat by id', async () => {
+    answer(200, { user: { role: 'admin' } });
+    expect(await whoAmI()).toEqual({ ok: true, data: { user: { role: 'admin' } } });
+    expect(sent().path).toBe('/api/me');
+    answer(200, { people: [] });
+    await listPeople();
+    expect(sent().path).toBe('/api/admin/people');
+    answer(403, { error: 'forbidden' });
+    expect(await listPeople()).toEqual({ ok: false, status: 403, error: 'forbidden' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(null, { status: 204 }))),
+    );
+    await unlinkDevice('a/b');
+    expect(sent().path).toBe('/api/devices/a%2Fb');
+    expect(sent().init).toEqual({ method: 'DELETE' });
   });
 
   it('makes invites and accounts, lists and revokes open invites', async () => {

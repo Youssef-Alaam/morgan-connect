@@ -29,7 +29,19 @@ export default async function setup(): Promise<() => Promise<void>> {
       password_hash: passwordHash,
     })
     .execute();
+  // A member with only a Telegram chat, for the People page to list and unlink.
+  const member = await owner
+    .insertInto('users')
+    .values({ role: 'member', told_admin_can_read_at: new Date() })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  await owner
+    .insertInto('devices')
+    .values({ user_id: member.id, channel: 'telegram', chat_id: 'stack-chat-1' })
+    .execute();
   await owner.destroy();
+  // The browser tests read the audit log with the owner role (see audit.ts).
+  process.env['STACK_DATABASE_URL'] = postgres.url;
   const running = await start({
     ...roleUrls(postgres.url),
     PORT: String(API_PORT),
