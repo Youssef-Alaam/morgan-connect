@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { listAudit, type AuditFilters, type AuditRow } from '../api.ts';
 
-export const NO_FILTERS: AuditFilters = {
+const NO_FILTERS: AuditFilters = {
   person: '',
   action: '',
   decision: '',
