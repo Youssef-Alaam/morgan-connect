@@ -229,7 +229,10 @@
   "join": {
     "notice": {
       "admin_can_read": "I understand that the admin can read my chats and memories, and that each read is logged."
-    }
+    },
+    "title": "Join Morgan",
+    "intro": "You were invited. Choose the email and password you will sign in with.",
+    "submit": "Join"
   },
   "setPassword": {
     "title": "Set your password",
