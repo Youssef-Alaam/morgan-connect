@@ -6,6 +6,7 @@ import {
   ownerOf,
   requestTopup,
   resolveTopup,
+  topupStepOf,
   type Db,
   type OpenTopup,
   type Owner,
@@ -115,14 +116,15 @@ async function apply(
 
 export function createTopups(options: TopupsOptions): Topups {
   const { db, timezone, now = () => new Date() } = options;
-  // The same eight places the database stores, so the hash matches what it reads back.
-  const amountUsd = fromUnits(toUnits(options.amountUsd));
 
   return {
     ask: async (chat) => {
       const member = await ownerOf(db, chat);
       if (member === undefined) return 'unavailable';
       const at = now();
+      // The admin's step for this person, else the install's; eight places, as the database stores,
+      // so the hash matches what it reads back.
+      const amountUsd = fromUnits(toUnits((await topupStepOf(db, member)) ?? options.amountUsd));
       const verdict = await checkBudget(db, member, { ...options, now: at });
       if (verdict.allowed) return 'unneeded';
       const month = monthKey(at, timezone);

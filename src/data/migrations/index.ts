@@ -34,6 +34,7 @@ import { up as webApprovalEvents } from './0033-web-approval-events.js';
 import { up as webApprovalClosed } from './0034-web-approval-closed.js';
 import { up as adminPeople } from './0035-admin-people.js';
 import { up as adminUsageSummary } from './0036-admin-usage-summary.js';
+import { up as topupStep } from './0037-topup-step.js';
 
 /** Applied in key order. Add new migrations here with the next number. */
 export const migrations: Record<string, Migration> = {
@@ -72,4 +73,5 @@ export const migrations: Record<string, Migration> = {
   '0034-web-approval-closed': { up: webApprovalClosed },
   '0035-admin-people': { up: adminPeople },
   '0036-admin-usage-summary': { up: adminUsageSummary },
+  '0037-topup-step': { up: topupStep },
 };
