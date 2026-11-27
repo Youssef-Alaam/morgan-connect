@@ -299,6 +299,7 @@ export async function start(
     logger,
     auth: { db, ...signInSettings(config) },
     chat: chat.chat,
+    ...(config.WEB_DIR === undefined ? {} : { webDir: config.WEB_DIR }),
   });
   const server = await listen(app, config.PORT);
   const address = server.address();

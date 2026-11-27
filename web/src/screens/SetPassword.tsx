@@ -32,13 +32,14 @@ export function SetPassword({ onDone }: SetPasswordProps) {
     event.preventDefault();
     setError(undefined);
     const set = await setPassword(token, email, password);
-    const signed = set.ok ? await signIn(email, password) : set;
-    if (!signed.ok) {
-      setError(signed.error);
+    if (!set.ok) {
+      setError(set.error);
       return;
     }
+    // The link is spent. If signing in fails, the sign-in screen takes over; the token is never sent again.
     window.history.replaceState(null, '', '/');
-    onDone(await standing());
+    const signed = await signIn(email, password);
+    onDone(signed.ok ? await standing() : 'out');
   };
 
   return (

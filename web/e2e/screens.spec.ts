@@ -259,3 +259,16 @@ test('a used or missing link says so and does not sign in', async ({ page }, inf
   await expect(page.getByRole('alert')).toContainText('expired or was already used');
   await expect(page.getByRole('button', { name: 'Set password' })).toBeDisabled();
 });
+
+test('a failed sign-in after the password is set hands over to sign-in without the token', async ({
+  page,
+}, info) => {
+  const seen = await serve(page, {
+    '/set-password': ok,
+    '/sign-in': { status: 500, body: { error: 'server_error' } },
+  });
+  await page.goto(`/set-password${queryOf(info.project.metadata)}#token=tok-123`);
+  await fillFirstPassword(page);
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+  expect(seen.filter((line) => line.startsWith('/set-password'))).toHaveLength(1);
+});

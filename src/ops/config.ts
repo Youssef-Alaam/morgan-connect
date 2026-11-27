@@ -16,6 +16,8 @@ const schema = z
     // Passkeys: the relying-party id (a domain) and the exact browser origin people sign in at. Set both or neither.
     WEBAUTHN_RP_ID: z.string().min(1).optional(),
     WEBAUTHN_ORIGIN: z.url().optional(),
+    // The built web app to serve (the Docker image sets it). Unset: only the API answers.
+    WEB_DIR: z.string().min(1).optional(),
     PORT: z.coerce.number().int().min(0).max(65535).default(3000),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
