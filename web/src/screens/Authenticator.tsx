@@ -8,20 +8,20 @@ import { TextInput } from '../components/TextInput.tsx';
 import { ErrorBanner, typed } from './ErrorBanner.tsx';
 
 type Step =
-  | { name: 'loading' | 'unavailable' | 'off' | 'on' }
+  | { name: 'loading' | 'unavailable' | 'failed' | 'off' | 'on' }
   | { name: 'setup'; secret: string; uri: string }
   | { name: 'codes'; codes: string[] };
 
 const K = 'security.authenticator';
 
-/** Ask the server what is on; a failure shows the error and leaves the switch-on button. */
+/** Ask the server what is on; a failure shows only the error: nothing is known to switch. */
 function useStatus(setStep: (step: Step) => void, fail: (error: string) => void): () => void {
   return useCallback(() => {
     setStep({ name: 'loading' });
     void twoFactorStatus().then((answer) => {
       if (!answer.ok) {
         fail(answer.error);
-        setStep({ name: 'off' });
+        setStep({ name: 'failed' });
       } else if (!answer.data.available) setStep({ name: 'unavailable' });
       else setStep({ name: answer.data.enabled ? 'on' : 'off' });
     });

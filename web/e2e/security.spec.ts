@@ -60,15 +60,31 @@ test('the authenticator is turned on with its first code, and the backup codes s
   expect(posted).toEqual(['setup {}', `confirm ${JSON.stringify({ code: '123456' })}`]);
 });
 
-test('a reload does not show the backup codes again', async ({ page }, info) => {
-  await script(page, [{ available: true, enabled: true }]);
+test('a reload right after confirming does not bring the backup codes back', async ({
+  page,
+}, info) => {
+  await script(page, [
+    { available: true, enabled: false },
+    { available: true, enabled: true },
+  ]);
   await openSecurity(page, info);
-  await expect(page.getByText('On', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Turn on' }).click();
+  await page.getByLabel('First code').fill('123456');
+  await page.getByRole('button', { name: 'Confirm' }).click();
+  await expect(page.getByLabel('Your backup codes')).toBeVisible();
   await page.reload();
   await page.getByRole('button', { name: 'Security' }).click();
   await expect(page.getByText('On', { exact: true })).toBeVisible();
-  await expect(page.getByText('Your backup codes')).toHaveCount(0);
+  await expect(page.getByLabel('Your backup codes')).toHaveCount(0);
   await expect(page.getByText(CODES[0] ?? '')).toHaveCount(0);
+});
+
+test('a status that cannot be read shows only the error', async ({ page }, info) => {
+  await script(page, [{ available: true, enabled: false }]);
+  await page.route('**/api/two-factor', (route) => route.abort());
+  await openSecurity(page, info);
+  await expect(page.getByRole('alert')).toContainText('cannot be reached');
+  await expect(page.getByRole('button', { name: 'Turn on' })).toHaveCount(0);
 });
 
 test('a wrong first code is refused in words and the setup stays', async ({ page }, info) => {
