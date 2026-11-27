@@ -1,9 +1,7 @@
 import {
   appendHistory,
-  clearHistory,
   closeStoppedTurn,
   conversationFor,
-  endConversation,
   lastMessageAt,
   loadHistory,
   recordUsage,
@@ -21,6 +19,7 @@ import {
   type Gate,
 } from '../policy/index.js';
 import { joinSystem, trusted, type SystemPrompt } from '../safety/index.js';
+import { startOver } from './start-over.js';
 import { withSwitchedOffNote } from './switched-off.js';
 import { refusedForBudget, type BudgetSettings, type ReplyResult } from './budget-reply.js';
 import { compact, type BeforeCompact } from './compaction.js';
@@ -309,17 +308,23 @@ async function compactWhenFull(
   }
 }
 
-/** `/new`: forget the chat and end the engine conversation; an engine failure never blocks it. */
-async function startOver(deps: ReplyDeps, turn: Turn): Promise<void> {
-  const chat = { channel: turn.channel, chatId: turn.chatId };
-  const ended = await endConversation(deps.db, owner(turn), chat);
-  await clearHistory(deps.db, owner(turn), chat);
-  if (ended === undefined || deps.engine.end === undefined) return;
-  try {
-    await deps.engine.end(ended);
-  } catch {
-    deps.logger.warn({ turnId: turn.id }, 'engine did not close the conversation');
-  }
+/** The model's answer to one turn, unless the person is over their limit. */
+async function modelReply(
+  deps: ReplyDeps,
+  turn: Turn,
+  { both, timedOut }: { both: AbortSignal; timedOut: () => boolean },
+): Promise<ReplyResult> {
+  const refused = await refusedForBudget(deps, turn);
+  if (refused !== undefined) return refused;
+  const renewed = await startOverWhenIdle(deps, turn);
+  const { answer, context } = await ask(deps, turn, both, timedOut);
+  await compactWhenFull(deps, turn, context, { signal: both, timedOut });
+  const told = withSwitchedOffNote(deps.gate, turn.id, answer);
+  return renewed
+    ? `${IDLE_REPLY}
+
+${told}`
+    : told;
 }
 
 /** Build the replier: `/new` clears the chat, `/usage` shows spend; anything else goes to the model with its history. */
@@ -339,18 +344,10 @@ export function createReplier(deps: ReplyDeps): Replier {
     const both = AbortSignal.any(signal === undefined ? [limit] : [signal, limit]);
     const stopTyping = keepTyping(deps, turn, sender);
     try {
-      const refused = await refusedForBudget(deps, turn);
-      if (refused !== undefined) return refused;
-      const renewed = await startOverWhenIdle(deps, turn);
-      const timedOut = (): boolean => limit.aborted && signal?.aborted !== true;
-      const { answer, context } = await ask(deps, turn, both, timedOut);
-      await compactWhenFull(deps, turn, context, { signal: both, timedOut });
-      const told = withSwitchedOffNote(deps.gate, turn.id, answer);
-      return renewed
-        ? `${IDLE_REPLY}
-
-${told}`
-        : told;
+      return await modelReply(deps, turn, {
+        both,
+        timedOut: () => limit.aborted && signal?.aborted !== true,
+      });
     } catch (error) {
       const kind = error instanceof EngineError ? error.kind : 'failed';
       deps.logger.warn({ turnId: turn.id, kind }, 'model reply failed');
