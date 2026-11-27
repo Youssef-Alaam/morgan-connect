@@ -30,9 +30,38 @@ afterAll(async () => {
   await postgres.stop();
 });
 
-it('answers a message over the limit with the fixed line and an Ask for more button, and no model call', async () => {
+interface Body {
+  chat_id: number | string;
+  text: string;
+  reply_markup?: unknown;
+}
+const buttons = (body: Body) =>
+  (
+    (typeof body.reply_markup === 'string' ? JSON.parse(body.reply_markup) : body.reply_markup) as {
+      inline_keyboard: { text: string; callback_data: string }[][];
+    }
+  ).inline_keyboard[0] ?? [];
+
+const at = (list: Body[], i: number): Body => {
+  const found = list[i];
+  if (found === undefined) throw new Error(`no message at ${String(i)}`);
+  return found;
+};
+
+const tapFrom = (id: number, data: string | undefined, type = 'private') => ({
+  update_id: 900 + id + Math.abs(data?.length ?? 0),
+  callback_query: {
+    id: `cb${String(id)}${data ?? ''}`,
+    from: { id, is_bot: false, first_name: 'A' },
+    chat_instance: 'ci',
+    data,
+    message: { message_id: 6, date: 1, chat: { id, type }, text: 'q' },
+  },
+});
+
+it('asks the admin on a tap, and an approval lets the member carry on', async () => {
   const telegram = await startFakeTelegram({ rejectToken: false, messageId: 31 });
-  const engine = new ScriptedEngine([{ text: 'should not be asked' }]);
+  const engine = new ScriptedEngine([{ text: 'back at it' }]);
   const running = await start(
     {
       ...roleUrls(postgres.url),
@@ -45,37 +74,63 @@ it('answers a message over the limit with the fixed line and an Ask for more but
     },
     { engine },
   );
+  const sentTo = (chat: number) => () =>
+    telegram.sent.filter((m) => String((m as Body).chat_id) === String(chat)) as Body[];
+  const answered = (n: number) => () => {
+    expect(telegram.answers).toHaveLength(n);
+  };
   try {
     await vi.waitFor(
       () => {
-        expect(telegram.sent).toHaveLength(1);
+        expect(sentTo(42)()).toHaveLength(1);
       },
       { timeout: 30_000 },
     );
-    const body = telegram.sent[0] as { text: string; reply_markup: unknown };
-    expect(body.text).toBe("You've reached this month's limit.");
-    const markup = (
-      typeof body.reply_markup === 'string' ? JSON.parse(body.reply_markup) : body.reply_markup
-    ) as { inline_keyboard: { text: string; callback_data: string }[][] };
-    expect(markup.inline_keyboard[0]).toMatchObject([{ text: 'Ask for more' }]);
+    const refusal = at(sentTo(42)(), 0);
+    expect(refusal.text).toBe("You've reached this month's limit.");
+    expect(buttons(refusal)).toMatchObject([{ text: 'Ask for more' }]);
     expect(engine.opened).toEqual([]);
-    telegram.push({
-      update_id: 900,
-      callback_query: {
-        id: 'cb900',
-        from: { id: 42, is_bot: false, first_name: 'A' },
-        chat_instance: 'ci',
-        data: markup.inline_keyboard[0]?.[0]?.callback_data,
-        message: { message_id: 6, date: 1, chat: { id: 42, type: 'private' }, text: 'q' },
+    const ask = buttons(refusal)[0]?.callback_data;
+    // A tap in a group, or by someone else, asks nothing.
+    telegram.push(tapFrom(42, ask, 'group'));
+    await vi.waitFor(answered(1), { timeout: 30_000 });
+    expect(telegram.answers[0]).toMatchObject({ text: 'Not available' });
+    expect(sentTo(1)()).toEqual([]);
+    telegram.push(tapFrom(42, ask));
+    await vi.waitFor(answered(2), { timeout: 30_000 });
+    expect(telegram.answers[1]).toMatchObject({ text: 'Asked the admin' });
+    telegram.push(tapFrom(42, ask));
+    await vi.waitFor(answered(3), { timeout: 30_000 });
+    expect(telegram.answers[2]).toMatchObject({ text: 'Already asked' });
+    const question = sentTo(1)();
+    expect(question).toHaveLength(1);
+    expect(question[0]?.text).toContain('Add $5.00 for this month?');
+    expect(buttons(at(question, 0)).map((b) => b.text)).toEqual(['Approve', 'Deny']);
+    // Someone else tapping Approve (the member, in their own chat) changes nothing.
+    const approve = buttons(at(question, 0))[0]?.callback_data;
+    telegram.push(tapFrom(42, approve));
+    await vi.waitFor(answered(4), { timeout: 30_000 });
+    expect(telegram.answers[3]).toMatchObject({ text: 'No longer valid' });
+    expect(sentTo(42)()).toHaveLength(1);
+    telegram.push(tapFrom(1, approve));
+    await vi.waitFor(
+      () => {
+        expect(sentTo(42)()).toHaveLength(2);
       },
+      { timeout: 30_000 },
+    );
+    expect(sentTo(42)()[1]?.text).toBe("$5.00 was added to this month's limit. Carry on.");
+    telegram.push({
+      update_id: 950,
+      message: { message_id: 8, date: 1, chat: { id: 42, type: 'private' }, text: 'again' },
     });
     await vi.waitFor(
       () => {
-        expect(telegram.answers).toHaveLength(1);
+        expect(sentTo(42)()).toHaveLength(3);
       },
       { timeout: 30_000 },
     );
-    expect(telegram.answers[0]).toMatchObject({ text: 'Not available yet' });
+    expect(sentTo(42)()[2]?.text).toBe('back at it');
   } finally {
     await running.stop();
     await telegram.stop();

@@ -14,6 +14,7 @@ it('applies defaults and treats empty values as unset', () => {
     DEMO_TOOLS: false,
     VAULT_BRANCH: 'main',
     TIMEZONE: 'UTC',
+    TOPUP_AMOUNT_USD: '5',
     IDLE_GAP_MINUTES: 360,
     COMPACT_AT_TOKENS: 8000,
   });
@@ -152,6 +153,16 @@ it('takes passkey settings together, and fails at boot when the origin is off th
   expect(load({ ...good, WEBAUTHN_ORIGIN: 'http://app.example.com' })).toThrow(/https/);
   const local = { WEBAUTHN_RP_ID: 'localhost', WEBAUTHN_ORIGIN: 'http://localhost:3000' };
   expect(load(local)).not.toThrow();
+});
+
+it('takes a plain, positive USD amount as the top-up step, default 5', () => {
+  expect(loadConfig({ DATABASE_URL: URL }).TOPUP_AMOUNT_USD).toBe('5');
+  expect(loadConfig({ DATABASE_URL: URL, TOPUP_AMOUNT_USD: '2.50' }).TOPUP_AMOUNT_USD).toBe('2.50');
+  for (const bad of ['0', '-1', '$5', '1e3']) {
+    expect(() => loadConfig({ DATABASE_URL: URL, TOPUP_AMOUNT_USD: bad })).toThrow(
+      /TOPUP_AMOUNT_USD/,
+    );
+  }
 });
 
 it('takes a plain USD amount as the install default limit and rejects anything else', () => {

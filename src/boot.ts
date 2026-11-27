@@ -32,8 +32,11 @@ import {
   createApprovals,
   createGate,
   createHttpEngine,
+  createTopups,
   type Approvals,
   type Engine,
+  type KeySource,
+  type Topups,
   type VaultOptions,
 } from './policy/index.js';
 import { type Config, createLogger, loadConfig, type Logger } from './ops/index.js';
@@ -44,6 +47,10 @@ const REQUEUE_EVERY_MS = 30_000;
 const TIMING = { retryDelayMs: 2000, typingIntervalMs: 4000, turnTimeoutMs: 120_000 };
 /** The turn waits for the owner inside its time limit, so a question closes before the turn does. */
 const APPROVAL_TTL_MS = 90_000;
+/** The admin may be away: a top-up question stays open this long (a day). */
+const TOPUP_TTL_MS = 24 * 60 * 60_000;
+// TODO(M2-10b+): 'own' once a person can bring their own key or subscription (D46); today every call uses the admin's key.
+const KEY_SOURCE: KeySource = 'admin';
 
 export interface Running {
   port: number;
@@ -103,8 +110,7 @@ function buildReplier(
           ...vaultFrom(config),
         }),
         timezone: config.TIMEZONE,
-        // TODO(M2-10b+): 'own' once a person can bring their own key or subscription (D46).
-        budget: { keySource: 'admin', defaultLimitUsd: config.DEFAULT_MONTHLY_LIMIT_USD },
+        budget: { keySource: KEY_SOURCE, defaultLimitUsd: config.DEFAULT_MONTHLY_LIMIT_USD },
         idleGapMs: config.IDLE_GAP_MINUTES * 60_000,
         compactAtTokens: config.COMPACT_AT_TOKENS,
         ...TIMING,
@@ -133,6 +139,22 @@ const approvalsFor = (db: Db, telegram: ChannelAdapter | undefined): Approvals =
       telegram !== undefined && caller.channel === 'telegram'
         ? telegram.askApproval(caller.chatId, text, id)
         : Promise.reject(new Error('This channel cannot ask for approval yet')),
+  });
+
+/** "Ask for more" goes to the admin's Telegram chat, the only place that can show the buttons yet. */
+const topupsFor = (config: Config, db: Db, telegram: ChannelAdapter, logger: Logger): Topups =>
+  createTopups({
+    db,
+    logger,
+    amountUsd: config.TOPUP_AMOUNT_USD,
+    keySource: KEY_SOURCE,
+    defaultLimitUsd: config.DEFAULT_MONTHLY_LIMIT_USD,
+    timezone: config.TIMEZONE,
+    ttlMs: TOPUP_TTL_MS,
+    adminChannel: 'telegram',
+    askAdmin: telegram.askApproval,
+    tell: (channel, chatId, text) =>
+      channel === 'telegram' ? telegram.send(chatId, text) : Promise.resolve(),
   });
 
 interface Chat {
@@ -169,9 +191,15 @@ async function startChat(
     stopWatching = watchStuckTurns(deps, REQUEUE_EVERY_MS);
     if (telegram !== undefined) {
       await announceSetupCode(identity, logger);
+      const topups = topupsFor(config, db, telegram, logger);
       await telegram.start(
         (message) => ingest(deps, message),
-        (answer) => approvals.decide(answer.id, answer.decision, answer),
+        // A top-up question is answered here, and a false means it did not count (wrong chat, too
+        // late, or the answer could not be applied): it must not fall through to the tool approvals.
+        // Only a question that is not a top-up (undefined) goes on to them.
+        async (answer) =>
+          (await topups.decide(answer)) ?? approvals.decide(answer.id, answer.decision, answer),
+        (chat) => topups.ask(chat),
       );
     }
   } catch (error) {
