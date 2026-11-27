@@ -420,7 +420,13 @@ it('counts user turns, not rows, and leaves out a turn with a damaged tool row',
 
 const workerDeps = (channel: FakeChannel, reply: Replier) => {
   const nothing = () => Promise.resolve();
-  const queue = { start: nothing, enqueue: nothing, work: nothing, stop: nothing };
+  const queue = {
+    expireInSeconds: 300,
+    start: nothing,
+    enqueue: nothing,
+    work: nothing,
+    stop: nothing,
+  };
   const logger = createLogger('silent');
   const identity = createIdentity(db);
   const aborts = createTurnAborts();

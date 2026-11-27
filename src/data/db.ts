@@ -18,6 +18,7 @@ export interface Database {
     status: Generated<TurnStatus>;
     reply_text: string | null;
     error: string | null;
+    claimed_at: Date | null;
     created_at: Generated<Date>;
   };
   workspaces: { id: Generated<string>; name: string; created_at: Generated<Date> };

@@ -81,16 +81,16 @@ it('finishes only a turn that is sending, and lists turns still queued', async (
   expect(await listQueuedTurnIds(db)).not.toContain(id);
 });
 
-it('delivers a queued turn id to the worker', async () => {
+it('delivers a queued turn id to the worker, and again after a later answer', async () => {
   const seen: string[] = [];
   await queue.work((turnId) => {
     seen.push(turnId);
-    return Promise.resolve();
+    return Promise.resolve(seen.length === 1 ? 'later' : undefined);
   });
   await queue.enqueue('turn-a');
   await vi.waitFor(
     () => {
-      expect(seen).toEqual(['turn-a']);
+      expect(seen).toEqual(['turn-a', 'turn-a']);
     },
     { timeout: 30_000 },
   );

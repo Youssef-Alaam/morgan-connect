@@ -21,6 +21,7 @@ beforeAll(async () => {
   const logger = createLogger('silent');
   const web = createWebChannel(ctx.app);
   const queue: TurnQueue = {
+    expireInSeconds: 300,
     start: () => Promise.resolve(),
     enqueue: (id) => {
       setImmediate(() => void processTurn(deps, id));

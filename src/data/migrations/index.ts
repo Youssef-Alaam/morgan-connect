@@ -26,6 +26,7 @@ import { up as profilesOverview } from './0025-profiles-overview.js';
 import { up as budgets } from './0026-budgets.js';
 import { up as budgetLimitWrites } from './0027-budget-limit-writes.js';
 import { up as taskCap } from './0028-task-cap.js';
+import { up as turnClaimedAt } from './0029-turn-claimed-at.js';
 
 /** Applied in key order. Add new migrations here with the next number. */
 export const migrations: Record<string, Migration> = {
@@ -56,4 +57,5 @@ export const migrations: Record<string, Migration> = {
   '0026-budgets': { up: budgets },
   '0027-budget-limit-writes': { up: budgetLimitWrites },
   '0028-task-cap': { up: taskCap },
+  '0029-turn-claimed-at': { up: turnClaimedAt },
 };
