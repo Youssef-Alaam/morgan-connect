@@ -61,6 +61,11 @@ export async function standing(): Promise<Standing> {
   return answer.error === PASSWORD_CHANGE ? 'change' : 'unknown';
 }
 
+/** Ends this browser's session. */
+export function signOut(): Promise<Result<unknown>> {
+  return call('/sign-out', {});
+}
+
 export function sendMessage(text: string, messageId: string): Promise<Result<unknown>> {
   return call('/chat', { text, messageId });
 }

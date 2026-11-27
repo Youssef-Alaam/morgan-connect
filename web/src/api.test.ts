@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { changePassword, secondFactor, signIn, standing } from './api.ts';
+import { changePassword, secondFactor, signIn, signOut, standing } from './api.ts';
 import { errorKey } from './errors.ts';
 
 function answer(status: number, body: unknown): void {
@@ -43,6 +43,16 @@ describe('the account calls', () => {
     expect(sent().init.body).toBe(
       JSON.stringify({ current: 'old', password: 'new-password-12', acceptedNotice: true }),
     );
+  });
+
+  it('posts the sign-out and accepts the empty answer', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(null, { status: 204 }))),
+    );
+    expect(await signOut()).toEqual({ ok: true, data: {} });
+    expect(sent().path).toBe('/api/sign-out');
+    expect(sent().init.method).toBe('POST');
   });
 
   it('turns an error answer into its status and error word', async () => {
