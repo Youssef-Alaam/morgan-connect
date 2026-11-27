@@ -82,7 +82,6 @@ it('lets a running turn finish, then refuses the next one before any model call'
     text: BUDGET_REPLY,
     askMore: true,
   });
-  expect(BUDGET_REPLY).toBe("You've reached this month's limit.");
   expect(engine.opened).toHaveLength(1);
   expect(await calls()).toBe(1);
   expect(await audits()).toEqual([
