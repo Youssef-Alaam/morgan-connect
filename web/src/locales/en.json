@@ -39,7 +39,9 @@
     "network": "Morgan cannot be reached. Try again.",
     "generic": "Something went wrong. Try again.",
     "same_password": "Choose a password different from the current one.",
-    "notice_required": "Tick the box to continue."
+    "notice_required": "Tick the box to continue.",
+    "link_invalid": "This link has expired or was already used. Ask for a new one.",
+    "email_taken": "That email already has an account."
   },
   "gallery": {
     "title": "Components",
@@ -169,5 +171,10 @@
     "notice": {
       "admin_can_read": "I understand that the admin can read my chats and memories, and that each read is logged."
     }
+  },
+  "setPassword": {
+    "title": "Set your password",
+    "intro": "Choose the email and password you will sign in with.",
+    "submit": "Set password"
   }
 }
