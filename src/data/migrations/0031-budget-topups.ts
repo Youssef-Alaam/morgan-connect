@@ -91,13 +91,17 @@ async function requestFunction(db: Kysely<unknown>): Promise<void> {
 async function cancelFunction(db: Kysely<unknown>): Promise<void> {
   await sql`create function public.cancel_topup(p_id uuid) returns boolean
     language plpgsql ${SAFE} as $$
-    declare v_ap uuid;
+    declare v_row public.budget_topups; v_hash text;
     begin
       update public.budget_topups set status = 'cancelled', decided_at = now()
         where id = p_id and user_id = ${ME} and workspace_id = ${WS} and status = 'open'
-        returning approval_id into v_ap;
-      if not found then return false; end if;
-      update public.approvals set status = 'cancelled' where id = v_ap and status = 'pending';
+        returning * into v_row;
+      if v_row.id is null then return false; end if;
+      update public.approvals set status = 'cancelled'
+        where id = v_row.approval_id and status = 'pending' returning args_sha256 into v_hash;
+      ${AUDIT} values (v_row.channel, v_row.chat_id, ${ME}, v_row.workspace_id,
+        'budget.topup.cancel', 'budget.topup', true, '{}', 0, coalesce(v_hash, ''), 'auto',
+        'aborted', ${ME});
       return true;
     end $$`.execute(db);
 }

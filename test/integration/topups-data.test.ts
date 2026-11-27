@@ -52,6 +52,12 @@ it('opens one request per person with the admin asked in the same step, and audi
   expect(await cancelTopup(ctx.app, ctx.alice, made.topupId)).toBe(false);
   expect(await cancelTopup(ctx.app, ctx.bob, made.topupId)).toBe(true);
   expect(await status(made.topupId)).toEqual({ status: 'cancelled' });
+  const closed = await ctx.owner
+    .selectFrom('audit_log')
+    .select(['outcome', 'user_id'])
+    .where('tool', '=', 'budget.topup.cancel')
+    .execute();
+  expect(closed).toEqual([{ outcome: 'aborted', user_id: ctx.bob.userId }]);
 });
 
 it('lets a lapsed request be replaced, and refuses the admin asking and a missing admin chat', async () => {
