@@ -66,6 +66,7 @@ const scale = {
   'opacity-disabled': '0.5',
   'opacity-scrim': '0.5',
   'dialog-width': '28rem',
+  'screen-width': '26rem',
   'nav-width': '12rem',
   'font-sans': "'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif",
   'font-mono': "'Space Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace",
