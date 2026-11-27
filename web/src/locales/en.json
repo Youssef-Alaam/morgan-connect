@@ -46,6 +46,7 @@
   "errors": {
     "label": "Problem",
     "invalid_credentials": "That email, password or code is not right.",
+    "invalid_code": "That code is not right.",
     "invalid_request": "Check what you typed and try again.",
     "too_many_attempts": "Too many tries. Wait a few minutes and try again.",
     "network": "Morgan cannot be reached. Try again.",
@@ -169,6 +170,27 @@
       "reply": "Done. I will message you at six.",
       "message": "Message Morgan",
       "send": "Send"
+    }
+  },
+  "security": {
+    "title": "Security",
+    "back": "Back to chat",
+    "authenticator": {
+      "title": "Authenticator app",
+      "loading": "Loading.",
+      "unavailable": "An authenticator app is not available on this install.",
+      "on": "On",
+      "off": "Off",
+      "turnOn": "Turn on",
+      "cancel": "Cancel",
+      "secret": "Setup key",
+      "secretHint": "Type this key into your authenticator app, or open it there.",
+      "open": "Open in your authenticator app",
+      "code": "First code",
+      "confirm": "Confirm",
+      "codesTitle": "Your backup codes",
+      "codesHint": "Save these now. Each works once if you lose the app. They are not shown again.",
+      "saved": "I saved them"
     }
   },
   "change": {

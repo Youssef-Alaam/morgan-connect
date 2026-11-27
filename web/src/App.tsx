@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { standing, type Standing } from './api.ts';
 import { Button } from './components/Button.tsx';
 import { ChangePassword } from './screens/ChangePassword.tsx';
-import { Chat } from './screens/Chat.tsx';
 import { SetPassword } from './screens/SetPassword.tsx';
+import { Signed } from './screens/Signed.tsx';
 import { SignIn } from './screens/SignIn.tsx';
 
 const STATUS = {
@@ -34,7 +34,7 @@ export function App() {
   if (where === 'first') return <SetPassword onDone={setWhere} />;
   if (where === 'out') return <SignIn onDone={setWhere} />;
   if (where === 'change') return <ChangePassword onDone={refresh} />;
-  if (where === 'in') return <Chat onSignedOut={signedOut} />;
+  if (where === 'in') return <Signed onSignedOut={signedOut} />;
   return (
     <main className="page">
       <h1>{t('app.name')}</h1>

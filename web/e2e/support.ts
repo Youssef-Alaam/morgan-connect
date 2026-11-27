@@ -13,6 +13,13 @@ export async function open(page: Page, query: string): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
 }
 
+// A face loads only when text first uses it: wait for it, or a slow runner screenshots the fallback.
+export async function monoReady(page: Page): Promise<void> {
+  await page.evaluate(() =>
+    document.fonts.load("16px 'Space Mono'").then(() => document.fonts.ready),
+  );
+}
+
 export async function noViolations(page: Page): Promise<void> {
   const result = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
