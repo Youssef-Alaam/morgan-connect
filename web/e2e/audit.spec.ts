@@ -73,19 +73,27 @@ async function script(page: Page): Promise<URLSearchParams[]> {
   return asked;
 }
 
-test('the admin sees the log newest first and pages back', async ({ page }, info) => {
+test('the admin sees the log newest first, filters it and pages back', async ({ page }, info) => {
   const asked = await script(page);
   await open(page, queryOf(info.project.metadata));
   await page.getByRole('button', { name: 'Audit' }).click();
   await expect(page.getByRole('heading', { name: 'Audit log' })).toBeVisible();
   await expect(page.getByRole('row', { name: /admin\.read support ticket 12/ })).toBeVisible();
   await expect(page.getByRole('row')).toHaveCount(4);
+  await expect(page.locator('main')).toHaveScreenshot('audit-list.png');
   await noViolations(page);
 
   await page.getByRole('button', { name: 'Show older rows' }).click();
   await expect(page.getByRole('row')).toHaveCount(5);
   expect(asked.at(-1)?.get('before')).toBe('7');
   await expect(page.getByRole('button', { name: 'Show older rows' })).toHaveCount(0);
+
+  await page.getByLabel('Outcome').selectOption('refused');
+  await expect(page.getByRole('row')).toHaveCount(2);
+  expect(asked.at(-1)?.get('outcome')).toBe('refused');
+  expect(asked.at(-1)?.has('before')).toBe(false);
+  await page.getByLabel('To (UTC)').fill('2026-11-02');
+  await expect.poll(() => asked.at(-1)?.get('to')).toBe('2026-11-03T00:00:00.000Z');
 });
 
 test('a refused list shows the refusal and no table', async ({ page }, info) => {

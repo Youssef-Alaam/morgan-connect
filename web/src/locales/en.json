@@ -376,10 +376,14 @@
     "open": "Audit",
     "back": "Back to chat",
     "caption": "What Morgan and the admin did, newest first",
+    "filters": "Filters",
     "person": "Person",
     "action": "Action",
     "decision": "Decision",
     "outcome": "Outcome",
+    "from": "From (UTC)",
+    "to": "To (UTC)",
+    "clear": "Clear filters",
     "when": "When (UTC)",
     "about": "about {{who}}",
     "none": "No rows match.",
@@ -394,6 +398,12 @@
     "refused": "Refused",
     "denied": "Denied",
     "expired": "Expired",
-    "aborted": "Stopped"
+    "aborted": "Stopped",
+    "any": {
+      "person": "Anyone",
+      "action": "Any action",
+      "decision": "Any decision",
+      "outcome": "Any outcome"
+    }
   }
 }

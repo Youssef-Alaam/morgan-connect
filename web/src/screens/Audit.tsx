@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type AuditRow } from '../api.ts';
+import { listPeople, type AuditRow, type Person } from '../api.ts';
 import { Badge } from '../components/Badge.tsx';
 import { Button } from '../components/Button.tsx';
 import { Table } from '../components/Table.tsx';
+import { FilterBar } from './AuditFilters.tsx';
 import { ErrorBanner } from './ErrorBanner.tsx';
 import { TopBar } from './TopBar.tsx';
 import { useAudit } from './useAudit.ts';
@@ -65,6 +67,12 @@ interface AuditProps {
 export function Audit({ onBack, onSignedOut }: AuditProps) {
   const { t } = useTranslation();
   const page = useAudit();
+  const [people, setPeople] = useState<Person[]>([]);
+  useEffect(() => {
+    void listPeople().then((answer) => {
+      if (answer.ok) setPeople(answer.data.people);
+    });
+  }, []);
   return (
     <main className="page screen screen-wide">
       <TopBar onSignedOut={onSignedOut}>
@@ -74,6 +82,12 @@ export function Audit({ onBack, onSignedOut }: AuditProps) {
       </TopBar>
       <h2>{t(`${K}.title`)}</h2>
       <ErrorBanner error={page.error} />
+      <FilterBar
+        filters={page.filters}
+        people={people}
+        actions={page.actions}
+        onChange={page.setFilters}
+      />
       {page.rows === undefined ? (
         page.error === undefined ? (
           <p>{t('app.loading')}</p>
