@@ -65,7 +65,15 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-${{ steps.playwright-version.outputs.version }}
       - name: 7d. Install Chromium
-        run: npx playwright install --with-deps chromium
+        # The runner's preinstalled Microsoft apt repo intermittently answers 403 and fails apt update;
+        # Chromium does not need it, so drop it and retry the install up to 3 times.
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list /etc/apt/sources.list.d/microsoft-prod.sources
+          for attempt in 1 2 3; do
+            npx playwright install --with-deps chromium && exit 0
+            echo "Chromium install attempt $attempt failed"; sleep 10
+          done
+          exit 1
         working-directory: web
       - name: 7e. Component screenshots and accessibility (light, dark, right-to-left)
         run: npx playwright test
