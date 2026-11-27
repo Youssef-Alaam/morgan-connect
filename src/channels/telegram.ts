@@ -26,9 +26,6 @@ const callbackSchema = z.object({
 /** `ap:y:<id>` approves, `ap:n:<id>` denies; the id is a UUID. Fits Telegram's 64-byte limit. */
 const APPROVAL_DATA = /^ap:([yn]):([0-9a-f-]{36})$/;
 
-/** The "Ask for more" button on a budget refusal. The request flow is M2-10b. */
-const ASK_MORE_DATA = 'bm:more';
-
 /** The owner's tap on Approve or Deny, or undefined for any other update. */
 export function parseApprovalCallback(update: unknown): ApprovalAnswer | undefined {
   const result = callbackSchema.safeParse(update);
@@ -65,10 +62,6 @@ async function answerTap(
   ctx: Context,
   onApproval: ((answer: ApprovalAnswer) => Promise<boolean>) | undefined,
 ): Promise<void> {
-  if (ctx.callbackQuery?.data === ASK_MORE_DATA) {
-    await ctx.answerCallbackQuery({ text: 'Not available yet' });
-    return;
-  }
   const answer = parseApprovalCallback(ctx.update);
   let shown = 'No longer valid';
   let counted = false;
@@ -113,10 +106,6 @@ export function createTelegramAdapter(
         .text('Approve', `ap:y:${approvalId}`)
         .text('Deny', `ap:n:${approvalId}`);
       await withTimeout(bot.api.sendMessage(chatId, text, { reply_markup: buttons }));
-    },
-    askMore: async (chatId, text) => {
-      const button = new InlineKeyboard().text('Ask for more', ASK_MORE_DATA);
-      await withTimeout(bot.api.sendMessage(chatId, text, { reply_markup: button }));
     },
     typing: async (chatId) => {
       await bot.api.sendChatAction(chatId, 'typing');
