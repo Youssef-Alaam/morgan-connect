@@ -2,11 +2,13 @@ import {
   claimTurn,
   finishTurn,
   getTurn,
+  interruptTurn,
   insertTurn,
   ownerOf,
   listQueuedTurnIds,
   turnOwner,
   type Db,
+  type Owner,
   type Turn,
   type TurnQueue,
 } from '../data/index.js';
@@ -103,20 +105,34 @@ async function deliver(
   return text;
 }
 
+/** A job whose turn could not be claimed: interrupted by a crash, already done, or held by the cap. */
+async function unclaimed(
+  deps: PipelineDeps,
+  owner: Owner,
+  turnId: string,
+): Promise<'later' | undefined> {
+  const existing = await getTurn(deps.db, owner, turnId);
+  // Only a claim older than the job's expiry is dead; a newer one is a live run seen by a duplicate job.
+  if (
+    existing?.status === 'sending' &&
+    (await interruptTurn(deps.db, owner, turnId, deps.queue.expireInSeconds))
+  ) {
+    deps.logger.warn({ turnId }, 'turn was interrupted mid-send; not resending');
+  }
+  // Still queued after a failed claim: the person is at their cap. Keep it, and look again later.
+  return existing?.status === 'queued' ? 'later' : undefined;
+}
+
 /** Run one turn: reply with the model's answer (or echo the text when no model is set). Claimed before the send, so a redelivery never resends. */
-export async function processTurn(deps: PipelineDeps, turnId: string): Promise<void> {
+export async function processTurn(
+  deps: PipelineDeps,
+  turnId: string,
+): Promise<'later' | undefined> {
   // The job holds only the id: find whose turn it is, then do everything else as them.
   const owner = await turnOwner(deps.db, turnId);
-  if (owner === undefined) return;
+  if (owner === undefined) return undefined;
   const turn = await claimTurn(deps.db, owner, turnId);
-  if (turn === undefined) {
-    const existing = await getTurn(deps.db, owner, turnId);
-    if (existing?.status === 'sending') {
-      await finishTurn(deps.db, owner, turnId, { status: 'failed', error: 'interrupted' });
-      deps.logger.warn({ turnId }, 'turn was interrupted mid-send; not resending');
-    }
-    return;
-  }
+  if (turn === undefined) return unclaimed(deps, owner, turnId);
   try {
     if (!(await deps.identity.isLinked(turn.channel, turn.chatId))) {
       throw new PipelineError('unlinked', 'Chat is not linked');
@@ -132,6 +148,7 @@ export async function processTurn(deps: PipelineDeps, turnId: string): Promise<v
     await finishTurn(deps.db, owner, turnId, { status: 'failed', error: kind });
     deps.logger.error({ turnId, kind }, 'turn failed');
   }
+  return undefined;
 }
 
 export function startWorker(deps: PipelineDeps): Promise<void> {

@@ -60,6 +60,7 @@ export {
   finishTurn,
   getTurn,
   insertTurn,
+  interruptTurn,
   listQueuedTurnIds,
   type NewTurn,
   type Turn,
