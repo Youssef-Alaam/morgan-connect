@@ -1,6 +1,10 @@
 import { PgBoss } from 'pg-boss';
 
-const QUEUE = 'turn';
+/**
+ * The queue's name; it was 'turn' (policy standard). pg-boss cannot change a policy, so the
+ * one-waiting-job-per-turn policy needs a new name. Boot re-queues every queued turn into it.
+ */
+const QUEUE = 'turns';
 
 /** A turn held back by its person's cap is looked at again after this many seconds. */
 const DEFER_SECONDS = 2;
@@ -64,7 +68,7 @@ export function createTurnQueue(
         retryLimit: 1,
         retryDelay: 5,
         expireInSeconds,
-        // One waiting job per turn (see singletonKey below); createQueue keeps an older queue's policy.
+        // One waiting job per turn (see singletonKey below).
         policy: 'short',
       });
       // createQueue leaves an existing queue alone, so turn notify on for installs made before it.
