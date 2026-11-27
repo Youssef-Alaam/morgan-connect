@@ -13,6 +13,8 @@ import { apply, followEvents, type Line } from '../events.ts';
 interface ChatProps {
   onSignedOut: () => void;
   onSecurity: () => void;
+  /** Given only to the admin. */
+  onUsers?: () => void;
 }
 
 /** Follow the live stream into the lines; true while it is broken. A session that ended means sign in again. */
@@ -38,8 +40,31 @@ function useStream(setLines: Dispatch<SetStateAction<Line[]>>, onSignedOut: () =
   return broken;
 }
 
+/** The buttons that open the other pages; People only for the admin. */
+function PageButtons({
+  onSecurity,
+  onUsers,
+}: {
+  onSecurity: () => void;
+  onUsers: (() => void) | undefined;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      {onUsers === undefined ? null : (
+        <Button variant="secondary" onClick={onUsers}>
+          {t('users.open')}
+        </Button>
+      )}
+      <Button variant="secondary" onClick={onSecurity}>
+        {t('security.title')}
+      </Button>
+    </>
+  );
+}
+
 // Talk to Morgan: your messages go out over POST, Morgan's answers arrive on the live stream.
-export function Chat({ onSignedOut, onSecurity }: ChatProps) {
+export function Chat({ onSignedOut, onSecurity, onUsers }: ChatProps) {
   const { t } = useTranslation();
   const [lines, setLines] = useState<Line[]>([]);
   const broken = useStream(setLines, onSignedOut);
@@ -59,9 +84,7 @@ export function Chat({ onSignedOut, onSecurity }: ChatProps) {
   return (
     <main className="page chat">
       <TopBar onSignedOut={onSignedOut}>
-        <Button variant="secondary" onClick={onSecurity}>
-          {t('security.title')}
-        </Button>
+        <PageButtons onSecurity={onSecurity} onUsers={onUsers} />
       </TopBar>
       <p role="status">{broken ? t('chat.reconnecting') : ''}</p>
       <ErrorBanner error={error} />
