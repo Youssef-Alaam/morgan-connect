@@ -3,7 +3,7 @@ dist
 coverage
 .git
 .github
-.env
+**/.env*
 *.log
 web/dist
 **/node_modules

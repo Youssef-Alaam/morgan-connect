@@ -1,5 +1,5 @@
-import { readFile, stat } from 'node:fs/promises';
-import { extname, join, normalize, sep } from 'node:path';
+import { readFile, realpath, stat } from 'node:fs/promises';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 
@@ -22,8 +22,11 @@ const NOT_PAGES = ['/api', '/health'];
 const ownedByApp = (path: string): boolean =>
   NOT_PAGES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 
-/** The file for a URL path inside `root`, or undefined when it is outside it or is not a file. */
-async function fileFor(root: string, path: string): Promise<string | undefined> {
+const inside = (root: string, path: string): boolean =>
+  path === root || path.startsWith(root + sep);
+
+/** The file for a URL path inside `root`, or undefined when it is outside it (even through a link) or is not a file. */
+async function fileFor(root: string, real: string, path: string): Promise<string | undefined> {
   let decoded: string;
   try {
     decoded = decodeURIComponent(path);
@@ -31,9 +34,11 @@ async function fileFor(root: string, path: string): Promise<string | undefined> 
     return undefined;
   }
   const full = normalize(join(root, decoded));
-  if (full !== root && !full.startsWith(root + sep)) return undefined;
-  const found = await stat(full).catch(() => undefined);
-  return found?.isFile() === true ? full : undefined;
+  if (!inside(root, full)) return undefined;
+  const target = await realpath(full).catch(() => undefined);
+  if (target === undefined || !inside(real, target)) return undefined;
+  const found = await stat(target).catch(() => undefined);
+  return found?.isFile() === true ? target : undefined;
 }
 
 /** Cache policy: hashed build files never change, the page itself is always re-checked. */
@@ -48,7 +53,9 @@ function cacheFor(path: string): string {
  * may be inline because the app writes its design tokens into a style element.
  */
 export function webRoutes(dir: string): Hono {
-  const root = normalize(dir);
+  const root = resolve(dir);
+  // Where the folder really is, so a link inside it cannot lead out.
+  const real = realpath(root).catch(() => root);
   const routes = new Hono();
   routes.use(
     secureHeaders({
@@ -67,11 +74,13 @@ export function webRoutes(dir: string): Hono {
   routes.get('*', async (c) => {
     const path = c.req.path;
     if (ownedByApp(path)) return c.json({ error: 'not_found' }, 404);
-    const asset = await fileFor(root, path);
+    const asset = await fileFor(root, await real, path);
     // A missing file with an extension is a missing file; any other path is a page of the app.
     if (asset === undefined && extname(path) !== '') return c.text('Not found', 404);
     const file = asset ?? join(root, 'index.html');
-    const body = await readFile(file);
+    const body = await readFile(file).catch(() => undefined);
+    if (body === undefined)
+      return c.text('The web app is not built here: index.html is missing.', 500);
     c.header('Content-Type', TYPES[extname(file)] ?? 'application/octet-stream');
     c.header('Cache-Control', asset === undefined ? 'no-cache' : cacheFor(path));
     return c.body(body);

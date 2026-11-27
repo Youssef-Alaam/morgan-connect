@@ -1,6 +1,6 @@
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { atomicWrite, createLogger } from '../ops/index.js';
 import { createApp } from './app.js';
@@ -9,6 +9,9 @@ const PAGE = '<!doctype html><title>Morgan</title><div id="root"></div>';
 let dir = '';
 let outside = '';
 let app: ReturnType<typeof createApp>;
+
+const appFor = (webDir: string): ReturnType<typeof createApp> =>
+  createApp({ dbVersion: () => Promise.resolve('17'), logger: createLogger('silent'), webDir });
 
 beforeAll(async () => {
   const base = await mkdtemp(join(tmpdir(), 'web-dist-'));
@@ -20,11 +23,10 @@ beforeAll(async () => {
   await atomicWrite(join(dir, 'assets', 'app-abc123.js'), 'console.log(1)');
   await atomicWrite(join(dir, 'favicon.ico'), 'ico');
   await atomicWrite(join(dir, 'blob.bin'), 'x');
-  app = createApp({
-    dbVersion: () => Promise.resolve('17'),
-    logger: createLogger('silent'),
-    webDir: dir,
-  });
+  await mkdir(join(base, 'private'));
+  await atomicWrite(join(base, 'private', 'secret.txt'), 'secret');
+  await symlink(join(base, 'private'), join(dir, 'linked'), 'junction');
+  app = appFor(`${dir}${sep}`);
 });
 afterAll(async () => {
   await rm(join(dir, '..'), { recursive: true, force: true });
@@ -89,6 +91,18 @@ describe('the web app', () => {
       expect(await response.text()).not.toContain('secret');
     },
   );
+
+  it('does not follow a link that leads out of the folder', async () => {
+    const response = await app.request('/linked/secret.txt');
+    expect(await response.text()).not.toContain('secret');
+  });
+
+  it('says so plainly when index.html is missing', async () => {
+    const empty = appFor(join(dir, 'assets'));
+    const response = await empty.request('/set-password');
+    expect(response.status).toBe(500);
+    expect(await response.text()).toContain('index.html is missing');
+  });
 
   it('is off when no folder is set', async () => {
     const bare = createApp({
