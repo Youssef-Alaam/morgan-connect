@@ -370,5 +370,30 @@
       "confirmRefuse": "Refuse this request?",
       "confirmRefuseText": "{{person}} is told no for this month and can ask again. The question sent to you on Telegram is closed."
     }
+  },
+  "audit": {
+    "title": "Audit log",
+    "open": "Audit",
+    "back": "Back to chat",
+    "caption": "What Morgan and the admin did, newest first",
+    "person": "Person",
+    "action": "Action",
+    "decision": "Decision",
+    "outcome": "Outcome",
+    "when": "When (UTC)",
+    "about": "about {{who}}",
+    "none": "No rows match.",
+    "older": "Show older rows",
+    "chatOnly": "Chat only, no web login",
+    "stranger": "Not linked",
+    "auto": "Auto",
+    "ask": "Ask",
+    "off": "Off",
+    "ok": "Done",
+    "error": "Error",
+    "refused": "Refused",
+    "denied": "Denied",
+    "expired": "Expired",
+    "aborted": "Stopped"
   }
 }
