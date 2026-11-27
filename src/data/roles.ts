@@ -1,6 +1,7 @@
 import { type QueryExecutorProvider, sql } from 'kysely';
 import type { Db } from './db.js';
 import { ADMIN_READ_FUNCTIONS } from './admin-read.js';
+import { AUDIT_VIEW_FUNCTIONS } from './audit-view.js';
 import { BUDGET_FUNCTIONS } from './budgets.js';
 import { DEVICE_FUNCTIONS } from './devices.js';
 import { PROFILE_FUNCTIONS } from './profiles.js';
@@ -19,6 +20,7 @@ const NAMED_FUNCTIONS = [
   ...BUDGET_FUNCTIONS,
   ...TASK_CAP_FUNCTIONS,
   ...TOPUP_FUNCTIONS,
+  ...AUDIT_VIEW_FUNCTIONS,
 ];
 
 export interface AppCredentials {
