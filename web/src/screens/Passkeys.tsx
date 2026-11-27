@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { listPasskeys, removePasskey, type Passkey } from '../api.ts';
 import { Button } from '../components/Button.tsx';
 import { Table } from '../components/Table.tsx';
+import { AddPasskey } from './AddPasskey.tsx';
 import { ErrorBanner } from './ErrorBanner.tsx';
 
 const K = 'security.passkeys';
@@ -50,6 +51,7 @@ export function Passkeys() {
   const [passkeys, setPasskeys] = useState<Passkey[]>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
+  const [unavailable, setUnavailable] = useState(false);
   const load = useCallback(() => {
     void listPasskeys().then((answer) => {
       if (answer.ok) setPasskeys(answer.data);
@@ -71,6 +73,16 @@ export function Passkeys() {
       <ErrorBanner error={error} />
       {loading ? <p>{t('app.loading')}</p> : null}
       {passkeys === undefined ? null : <PasskeyList passkeys={passkeys} onRemove={remove} />}
+      {unavailable ? (
+        <p>{t(`${K}.unavailable`)}</p>
+      ) : (
+        <AddPasskey
+          onAdded={load}
+          onUnavailable={() => {
+            setUnavailable(true);
+          }}
+        />
+      )}
     </section>
   );
 }

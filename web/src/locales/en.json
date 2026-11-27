@@ -47,6 +47,9 @@
     "label": "Problem",
     "invalid_credentials": "That email, password or code is not right.",
     "invalid_code": "That code is not right.",
+    "passkey_cancelled": "No passkey was added.",
+    "invalid_passkey": "The passkey could not be checked. Try again.",
+    "already_registered": "This device already has a passkey on this account.",
     "last_sign_in_method": "This is your only way to sign in, so it cannot be removed.",
     "invalid_request": "Check what you typed and try again.",
     "too_many_attempts": "Too many tries. Wait a few minutes and try again.",
@@ -205,7 +208,12 @@
       "lastUsed": "Last used",
       "actions": "Actions",
       "remove": "Remove",
-      "removeNamed": "Remove {{name}}"
+      "removeNamed": "Remove {{name}}",
+      "defaultName": "Passkey",
+      "newName": "Name for the new passkey",
+      "add": "Add a passkey",
+      "unsupported": "This browser cannot make passkeys.",
+      "unavailable": "Passkeys are not available on this install."
     }
   },
   "change": {
