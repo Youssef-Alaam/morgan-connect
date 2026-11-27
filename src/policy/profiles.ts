@@ -132,11 +132,8 @@ export async function previewProfile(
   if (now === undefined) return undefined;
   const presets = await listPresets(db);
   const next = toProfile(presets.find((row) => row.preset === target.preset));
-  // The database refuses an admin setting their own person profile to Restricted (see assignProfile).
-  const refused =
-    target.userId === caller.userId &&
-    target.deviceId === undefined &&
-    target.preset === 'restricted';
+  // The database refuses an admin making themselves Restricted, person or device (migration 0024).
+  const refused = target.userId === caller.userId && target.preset === 'restricted';
   return {
     previous: now.preset,
     preset: target.preset,

@@ -201,3 +201,27 @@ it('does not preview a person in another workspace', async () => {
     .executeTakeFirstOrThrow();
   expect((await preview(ctx.alice, `userId=${stranger.id}&preset=trusted`)).status).toBe(404);
 });
+
+it('the preview flag equals the save outcome for the admin�s own device', async () => {
+  const device = await ctx.owner
+    .selectFrom('devices')
+    .select('id')
+    .where('user_id', '=', ctx.alice.userId)
+    .where('channel', '<>', 'web')
+    .executeTakeFirstOrThrow();
+  const shown = await preview(
+    ctx.alice,
+    `userId=${ctx.alice.userId}&deviceId=${device.id}&preset=restricted`,
+  );
+  expect(((await shown.json()) as Preview).refused).toBe(true);
+  const saved = await call(
+    'PUT',
+    `members/${ctx.alice.userId}/profile`,
+    await cookieFor(ctx.alice),
+    {
+      preset: 'restricted',
+      deviceId: device.id,
+    },
+  );
+  expect(saved.status).toBe(403);
+});
