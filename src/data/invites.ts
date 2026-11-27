@@ -11,6 +11,9 @@ export const ACCOUNT_FUNCTIONS: readonly string[] = [
   'admin_create_invite(text, integer, numeric)',
   'admin_create_account(text, text, numeric)',
   'member_accept_notice()',
+  'admin_list_people()',
+  'admin_list_invites()',
+  'admin_revoke_invite(uuid)',
 ];
 
 /** Make an invite (only its hash is stored). False when the caller is not an admin. */

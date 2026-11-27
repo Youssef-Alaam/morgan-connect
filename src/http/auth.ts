@@ -14,6 +14,7 @@ import { sha256 } from '../identity/admin-link.js';
 import { createFailureLimiter } from '../identity/limiter.js';
 import { chatRoutes, type ChatDeps } from './chat.js';
 import { createPasswordHasher } from '../identity/password.js';
+import { adminRoutes } from './admin.js';
 import { deviceRoutes } from './devices.js';
 import { passkeyAccountRoutes, passkeySignInRoutes } from './passkeys.js';
 import { memberRoutes } from './members.js';
@@ -138,6 +139,7 @@ export function authRoutes(deps: AuthDeps, chat?: Omit<ChatDeps, 'db'>): Hono<Si
   routes.use(sessionGate(db));
   memberRoutes(routes, deps, shared);
   if (chat !== undefined) chatRoutes(routes, { ...chat, db });
+  adminRoutes(routes, deps);
   deviceRoutes(routes, deps);
   profileRoutes(routes, deps);
   twoFactorRoutes(routes, deps, two);

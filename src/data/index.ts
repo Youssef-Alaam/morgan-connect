@@ -31,6 +31,13 @@ export {
 } from './devices.js';
 export { changePassword, createAccount, createInvite } from './invites.js';
 export {
+  listInvites,
+  listPeople,
+  revokeInvite,
+  type Person,
+  type PendingInvite,
+} from './people.js';
+export {
   activeTotp,
   confirmTotp,
   pendingTotp,
