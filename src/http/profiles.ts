@@ -1,9 +1,15 @@
 import { type Hono } from 'hono';
 import { z } from 'zod';
-import { assignProfile, PRESETS, profilesOf } from '../policy/index.js';
+import { isAdmin, listPresets } from '../data/index.js';
+import { assignProfile, PRESETS, previewProfile, profilesOf } from '../policy/index.js';
 import { type AuthDeps, type Signed } from './session.js';
 
 const userId = z.uuid();
+const preview = z.object({
+  userId: z.uuid(),
+  deviceId: z.uuid().optional(),
+  preset: z.enum(PRESETS),
+});
 const choice = z.object({ preset: z.enum(PRESETS), deviceId: z.uuid().optional() });
 
 /**
@@ -24,5 +30,21 @@ export function profileRoutes(routes: Hono<Signed>, { db }: AuthDeps): void {
     if (!id.success || !parsed.success) return c.json({ error: 'invalid_request' }, 400);
     const done = await assignProfile(db, c.get('session'), { userId: id.data, ...parsed.data });
     return done === undefined ? c.json({ error: 'forbidden' }, 403) : c.json(done);
+  });
+
+  // The three presets and what each allows, for the admin's profile page.
+  routes.get('/admin/profile-presets', async (c) => {
+    if (!(await isAdmin(db, c.get('session')))) return c.json({ error: 'forbidden' }, 403);
+    return c.json({ presets: await listPresets(db) });
+  });
+
+  // What a choice would loosen, before it is saved: the same warnings the save returns. Writes nothing.
+  routes.get('/admin/profile-preview', async (c) => {
+    const session = c.get('session');
+    if (!(await isAdmin(db, session))) return c.json({ error: 'forbidden' }, 403);
+    const parsed = preview.safeParse(c.req.query());
+    if (!parsed.success) return c.json({ error: 'invalid_request' }, 400);
+    const shown = await previewProfile(db, session, parsed.data);
+    return shown === undefined ? c.json({ error: 'not_found' }, 404) : c.json(shown);
   });
 }

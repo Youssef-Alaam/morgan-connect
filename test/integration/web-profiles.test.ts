@@ -122,3 +122,65 @@ it('refuses the admin setting their own profile to restricted, with a refused au
   expect(rows[0]?.n).toBe('1');
   expect((await call('PUT', own, cookie, { preset: 'trusted' })).status).toBe(200);
 });
+
+interface Preview {
+  previous: string;
+  preset: string;
+  warnings: { actionType: string; from: string; to: string; warning: string }[];
+}
+const preview = async (who: Owner, query: string) =>
+  call('GET', `admin/profile-preview?${query}`, await cookieFor(who));
+
+it('lists the three presets with what each allows, for the admin only', async () => {
+  const shown = await call('GET', 'admin/profile-presets', await cookieFor(ctx.alice));
+  expect(shown.status).toBe(200);
+  const { presets } = (await shown.json()) as {
+    presets: { preset: string; shellGate: string; modes: Record<string, string> }[];
+  };
+  expect(presets.map((row) => row.preset)).toEqual(['restricted', 'standard', 'trusted']);
+  expect(presets[0]?.modes).toMatchObject({ read: 'auto', send: 'off' });
+  expect(presets[2]?.shellGate).toBe('risky_only');
+  expect((await call('GET', 'admin/profile-presets', await cookieFor(ctx.bob))).status).toBe(403);
+  expect((await call('GET', 'admin/profile-presets', '')).status).toBe(401);
+});
+
+it('previews the risk warnings of a choice without saving it or writing an audit row', async () => {
+  await set(ctx.alice, { preset: 'standard' });
+  const before = await sql<{ n: string }>`select count(*) as n from audit_log`.execute(ctx.owner);
+  const loosen = await preview(ctx.alice, `userId=${ctx.bob.userId}&preset=trusted`);
+  expect(loosen.status).toBe(200);
+  expect((await loosen.json()) as Preview).toMatchObject({
+    previous: 'standard',
+    preset: 'trusted',
+    warnings: [{ actionType: 'create', warning: 'profile.risk.create.auto' }],
+  });
+  const tighten = await preview(ctx.alice, `userId=${ctx.bob.userId}&preset=restricted`);
+  expect(((await tighten.json()) as Preview).warnings).toEqual([]);
+  const after = await sql<{ n: string }>`select count(*) as n from audit_log`.execute(ctx.owner);
+  expect(after.rows[0]?.n).toBe(before.rows[0]?.n);
+  const shown = (await (
+    await call('GET', `members/${ctx.bob.userId}/profiles`, await cookieFor(ctx.alice))
+  ).json()) as Shown;
+  expect(shown.person.preset).toBe('standard');
+});
+
+it('previews for one device, and refuses a member, a stranger device and bad input', async () => {
+  const device = await ctx.owner
+    .selectFrom('devices')
+    .select('id')
+    .where('user_id', '=', ctx.bob.userId)
+    .executeTakeFirstOrThrow();
+  const ok = await preview(
+    ctx.alice,
+    `userId=${ctx.bob.userId}&deviceId=${device.id}&preset=trusted`,
+  );
+  expect(ok.status).toBe(200);
+  const other = await preview(
+    ctx.alice,
+    `userId=${ctx.alice.userId}&deviceId=${device.id}&preset=trusted`,
+  );
+  expect(other.status).toBe(404);
+  expect((await preview(ctx.bob, `userId=${ctx.bob.userId}&preset=trusted`)).status).toBe(403);
+  expect((await preview(ctx.alice, `userId=${ctx.bob.userId}&preset=root`)).status).toBe(400);
+  expect((await preview(ctx.alice, `userId=nope&preset=trusted`)).status).toBe(400);
+});
