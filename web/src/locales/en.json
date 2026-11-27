@@ -28,7 +28,9 @@
     "invalid_request": "Check what you typed and try again.",
     "too_many_attempts": "Too many tries. Wait a few minutes and try again.",
     "network": "Morgan cannot be reached. Try again.",
-    "generic": "Something went wrong. Try again."
+    "generic": "Something went wrong. Try again.",
+    "same_password": "Choose a password different from the current one.",
+    "notice_required": "Tick the box to continue."
   },
   "gallery": {
     "title": "Components",
@@ -144,6 +146,19 @@
       "reply": "Done. I will message you at six.",
       "message": "Message Morgan",
       "send": "Send"
+    }
+  },
+  "change": {
+    "title": "Choose your password",
+    "intro": "The password you were given is temporary. Choose your own to continue.",
+    "current": "Current password",
+    "next": "New password",
+    "nextHint": "At least 12 characters.",
+    "submit": "Save password"
+  },
+  "join": {
+    "notice": {
+      "admin_can_read": "I understand that the admin can read my chats and memories, and that each read is logged."
     }
   }
 }

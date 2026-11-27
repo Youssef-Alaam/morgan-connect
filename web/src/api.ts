@@ -37,6 +37,14 @@ export function secondFactor(challenge: string, code: string): Promise<Result<un
   return call('/sign-in/second-factor', { challenge, code });
 }
 
+export function changePassword(
+  current: string,
+  password: string,
+  acceptedNotice: boolean,
+): Promise<Result<unknown>> {
+  return call('/change-password', { current, password, acceptedNotice });
+}
+
 /** Asks the server who this is: signed in, signed out (only a 401), held on the change-password screen, or unknown (network or server trouble). */
 export async function standing(): Promise<Standing> {
   const answer = await call('/me');
