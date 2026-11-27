@@ -26,8 +26,8 @@ export function adminRoutes(routes: Hono<Signed>, { db }: AuthDeps): void {
   routes.delete('/admin/invites/:id', async (c) => {
     const session = c.get('session');
     const id = inviteId.safeParse(c.req.param('id'));
-    if (!id.success) return c.json({ error: 'not_found' }, 404);
-    if (await revokeInvite(db, session, id.data)) return c.body(null, 204);
+    if (id.success && (await revokeInvite(db, session, id.data))) return c.body(null, 204);
+    // A member is refused whatever the id; only the admin hears "not found".
     return (await isAdmin(db, session))
       ? c.json({ error: 'not_found' }, 404)
       : c.json({ error: 'forbidden' }, 403);

@@ -60,16 +60,15 @@ export interface PendingInvite {
   expiresAt: Date;
 }
 
-/** The invites this admin made that nobody has used and that have not run out (own rows only). */
+/** The open invites of the admin's workspace, whoever made them (the same set revoke acts on). */
 export function listInvites(db: Db, admin: Owner): Promise<PendingInvite[]> {
   return withOwner(db, admin, async (trx) => {
-    const rows = await trx
-      .selectFrom('invites')
-      .select(['id', 'monthly_limit_usd', 'created_at', 'expires_at'])
-      .where('used_at', 'is', null)
-      .where('expires_at', '>', sql<Date>`now()`)
-      .orderBy('created_at', 'desc')
-      .execute();
+    const { rows } = await sql<{
+      id: string;
+      monthly_limit_usd: string | null;
+      created_at: Date;
+      expires_at: Date;
+    }>`select * from admin_list_invites()`.execute(trx);
     return rows.map((row) => ({
       id: row.id,
       monthlyLimitUsd: row.monthly_limit_usd === null ? undefined : Number(row.monthly_limit_usd),

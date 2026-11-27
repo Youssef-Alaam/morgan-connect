@@ -29,6 +29,18 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         left join public.devices d on d.user_id = u.id and d.channel <> 'web'
         where u.workspace_id = v_ws order by u.created_at, u.id, d.created_at, d.id;
     end $$`.execute(db);
+  // Every open invite in the admin's workspace (not only the ones this admin made), as revoke matches.
+  await sql`create function public.admin_list_invites()
+    returns table (id uuid, monthly_limit_usd numeric, created_at timestamptz, expires_at timestamptz)
+    language plpgsql stable ${SAFE} as $$
+    #variable_conflict use_column
+    declare v_ws uuid := ${ADMIN_WS};
+    begin
+      if v_ws is null then return; end if;
+      return query select i.id, i.monthly_limit_usd, i.created_at, i.expires_at from public.invites i
+        where i.workspace_id = v_ws and i.used_at is null and i.expires_at > now()
+        order by i.created_at desc, i.id;
+    end $$`.execute(db);
   // An invite not yet used goes; a used one is a person now and stays. False when nothing went.
   await sql`create function public.admin_revoke_invite(p_invite_id uuid) returns boolean
     language plpgsql ${SAFE} as $$
@@ -45,6 +57,6 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         'auto', case when v_ok then 'ok' else 'refused' end, p_invite_id::text);
       return v_ok;
     end $$`.execute(db);
-  await sql`revoke execute on function public.admin_list_people(),
+  await sql`revoke execute on function public.admin_list_people(), public.admin_list_invites(),
     public.admin_revoke_invite(uuid) from public`.execute(db);
 }

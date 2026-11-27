@@ -124,3 +124,54 @@ it('lets the admin unlink a member chat, and audits it', async () => {
   expect((await call('DELETE', `devices/${chat?.id ?? ''}`, admin)).status).toBe(204);
   expect(await audits('device.unlink')).toEqual(['ok']);
 });
+
+it('refuses a member on a nonexistent invite id, and audits it', async () => {
+  const before = (await audits('admin.invite.revoke')).length;
+  const gone = '99999999-9999-4999-8999-999999999999';
+  expect((await call('DELETE', `admin/invites/${gone}`, member)).status).toBe(403);
+  expect((await call('DELETE', 'admin/invites/not-an-id', member)).status).toBe(403);
+  expect((await audits('admin.invite.revoke')).slice(before)).toEqual(['refused']);
+});
+
+it("shows another workspace's admin none of this workspace, and refuses revoking its invite", async () => {
+  // The single-admin index is install-wide today; drop it only to stand up a second workspace's admin.
+  await sql`drop index users_single_admin`.execute(ctx.owner);
+  const other = await ctx.owner
+    .insertInto('users')
+    .values({ role: 'admin', workspace_id: ctx.otherWorkspaceId })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  await ctx.owner
+    .insertInto('credentials')
+    .values({
+      user_id: other.id,
+      workspace_id: ctx.otherWorkspaceId,
+      email: 'other-admin@example.test',
+      password_hash: 'x',
+    })
+    .execute();
+  await createSession(
+    ctx.app,
+    { userId: other.id, workspaceId: ctx.otherWorkspaceId },
+    { tokenHash: sha256('other-tok'), expiresAt: new Date(Date.now() + 3_600_000) },
+  );
+  const cookie = 'morgan_session=other-tok';
+  const { people } = (await (await call('GET', 'admin/people', cookie)).json()) as People;
+  expect(people.map((person) => person.id)).toEqual([other.id]);
+  const { invites } = (await (await call('GET', 'admin/invites', cookie)).json()) as {
+    invites: unknown[];
+  };
+  expect(invites).toEqual([]);
+  const theirs = await ctx.owner
+    .selectFrom('invites')
+    .select('id')
+    .where('workspace_id', '=', ctx.alice.workspaceId)
+    .where('used_at', 'is', null)
+    .executeTakeFirstOrThrow();
+  const before = (await audits('admin.invite.revoke')).length;
+  expect((await call('DELETE', `admin/invites/${theirs.id}`, cookie)).status).toBe(404);
+  expect((await audits('admin.invite.revoke')).slice(before)).toEqual(['refused']);
+  expect(
+    await ctx.owner.selectFrom('invites').select('id').where('id', '=', theirs.id).execute(),
+  ).toHaveLength(1);
+});
