@@ -19,6 +19,7 @@ export {
   redeemLink,
   sessionOwner,
   turnOwner,
+  expireStaleTurns,
 } from './system.js';
 export { accountOf, createSession, endSession, type Account } from './accounts.js';
 export {
@@ -62,6 +63,7 @@ export {
   insertTurn,
   interruptTurn,
   listQueuedTurnIds,
+  waitingBehind,
   type NewTurn,
   type Turn,
 } from './turns.js';

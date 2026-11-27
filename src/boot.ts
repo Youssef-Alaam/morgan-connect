@@ -10,6 +10,7 @@ import {
   type Replier,
   requeueStuckTurns,
   startWorker,
+  watchStuckTurns,
 } from './core/index.js';
 import { announceAdminLink, createIdentity, type Identity } from './identity/index.js';
 import {
@@ -36,6 +37,9 @@ import {
   type VaultOptions,
 } from './policy/index.js';
 import { type Config, createLogger, loadConfig, type Logger } from './ops/index.js';
+
+/** How often queued turns with no job are given one again. */
+const REQUEUE_EVERY_MS = 30_000;
 
 const TIMING = { retryDelayMs: 2000, typingIntervalMs: 4000, turnTimeoutMs: 120_000 };
 /** The turn waits for the owner inside its time limit, so a question closes before the turn does. */
@@ -157,10 +161,12 @@ async function startChat(
   const aborts = createTurnAborts();
   const senders = telegram === undefined ? [web] : [telegram, web];
   const deps = { db, queue, senders, logger, retryDelayMs: 1000, identity, reply, aborts };
+  let stopWatching = (): void => undefined;
   try {
     await closeOrphanedApprovals(db);
     await startWorker(deps);
     await requeueStuckTurns(deps);
+    stopWatching = watchStuckTurns(deps, REQUEUE_EVERY_MS);
     if (telegram !== undefined) {
       await announceSetupCode(identity, logger);
       await telegram.start(
@@ -169,12 +175,14 @@ async function startChat(
       );
     }
   } catch (error) {
+    stopWatching();
     await queue.stop();
     throw error;
   }
   return {
     chat: { events: web, ingest: (message) => ingest(deps, message) },
     stop: async () => {
+      stopWatching();
       await telegram?.stop();
       await queue.stop();
     },

@@ -5,6 +5,7 @@ export {
   processTurn,
   requeueStuckTurns,
   startWorker,
+  watchStuckTurns,
   type ChannelSender,
   type PipelineDeps,
 } from './pipeline.js';

@@ -1,5 +1,6 @@
 import {
   claimTurn,
+  expireStaleTurns,
   finishTurn,
   getTurn,
   interruptTurn,
@@ -7,6 +8,7 @@ import {
   ownerOf,
   listQueuedTurnIds,
   turnOwner,
+  waitingBehind,
   type Db,
   type Owner,
   type Turn,
@@ -51,7 +53,8 @@ export async function ingest(deps: PipelineDeps, raw: unknown): Promise<void> {
       return;
     }
     // A device removed since admit leaves nobody to own the turn: treat it as not admitted.
-    if ((await ownerOf(deps.db, message)) === undefined) return;
+    const owner = await ownerOf(deps.db, message);
+    if (owner === undefined) return;
     const turn = await insertTurn(deps.db, {
       idempotencyKey: idempotencyKey(message),
       channel: message.channel,
@@ -60,6 +63,7 @@ export async function ingest(deps: PipelineDeps, raw: unknown): Promise<void> {
     });
     where.turnId = turn.id;
     if (turn.created || turn.status === 'queued') await deps.queue.enqueue(turn.id);
+    if (turn.created) await tellIfWaiting(deps, message, owner, turn.id);
   } catch (error) {
     const kind = error instanceof PipelineError ? error.kind : 'ingest_failed';
     deps.logger.error({ ...where, kind }, 'ingest failed');
@@ -67,11 +71,65 @@ export async function ingest(deps: PipelineDeps, raw: unknown): Promise<void> {
   }
 }
 
-/** Re-queue turns that were stored but never got a job (a crash between insert and enqueue). */
+/** A turn that cannot start yet (its person is at their cap) gets one line saying so. */
+async function tellIfWaiting(
+  deps: PipelineDeps,
+  chat: { channel: string; chatId: string },
+  owner: Owner,
+  turnId: string,
+): Promise<void> {
+  try {
+    const sender = deps.senders.find((s) => s.channel === chat.channel);
+    if (sender === undefined) return;
+    const { ahead, cap } = await waitingBehind(deps.db, owner, turnId);
+    if (ahead < cap) return;
+    const others = ahead === 1 ? '1 other task' : `${String(ahead)} other tasks`;
+    await sender.send(chat.chatId, `Queued behind ${others}. I will start it when one finishes.`);
+  } catch (error) {
+    // The notice is a courtesy: the turn is already stored and queued.
+    deps.logger.warn(
+      { turnId, kind: error instanceof Error ? error.name : 'unknown' },
+      'queue notice failed',
+    );
+  }
+}
+
+/**
+ * Clean up after a dead worker, then re-queue turns that were stored but never got a job (a crash
+ * between insert and enqueue). A turn claimed longer ago than the job expiry is failed, which frees
+ * its person's slot; returns how many turns were re-queued.
+ */
 export async function requeueStuckTurns(deps: PipelineDeps): Promise<number> {
+  await expireStaleTurns(deps.db, deps.queue.expireInSeconds);
   const ids = await listQueuedTurnIds(deps.db);
   for (const id of ids) await deps.queue.enqueue(id);
   return ids.length;
+}
+
+/**
+ * Re-queue stuck turns now and then, so a queued turn that lost its job cannot hold up its
+ * person's line. Safe to repeat: a turn has one waiting job. Returns the stop function.
+ */
+export function watchStuckTurns(deps: PipelineDeps, everyMs: number): () => void {
+  let busy = false;
+  const timer = setInterval(() => {
+    // A slow sweep is not overlapped by the next tick.
+    if (busy) return;
+    busy = true;
+    requeueStuckTurns(deps)
+      .catch((error: unknown) => {
+        deps.logger.warn(
+          { kind: error instanceof Error ? error.name : 'unknown' },
+          'requeue failed',
+        );
+      })
+      .finally(() => {
+        busy = false;
+      });
+  }, everyMs);
+  return () => {
+    clearInterval(timer);
+  };
 }
 
 /** Run the replier with an abort signal that `/stop` can fire while the model works. */
