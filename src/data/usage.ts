@@ -62,7 +62,12 @@ interface Row {
 }
 
 /** The one row of day and month totals; the edges are found on the local clock. */
-async function totalsRow(db: Db, now: Date, timezone: string): Promise<Row | undefined> {
+async function totalsRow(
+  db: Db,
+  userId: string,
+  now: Date,
+  timezone: string,
+): Promise<Row | undefined> {
   const { rows } = await sql<Row>`
     with local as (
       select
@@ -77,7 +82,7 @@ async function totalsRow(db: Db, now: Date, timezone: string): Promise<Row | und
         (month + interval '1 month') at time zone ${timezone} as month_end
       from local
     ),
-    today as (select * from usage_ledger, bounds where created_at >= day_start and created_at < day_end)
+    today as (select * from usage_ledger, bounds where user_id = ${userId} and created_at >= day_start and created_at < day_end)
     select
       (select count(*) from today)::float8 as day_calls,
       (select coalesce(sum(input_tokens), 0) from today)::float8 as day_in,
@@ -88,7 +93,7 @@ async function totalsRow(db: Db, now: Date, timezone: string): Promise<Row | und
       coalesce(sum(output_tokens), 0)::float8 as month_out,
       coalesce(sum(cost_usd), 0)::text as month_cost
     from usage_ledger, bounds
-    where created_at >= month_start and created_at < month_end`.execute(db);
+    where user_id = ${userId} and created_at >= month_start and created_at < month_end`.execute(db);
   return rows[0];
 }
 
@@ -102,7 +107,7 @@ export async function usageSince(
   now: Date,
   timezone: string,
 ): Promise<UsageReport> {
-  const r = await withOwner(db, owner, (trx) => totalsRow(trx, now, timezone));
+  const r = await withOwner(db, owner, (trx) => totalsRow(trx, owner.userId, now, timezone));
   if (r === undefined) throw new Error('The usage query returned no row');
   return {
     today: {

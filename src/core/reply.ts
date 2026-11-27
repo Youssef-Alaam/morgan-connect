@@ -1,9 +1,7 @@
 import {
   appendHistory,
-  clearHistory,
   closeStoppedTurn,
   conversationFor,
-  endConversation,
   lastMessageAt,
   loadHistory,
   recordUsage,
@@ -21,7 +19,9 @@ import {
   type Gate,
 } from '../policy/index.js';
 import { joinSystem, trusted, type SystemPrompt } from '../safety/index.js';
+import { startOver } from './start-over.js';
 import { withSwitchedOffNote } from './switched-off.js';
+import { refusedForBudget, type BudgetSettings, type ReplyResult } from './budget-reply.js';
 import { compact, type BeforeCompact } from './compaction.js';
 import { isCommand } from './commands.js';
 import { toEngineHistory } from './summary-view.js';
@@ -48,6 +48,11 @@ export interface ReplyDeps {
   system?: SystemPrompt;
   /** The tools the model may call, each behind the policy gate. */
   gate?: Gate;
+  /**
+   * Spend limits (M2-10a). Unset: no limit is checked. Checked here in core, once at the start of each turn, not in the policy gate (which only
+   * guards tools). Compaction calls are not checked. M2-10b builds on this.
+   */
+  budget?: BudgetSettings;
   /** The model id the engine uses; written to the usage ledger. */
   model: string;
   /** Where "today" starts for /usage, and the zone of the time shown to the model (an IANA name). */
@@ -77,8 +82,12 @@ export function assertFitsJobExpiry(
   }
 }
 
-/** Turns a stored turn into the text to send back. */
-export type Replier = (turn: Turn, sender: ChannelSender, signal?: AbortSignal) => Promise<string>;
+/** Turns a stored turn into the reply to send back. */
+export type Replier = (
+  turn: Turn,
+  sender: ChannelSender,
+  signal?: AbortSignal,
+) => Promise<ReplyResult>;
 
 /** Wait, but wake at once when the turn is aborted. */
 const wait = (ms: number, signal: AbortSignal): Promise<void> =>
@@ -299,17 +308,23 @@ async function compactWhenFull(
   }
 }
 
-/** `/new`: forget the chat and end the engine conversation; an engine failure never blocks it. */
-async function startOver(deps: ReplyDeps, turn: Turn): Promise<void> {
-  const chat = { channel: turn.channel, chatId: turn.chatId };
-  const ended = await endConversation(deps.db, owner(turn), chat);
-  await clearHistory(deps.db, owner(turn), chat);
-  if (ended === undefined || deps.engine.end === undefined) return;
-  try {
-    await deps.engine.end(ended);
-  } catch {
-    deps.logger.warn({ turnId: turn.id }, 'engine did not close the conversation');
-  }
+/** The model's answer to one turn, unless the person is over their limit. */
+async function modelReply(
+  deps: ReplyDeps,
+  turn: Turn,
+  { both, timedOut }: { both: AbortSignal; timedOut: () => boolean },
+): Promise<ReplyResult> {
+  const refused = await refusedForBudget(deps, turn);
+  if (refused !== undefined) return refused;
+  const renewed = await startOverWhenIdle(deps, turn);
+  const { answer, context } = await ask(deps, turn, both, timedOut);
+  await compactWhenFull(deps, turn, context, { signal: both, timedOut });
+  const told = withSwitchedOffNote(deps.gate, turn.id, answer);
+  return renewed
+    ? `${IDLE_REPLY}
+
+${told}`
+    : told;
 }
 
 /** Build the replier: `/new` clears the chat, `/usage` shows spend; anything else goes to the model with its history. */
@@ -329,16 +344,10 @@ export function createReplier(deps: ReplyDeps): Replier {
     const both = AbortSignal.any(signal === undefined ? [limit] : [signal, limit]);
     const stopTyping = keepTyping(deps, turn, sender);
     try {
-      const renewed = await startOverWhenIdle(deps, turn);
-      const timedOut = (): boolean => limit.aborted && signal?.aborted !== true;
-      const { answer, context } = await ask(deps, turn, both, timedOut);
-      await compactWhenFull(deps, turn, context, { signal: both, timedOut });
-      const told = withSwitchedOffNote(deps.gate, turn.id, answer);
-      return renewed
-        ? `${IDLE_REPLY}
-
-${told}`
-        : told;
+      return await modelReply(deps, turn, {
+        both,
+        timedOut: () => limit.aborted && signal?.aborted !== true,
+      });
     } catch (error) {
       const kind = error instanceof EngineError ? error.kind : 'failed';
       deps.logger.warn({ turnId: turn.id, kind }, 'model reply failed');

@@ -82,6 +82,11 @@ const schema = z
         }
       }, 'must be an IANA time zone name')
       .default('UTC'),
+    // The monthly limit in USD on the admin's API keys for a person with none of their own. Unset: no limit.
+    DEFAULT_MONTHLY_LIMIT_USD: z
+      .string()
+      .regex(/^\d{1,6}(\.\d{1,8})?$/, 'must be a plain USD amount such as 5 or 2.50')
+      .optional(),
     // After this many idle minutes the next message starts a new conversation, as if the person had typed /new.
     IDLE_GAP_MINUTES: z.coerce.number().int().min(5).default(360),
     // When one model call carries this many tokens, the older part of the chat is summarised.

@@ -67,8 +67,10 @@ const replierFor = (
   });
   return { reply, engine };
 };
-const say = async (reply: Replier, chatId: string, text: string): Promise<string> =>
-  reply(turn(chatId, `${text} ${LONG}`), new FakeChannel());
+const say = async (reply: Replier, chatId: string, text: string): Promise<string> => {
+  const answer = await reply(turn(chatId, `${text} ${LONG}`), new FakeChannel());
+  return typeof answer === 'string' ? answer : answer.text;
+};
 
 const rows = (chatId: string) =>
   withOwner(db, who, (trx) =>

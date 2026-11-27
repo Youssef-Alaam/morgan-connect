@@ -99,6 +99,8 @@ function buildReplier(
           ...vaultFrom(config),
         }),
         timezone: config.TIMEZONE,
+        // TODO(M2-10b+): 'own' once a person can bring their own key or subscription (D46).
+        budget: { keySource: 'admin', defaultLimitUsd: config.DEFAULT_MONTHLY_LIMIT_USD },
         idleGapMs: config.IDLE_GAP_MINUTES * 60_000,
         compactAtTokens: config.COMPACT_AT_TOKENS,
         ...TIMING,

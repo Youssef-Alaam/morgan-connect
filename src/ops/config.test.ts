@@ -153,3 +153,14 @@ it('takes passkey settings together, and fails at boot when the origin is off th
   const local = { WEBAUTHN_RP_ID: 'localhost', WEBAUTHN_ORIGIN: 'http://localhost:3000' };
   expect(load(local)).not.toThrow();
 });
+
+it('takes a plain USD amount as the install default limit and rejects anything else', () => {
+  expect(loadConfig({ DATABASE_URL: URL, DEFAULT_MONTHLY_LIMIT_USD: '2.50' })).toMatchObject({
+    DEFAULT_MONTHLY_LIMIT_USD: '2.50',
+  });
+  for (const bad of ['-1', '1e3', '$5']) {
+    expect(() => loadConfig({ DATABASE_URL: URL, DEFAULT_MONTHLY_LIMIT_USD: bad })).toThrow(
+      /DEFAULT_MONTHLY_LIMIT_USD/,
+    );
+  }
+});

@@ -182,7 +182,8 @@ async function received(modelAnswer: string): Promise<string> {
     status: 'sending',
     ...ctx.bob,
   } as const;
-  return reply(turn, new FakeChannel());
+  const answer = await reply(turn, new FakeChannel());
+  return typeof answer === 'string' ? answer : answer.text;
 }
 
 it('puts the fixed sentence in the reply itself when the model leaves it out', async () => {
