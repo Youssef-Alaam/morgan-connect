@@ -1,11 +1,51 @@
 import { type Hono } from 'hono';
 import { z } from 'zod';
-import { budgetSummary, isAdmin, setBudget, setTaskCap } from '../data/index.js';
+import {
+  budgetSummary,
+  isAdmin,
+  listWaitingTopups,
+  setBudget,
+  setTaskCap,
+  setTopupStep,
+} from '../data/index.js';
 import { type AuthDeps, type Signed } from './session.js';
 
 const personId = z.uuid();
-const limit = z.object({ limitUsd: z.string().regex(/^\d{1,6}(\.\d{1,8})?$/) });
+const money = z.string().regex(/^\d{1,6}(\.\d{1,8})?$/);
+const limit = z.object({ limitUsd: money });
+/** Null goes back to the install's step. A step of 0 would raise nothing. */
+const step = z.object({
+  amountUsd: money.refine((value) => Number(value) > 0).nullable(),
+});
 const taskCap = z.object({ cap: z.number().int().min(1).max(1000).nullable() });
+
+type Admin = Signed['Variables']['session'];
+
+/**
+ * One admin-only setting on a person. Decided by the database: a member is refused (403, and the
+ * attempt is audited there), and the admin hears 404 for someone outside their workspace.
+ */
+function setting<T>(
+  { routes, db }: { routes: Hono<Signed>; db: AuthDeps['db'] },
+  path: 'budget' | 'task-cap' | 'topup-step',
+  schema: z.ZodType<T>,
+  apply: (admin: Admin, id: string, body: T) => Promise<boolean>,
+): void {
+  routes.put(`/admin/people/:id/${path}`, async (c) => {
+    const session = c.get('session');
+    const id = personId.safeParse(c.req.param('id'));
+    const body = schema.safeParse(await c.req.json().catch(() => undefined));
+    const ready = id.success && body.success;
+    if (!(await isAdmin(db, session))) {
+      if (ready) await apply(session, id.data, body.data);
+      return c.json({ error: 'forbidden' }, 403);
+    }
+    if (!ready) return c.json({ error: 'invalid_request' }, 400);
+    return (await apply(session, id.data, body.data))
+      ? c.body(null, 204)
+      : c.json({ error: 'not_found' }, 404);
+  });
+}
 
 /**
  * The admin's budgets page (M2-15c): spend this month against each limit, and the limit and task
@@ -29,28 +69,20 @@ export function budgetRoutes(
     });
   });
 
-  // The two settings below are decided by the database: a member is refused (403, audited), and the
-  // admin hears 404 for someone outside their workspace.
-  function setting<T>(
-    path: 'budget' | 'task-cap',
-    schema: z.ZodType<T>,
-    apply: (admin: Signed['Variables']['session'], id: string, body: T) => Promise<boolean>,
-  ): void {
-    routes.put(`/admin/people/:id/${path}`, async (c) => {
-      const session = c.get('session');
-      const id = personId.safeParse(c.req.param('id'));
-      const body = schema.safeParse(await c.req.json().catch(() => undefined));
-      const ready = id.success && body.success;
-      if (!(await isAdmin(db, session))) {
-        if (ready) await apply(session, id.data, body.data);
-        return c.json({ error: 'forbidden' }, 403);
-      }
-      if (!ready) return c.json({ error: 'invalid_request' }, 400);
-      return (await apply(session, id.data, body.data))
-        ? c.body(null, 204)
-        : c.json({ error: 'not_found' }, 404);
-    });
-  }
-  setting('budget', limit, (admin, id, body) => setBudget(db, admin, id, body.limitUsd));
-  setting('task-cap', taskCap, (admin, id, body) => setTaskCap(db, admin, id, body.cap));
+  setting({ routes, db }, 'budget', limit, (admin, id, body) =>
+    setBudget(db, admin, id, body.limitUsd),
+  );
+  setting({ routes, db }, 'task-cap', taskCap, (admin, id, body) =>
+    setTaskCap(db, admin, id, body.cap),
+  );
+  setting({ routes, db }, 'topup-step', step, (admin, id, body) =>
+    setTopupStep(db, admin, id, body.amountUsd ?? undefined),
+  );
+
+  // The requests still waiting for an answer.
+  routes.get('/admin/topups', async (c) => {
+    const session = c.get('session');
+    if (!(await isAdmin(db, session))) return c.json({ error: 'forbidden' }, 403);
+    return c.json({ topups: await listWaitingTopups(db, session) });
+  });
 }

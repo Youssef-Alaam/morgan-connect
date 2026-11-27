@@ -100,14 +100,18 @@ export {
 export {
   TOPUP_FUNCTIONS,
   cancelTopup,
+  listWaitingTopups,
   openTopupFor,
   requestTopup,
   resolveTopup,
+  setTopupStep,
+  topupStepOf,
   topupTotal,
   type NewTopup,
   type OpenTopup,
   type ResolvedTopup,
   type TopupRequest,
+  type WaitingTopup,
 } from './topups.js';
 export {
   recordUsage,
