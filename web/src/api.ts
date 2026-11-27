@@ -166,6 +166,14 @@ export function revokeInvite(id: string): Promise<Result<unknown>> {
   return call(`/admin/invites/${encodeURIComponent(id)}`, undefined, 'DELETE');
 }
 
+/** A member with a temporary password, shown once in the answer; a 409 email_taken means the email has an account. */
+export function createAccount(
+  email: string,
+  monthlyLimitUsd: number | null,
+): Promise<Result<{ temporaryPassword: string }>> {
+  return call('/accounts', { email, monthlyLimitUsd });
+}
+
 /** Ends this browser's session. */
 export function signOut(): Promise<Result<unknown>> {
   return call('/sign-out', {});

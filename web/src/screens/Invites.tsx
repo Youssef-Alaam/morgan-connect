@@ -11,6 +11,7 @@ import { limitOf } from './limit.ts';
 
 const K = 'users.invites';
 const DEFAULT_HOURS = '72';
+const MAX_HOURS = 720;
 
 /** A moment as `year-month-day hour:minute`, UTC, the same wherever the admin is. */
 const when = (iso: string): string => iso.slice(0, 16).replace('T', ' ');
@@ -81,10 +82,15 @@ function InviteForm({ onMade, onError }: FormProps) {
   const { t } = useTranslation();
   const [limit, setLimit] = useState('');
   const [hours, setHours] = useState(DEFAULT_HOURS);
+  const [hoursError, setHoursError] = useState(false);
   const create = (event: SyntheticEvent) => {
     event.preventDefault();
     onError(undefined);
-    void createInvite(limitOf(limit), Number(hours)).then((answer) => {
+    const lasts = Number(hours);
+    const valid = /^\d+$/.test(hours.trim()) && lasts >= 1 && lasts <= MAX_HOURS;
+    setHoursError(!valid);
+    if (!valid) return;
+    void createInvite(limitOf(limit), lasts).then((answer) => {
       if (answer.ok) onMade(`${window.location.origin}/join#token=${answer.data.token}`);
       else onError(answer.error);
     });
@@ -101,6 +107,7 @@ function InviteForm({ onMade, onError }: FormProps) {
       <TextInput
         label={t(`${K}.hours`)}
         inputMode="numeric"
+        {...(hoursError ? { error: t(`${K}.hoursInvalid`) } : {})}
         value={hours}
         onChange={typed(setHours)}
       />
