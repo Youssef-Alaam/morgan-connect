@@ -5,6 +5,8 @@ import { withOwner } from './tenancy.js';
 /** The app role may execute exactly these (ensureAppRole). */
 export const TOPUP_FUNCTIONS: readonly string[] = [
   'request_topup(numeric, text, text, text, text, timestamptz, timestamptz, text)',
+  'admin_open_topup(uuid)',
+  'admin_resolve_topup(uuid, text)',
   'cancel_topup(uuid)',
 ];
 
@@ -72,6 +74,73 @@ function asRequest(row: RequestRow | undefined): TopupRequest {
   return {
     outcome: row?.outcome === 'open' || row?.outcome === 'no_admin' ? row.outcome : 'unavailable',
   };
+}
+
+export interface OpenTopup {
+  topupId: string;
+  memberId: string;
+  /** A decimal string, as the database holds it. */
+  amountUsd: string;
+  month: string;
+}
+
+/** The open request behind an admin's question, or undefined when it is not a top-up (or not the admin's). */
+export function openTopupFor(
+  db: Db,
+  admin: Owner,
+  approvalId: string,
+): Promise<OpenTopup | undefined> {
+  return withOwner(db, admin, async (trx) => {
+    const { rows } = await sql<{
+      topup_id: string;
+      member_id: string;
+      amount: string;
+      month: string;
+    }>`select * from admin_open_topup(${approvalId}::uuid)`.execute(trx);
+    const row = rows[0];
+    return (
+      row && {
+        topupId: row.topup_id,
+        memberId: row.member_id,
+        amountUsd: row.amount,
+        month: row.month,
+      }
+    );
+  });
+}
+
+export interface ResolvedTopup {
+  memberId: string;
+  amountUsd: string;
+  /** Where the member asked. */
+  channel: string;
+  chatId: string;
+}
+
+/** The admin's answer, once: undefined when it is not theirs to give or was already answered. Audited. */
+export function resolveTopup(
+  db: Db,
+  admin: Owner,
+  id: string,
+  status: 'approved' | 'refused',
+): Promise<ResolvedTopup | undefined> {
+  return withOwner(db, admin, async (trx) => {
+    const { rows } = await sql<{
+      member_id: string;
+      amount: string;
+      channel: string;
+      chat_id: string;
+    }>`select * from admin_resolve_topup(${id}::uuid, ${status})`.execute(trx);
+    const row = rows[0];
+    return (
+      row && {
+        memberId: row.member_id,
+        amountUsd: row.amount,
+        channel: row.channel,
+        chatId: row.chat_id,
+      }
+    );
+  });
 }
 
 /** Close a request whose question could not be shown, so the member may ask again. */

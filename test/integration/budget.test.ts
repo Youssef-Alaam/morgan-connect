@@ -14,6 +14,7 @@ import {
 } from '../../src/data/index.js';
 import { copyLegacyLimits } from '../../src/data/migrations/0027-budget-limit-writes.js';
 import { checkBudget } from '../../src/policy/index.js';
+import { monthKey } from '../../src/policy/budget.js';
 import { linkChats } from '../helpers/link-chats.js';
 import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
@@ -88,6 +89,35 @@ it("never limits a call paid by the person's own key or subscription (D46)", asy
 it('never limits the admin, whatever the default or their own row says', async () => {
   await spend(admin, 50);
   expect(await check({ defaultLimitUsd: '0' }, admin)).toEqual({ allowed: true });
+});
+
+it('raises the limit by the approved top-ups of this month only', async () => {
+  await setBudget(db, admin, who.userId, '50');
+  const now = new Date();
+  const topup = (month: string, status: 'approved' | 'refused') => ({
+    user_id: who.userId,
+    workspace_id: who.workspaceId,
+    amount_usd: '20',
+    month,
+    status,
+    channel: 'fake',
+    chat_id: 'B1',
+    expires_at: now,
+  });
+  const next = monthKey(new Date(now.getTime() + 40 * 86_400_000), 'UTC');
+  await db
+    .insertInto('budget_topups')
+    .values([topup(next, 'approved'), topup(monthKey(now, 'UTC'), 'refused')])
+    .execute();
+  expect(await check()).toMatchObject({ allowed: false, limitUsd: '50.00000000' });
+  await db
+    .insertInto('budget_topups')
+    .values(topup(monthKey(now, 'UTC'), 'approved'))
+    .execute();
+  expect(await check()).toEqual({ allowed: true });
+  await spend(who, 20);
+  expect(await check()).toMatchObject({ allowed: false, limitUsd: '70.00000000' });
+  await db.deleteFrom('budget_topups').execute();
 });
 
 it('counts the month in the given time zone, so next month starts clean', async () => {

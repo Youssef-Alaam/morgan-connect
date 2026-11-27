@@ -85,9 +85,13 @@ export { BUDGET_FUNCTIONS, budgetOf, isAdmin, setBudget } from './budgets.js';
 export {
   TOPUP_FUNCTIONS,
   cancelTopup,
+  openTopupFor,
   requestTopup,
+  resolveTopup,
   topupTotal,
   type NewTopup,
+  type OpenTopup,
+  type ResolvedTopup,
   type TopupRequest,
 } from './topups.js';
 export {
