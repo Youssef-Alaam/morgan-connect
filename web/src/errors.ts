@@ -4,6 +4,8 @@ const KNOWN = new Set([
   'too_many_attempts',
   'same_password',
   'notice_required',
+  'link_invalid',
+  'email_taken',
   'network',
 ]);
 

@@ -37,6 +37,14 @@ export function secondFactor(challenge: string, code: string): Promise<Result<un
   return call('/sign-in/second-factor', { challenge, code });
 }
 
+export function setPassword(
+  token: string,
+  email: string,
+  password: string,
+): Promise<Result<unknown>> {
+  return call('/set-password', { token, email, password });
+}
+
 export function changePassword(
   current: string,
   password: string,

@@ -213,3 +213,49 @@ test('a session that ended while chatting goes back to sign-in', async ({ page }
   await open(page, queryOf(info.project.metadata));
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 });
+
+async function fillFirstPassword(page: Page): Promise<void> {
+  await page.getByLabel('Email').fill('narimane@example.test');
+  await page.getByLabel('New password').fill('my own long password');
+  await page.getByRole('button', { name: 'Set password' }).click();
+}
+
+test('the first-password link sets the password and signs in, token never in a URL', async ({
+  page,
+}, info) => {
+  const urls: string[] = [];
+  page.on('request', (request) => urls.push(request.url()));
+  const seen = await serve(page, { '/set-password': ok, '/sign-in': ok, '/me': ok });
+  await page.goto(`/set-password${queryOf(info.project.metadata)}#token=tok-123`);
+  await page.evaluate(() => document.fonts.ready);
+  await expect(page.getByRole('heading', { name: 'Set your password' })).toBeVisible();
+  expect(new URL(page.url()).hash).toBe('');
+  await expect(page.locator('main')).toHaveScreenshot('set-password.png');
+  await noViolations(page);
+  await fillFirstPassword(page);
+  await expect(page.getByRole('textbox', { name: 'Message Morgan' })).toBeVisible();
+  const login = { email: 'narimane@example.test', password: 'my own long password' };
+  expect(seen).toContain(`/set-password ${JSON.stringify({ token: 'tok-123', ...login })}`);
+  expect(seen).toContain(`/sign-in ${JSON.stringify(login)}`);
+  expect(urls.filter((url) => url.includes('tok-123'))).toEqual([]);
+  expect(new URL(page.url()).pathname).toBe('/');
+});
+
+test('a first password on a temporary-password account ends on change-password', async ({
+  page,
+}, info) => {
+  await serve(page, { '/set-password': ok, '/sign-in': ok, '/me': mustChange });
+  await page.goto(`/set-password${queryOf(info.project.metadata)}#token=tok-123`);
+  await fillFirstPassword(page);
+  await expect(page.getByRole('heading', { name: 'Choose your password' })).toBeVisible();
+});
+
+test('a used or missing link says so and does not sign in', async ({ page }, info) => {
+  await serve(page, { '/set-password': { status: 410, body: { error: 'link_invalid' } } });
+  await page.goto(`/set-password${queryOf(info.project.metadata)}#token=old`);
+  await fillFirstPassword(page);
+  await expect(page.getByRole('alert')).toContainText('expired or was already used');
+  await page.goto(`/set-password${queryOf(info.project.metadata)}`);
+  await expect(page.getByRole('alert')).toContainText('expired or was already used');
+  await expect(page.getByRole('button', { name: 'Set password' })).toBeDisabled();
+});
