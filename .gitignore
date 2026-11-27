@@ -6,3 +6,4 @@ dist-evals/
 *.log
 .env
 web/test-results/
+web/test-results-stack/
