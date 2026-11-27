@@ -185,7 +185,7 @@ export function createAccount(
 }
 
 type Preset = 'restricted' | 'standard' | 'trusted';
-type Mode = 'off' | 'ask' | 'auto';
+export type Mode = 'off' | 'ask' | 'auto';
 
 /** What each preset allows, per action type. */
 export interface PresetRow {

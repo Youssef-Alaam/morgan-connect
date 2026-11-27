@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { type Person, type PresetRow, type Profiles as Shown } from '../api.ts';
+import { type Mode, type Person, type PresetRow, type Profiles as Shown } from '../api.ts';
 import { Badge } from '../components/Badge.tsx';
 import { Button } from '../components/Button.tsx';
 import { Select } from '../components/Select.tsx';
@@ -19,18 +19,27 @@ interface TargetsProps {
 function Targets({ person, shown }: TargetsProps) {
   const { t } = useTranslation();
   const rows = [
-    { key: person.id, label: t(`${K}.forPerson`), preset: shown.person.preset },
+    { key: person.id, label: t(`${K}.forPerson`), preset: shown.person.preset, own: true },
     ...shown.devices.map((device) => ({
       key: device.deviceId,
       label: t(`${K}.forChat`, { channel: device.channel }),
       preset: device.preset,
+      own: device.own,
     })),
   ];
   return (
     <Table
       caption={t(`${K}.caption`, { person: person.email ?? t(`${K}.chatOnly`) })}
       columns={[t(`${K}.applies`), t(`${K}.profile`)]}
-      rows={rows.map((row) => ({ key: row.key, cells: [row.label, t(`${K}.${row.preset}`)] }))}
+      rows={rows.map((row) => ({
+        key: row.key,
+        cells: [
+          row.label,
+          row.own
+            ? t(`${K}.${row.preset}`)
+            : t(`${K}.inherits`, { preset: t(`${K}.${row.preset}`) }),
+        ],
+      }))}
     />
   );
 }
@@ -40,11 +49,19 @@ interface ModesProps {
   presets: PresetRow[];
 }
 
+const RANK = { off: 0, ask: 1, auto: 2 } as const;
+
+/** Red only where the setting is looser than Restricted allows for that action type. */
+function looser(mode: Mode, base: Mode | undefined): boolean {
+  return base !== undefined && RANK[mode] > RANK[base];
+}
+
 /** What a profile lets Morgan do, per action type: the off / ask / auto setting of each. */
 function Modes({ preset, presets }: ModesProps) {
   const { t } = useTranslation();
   const row = presets.find((candidate) => candidate.preset === preset);
   if (row === undefined) return null;
+  const base = presets.find((candidate) => candidate.preset === 'restricted')?.modes;
   return (
     <Table
       caption={t(`${K}.allows`, { preset: t(`${K}.${row.preset}`) })}
@@ -53,7 +70,7 @@ function Modes({ preset, presets }: ModesProps) {
         key: type,
         cells: [
           t(`${K}.type.${type}`),
-          <Badge key="mode" tone={mode === 'auto' ? 'danger' : 'neutral'}>
+          <Badge key="mode" tone={looser(mode, base?.[type]) ? 'danger' : 'neutral'}>
             {t(`${K}.${mode}`)}
           </Badge>,
         ],

@@ -79,10 +79,26 @@ test('the admin sees what applies to a person and each chat, and what a profile 
   await script(page);
   await openAccess(page, queryOf(info.project.metadata));
   await expect(page.getByRole('row', { name: 'The person Standard' })).toBeVisible();
-  await expect(page.getByRole('row', { name: 'Their telegram chat Standard' })).toBeVisible();
+  await expect(
+    page.getByRole('row', { name: 'Their telegram chat Standard, same as the person' }),
+  ).toBeVisible();
   await expect(page.getByRole('table', { name: 'What Standard allows' })).toBeVisible();
+  // Read is Auto in every profile, so it is not flagged; only a setting looser than Restricted is.
+  await expect(page.getByRole('row', { name: 'Read Auto' }).locator('.badge-danger')).toHaveCount(
+    0,
+  );
   await expect(page.locator('main')).toHaveScreenshot('profiles-list.png');
   await noViolations(page);
+});
+
+test('a failed presets load shows the problem', async ({ page }, info) => {
+  await script(page);
+  await page.route('**/api/admin/profile-presets', (route) =>
+    route.fulfill({ status: 500, json: { error: 'server_error' } }),
+  );
+  await open(page, queryOf(info.project.metadata));
+  await page.getByRole('button', { name: 'Access' }).click();
+  await expect(page.getByRole('alert')).toContainText('Something went wrong');
 });
 
 test('a member is not offered the page', async ({ page }, info) => {

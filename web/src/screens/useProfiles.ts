@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   listPeople,
   listPresets,
@@ -23,6 +23,7 @@ function useDirectory() {
     });
     void listPresets().then((answer) => {
       if (answer.ok) setPresets(answer.data.presets);
+      else setError(answer.error);
     });
   }, []);
   return { people, presets, who, setWho, error };
@@ -33,8 +34,11 @@ export function useProfiles() {
   const { people, presets, who, setWho, error: loadError } = useDirectory();
   const [shown, setShown] = useState<Shown>();
   const [error, setError] = useState<string>();
+  const latest = useRef<string | undefined>(undefined);
   const load = useCallback((id: string) => {
+    latest.current = id;
     void profilesOf(id).then((answer) => {
+      if (latest.current !== id) return; // another person was picked meanwhile
       if (answer.ok) setShown(answer.data);
       else setError(answer.error);
     });

@@ -318,6 +318,7 @@
       "delete": "Delete",
       "send": "Send",
       "execute": "Run commands"
-    }
+    },
+    "inherits": "{{preset}}, same as the person"
   }
 }
