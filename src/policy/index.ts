@@ -21,6 +21,7 @@ export { createApprovals, type ApprovalPrompt, type Approvals, type Verdict } fr
 export {
   PRESETS,
   assignProfile,
+  previewProfile,
   loosened,
   profilesOf,
   profileFor,

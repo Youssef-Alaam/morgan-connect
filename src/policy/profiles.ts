@@ -113,6 +113,35 @@ export async function assignProfile(
   };
 }
 
+/**
+ * What a choice would loosen, worked out the same way as `assignProfile` but writing nothing. For
+ * the admin's page, which shows the warnings before it saves. Undefined when the person, or the
+ * device (which must be theirs), is not found.
+ */
+export async function previewProfile(
+  db: Db,
+  caller: Owner,
+  target: { userId: string; deviceId?: string | undefined; preset: Preset },
+): Promise<(Assignment & { refused: boolean }) | undefined> {
+  const current = await profilesOf(db, caller, target.userId);
+  if (current === undefined) return undefined;
+  const now =
+    target.deviceId === undefined
+      ? current.person
+      : current.devices.find((device) => device.deviceId === target.deviceId);
+  if (now === undefined) return undefined;
+  const presets = await listPresets(db);
+  const next = toProfile(presets.find((row) => row.preset === target.preset));
+  // The database refuses an admin making themselves Restricted, person or device (migration 0024).
+  const refused = target.userId === caller.userId && target.preset === 'restricted';
+  return {
+    previous: now.preset,
+    preset: target.preset,
+    warnings: loosened(now.modes, next),
+    refused,
+  };
+}
+
 export interface DeviceProfile extends AccessProfile {
   deviceId: string;
   channel: string;
