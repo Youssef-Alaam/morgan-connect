@@ -1,5 +1,6 @@
 const KNOWN = new Set([
   'invalid_credentials',
+  'invalid_code',
   'invalid_request',
   'too_many_attempts',
   'same_password',

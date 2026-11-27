@@ -1,6 +1,7 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import { sendMessage, standing } from '../api.ts';
+import { Button } from '../components/Button.tsx';
 import { ChatBubble } from '../components/ChatBubble.tsx';
 import { Composer } from '../components/Composer.tsx';
 import { ApprovalLine } from './ApprovalLine.tsx';
@@ -11,6 +12,7 @@ import { apply, followEvents, type Line } from '../events.ts';
 
 interface ChatProps {
   onSignedOut: () => void;
+  onSecurity: () => void;
 }
 
 /** Follow the live stream into the lines; true while it is broken. A session that ended means sign in again. */
@@ -37,7 +39,7 @@ function useStream(setLines: Dispatch<SetStateAction<Line[]>>, onSignedOut: () =
 }
 
 // Talk to Morgan: your messages go out over POST, Morgan's answers arrive on the live stream.
-export function Chat({ onSignedOut }: ChatProps) {
+export function Chat({ onSignedOut, onSecurity }: ChatProps) {
   const { t } = useTranslation();
   const [lines, setLines] = useState<Line[]>([]);
   const broken = useStream(setLines, onSignedOut);
@@ -56,7 +58,11 @@ export function Chat({ onSignedOut }: ChatProps) {
 
   return (
     <main className="page chat">
-      <TopBar onSignedOut={onSignedOut} />
+      <TopBar onSignedOut={onSignedOut}>
+        <Button variant="secondary" onClick={onSecurity}>
+          {t('security.title')}
+        </Button>
+      </TopBar>
       <p role="status">{broken ? t('chat.reconnecting') : ''}</p>
       <ErrorBanner error={error} />
       <div className="chat-log" role="log" aria-label={t('chat.log')}>
