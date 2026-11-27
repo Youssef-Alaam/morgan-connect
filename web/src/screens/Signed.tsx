@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { whoAmI } from '../api.ts';
+import { Budgets } from './Budgets.tsx';
 import { Chat } from './Chat.tsx';
 import { Profiles } from './Profiles.tsx';
 import { Security } from './Security.tsx';
@@ -9,7 +10,7 @@ interface SignedProps {
   onSignedOut: () => void;
 }
 
-type View = 'chat' | 'security' | 'users' | 'profiles';
+type View = 'chat' | 'security' | 'users' | 'profiles' | 'budgets';
 
 // The screens of a signed-in person: the chat, the account's security page and, for the admin, the people and access pages.
 export function Signed({ onSignedOut }: SignedProps) {
@@ -26,11 +27,14 @@ export function Signed({ onSignedOut }: SignedProps) {
   if (view === 'security') return <Security onBack={go('chat')} onSignedOut={onSignedOut} />;
   if (view === 'users') return <Users onBack={go('chat')} onSignedOut={onSignedOut} />;
   if (view === 'profiles') return <Profiles onBack={go('chat')} onSignedOut={onSignedOut} />;
+  if (view === 'budgets') return <Budgets onBack={go('chat')} onSignedOut={onSignedOut} />;
   return (
     <Chat
       onSignedOut={onSignedOut}
       onSecurity={go('security')}
-      {...(admin ? { onUsers: go('users'), onProfiles: go('profiles') } : {})}
+      {...(admin
+        ? { onUsers: go('users'), onProfiles: go('profiles'), onBudgets: go('budgets') }
+        : {})}
     />
   );
 }
