@@ -81,3 +81,50 @@ test('a server error is not a sign-out: it offers a retry', async ({ page }, inf
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 });
+
+test('an authenticator code is asked for after the password', async ({ page }, info) => {
+  const seen = await serve(page, {
+    '/me': [out, { status: 200, body: {} }],
+    '/sign-in': { status: 200, body: { step: 'second_factor', challenge: 'chal-1' } },
+    '/sign-in/second-factor': ok,
+  });
+  await open(page, queryOf(info.project.metadata));
+  await page.getByLabel('Email').fill('narimane@example.test');
+  await page.getByLabel('Password', { exact: true }).fill('correct horse battery');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByLabel('Authenticator code')).toBeVisible();
+  await expect(page.locator('main')).toHaveScreenshot('second-factor.png');
+  await noViolations(page);
+  await page.getByLabel('Authenticator code').fill('123456');
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await expect(page.getByText('Nothing here yet.')).toBeVisible();
+  expect(seen).toContain(
+    `/sign-in/second-factor ${JSON.stringify({ challenge: 'chal-1', code: '123456' })}`,
+  );
+});
+
+test('a backup code can be used instead, and the code step has a way back', async ({
+  page,
+}, info) => {
+  const seen = await serve(page, {
+    '/me': [out, { status: 200, body: {} }],
+    '/sign-in': { status: 200, body: { step: 'second_factor', challenge: 'chal-2' } },
+    '/sign-in/second-factor': ok,
+  });
+  await open(page, queryOf(info.project.metadata));
+  await page.getByLabel('Email').fill('narimane@example.test');
+  await page.getByLabel('Password', { exact: true }).fill('correct horse battery');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('button', { name: 'Back to password' }).click();
+  await expect(page.getByLabel('Email')).toBeVisible();
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('button', { name: 'Use a backup code' }).click();
+  await expect(page.locator('main')).toHaveScreenshot('backup-code.png');
+  await noViolations(page);
+  await page.getByLabel('Backup code').fill('abcd-efgh-ijkl');
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await expect(page.getByText('Nothing here yet.')).toBeVisible();
+  expect(seen).toContain(
+    `/sign-in/second-factor ${JSON.stringify({ challenge: 'chal-2', code: 'abcd-efgh-ijkl' })}`,
+  );
+});

@@ -1,6 +1,8 @@
 // The browser's side of the HTTP API (`/api`). Same origin, JSON only; the session is a cookie.
 export type Result<T> = { ok: true; data: T } | { ok: false; status: number; error: string };
 
+export type SignInAnswer = { step: 'second_factor'; challenge: string } | { step?: undefined };
+
 /** Where a person stands: the screen to show. `unknown` means the server could not be asked (retry). */
 export type Standing = 'in' | 'out' | 'change' | 'unknown';
 
@@ -27,8 +29,12 @@ async function call<T>(path: string, body?: unknown): Promise<Result<T>> {
   }
 }
 
-export function signIn(email: string, password: string): Promise<Result<unknown>> {
+export function signIn(email: string, password: string): Promise<Result<SignInAnswer>> {
   return call('/sign-in', { email, password });
+}
+
+export function secondFactor(challenge: string, code: string): Promise<Result<unknown>> {
+  return call('/sign-in/second-factor', { challenge, code });
 }
 
 /** Asks the server who this is: signed in, signed out (only a 401), held on the change-password screen, or unknown (network or server trouble). */

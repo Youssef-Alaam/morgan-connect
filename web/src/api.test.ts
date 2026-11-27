@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { signIn, standing } from './api.ts';
+import { secondFactor, signIn, standing } from './api.ts';
 import { errorKey } from './errors.ts';
 
 function answer(status: number, body: unknown): void {
@@ -27,6 +27,13 @@ describe('the account calls', () => {
     expect(init.method).toBe('POST');
     expect(init.body).toBe(JSON.stringify({ email: 'a@example.test', password: 'pw' }));
     expect(init.headers).toEqual({ 'content-type': 'application/json' });
+  });
+
+  it('passes a second-factor challenge back with the code', async () => {
+    answer(200, { ok: true });
+    await secondFactor('c1', '123456');
+    expect(sent().path).toBe('/api/sign-in/second-factor');
+    expect(sent().init.body).toBe(JSON.stringify({ challenge: 'c1', code: '123456' }));
   });
 
   it('turns an error answer into its status and error word', async () => {
