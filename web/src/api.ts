@@ -8,12 +8,14 @@ export type Standing = 'in' | 'out' | 'change' | 'unknown';
 
 const PASSWORD_CHANGE = 'password_change_required';
 
-async function call<T>(path: string, body?: unknown): Promise<Result<T>> {
+async function call<T>(path: string, body?: unknown, method?: string): Promise<Result<T>> {
   const init: RequestInit =
     body === undefined
-      ? {}
+      ? method === undefined
+        ? {}
+        : { method }
       : {
-          method: 'POST',
+          method: method ?? 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(body),
         };
@@ -84,6 +86,22 @@ export function confirmTwoFactor(code: string): Promise<Result<{ backupCodes: st
 /** Turning it off takes a current authenticator code or an unused backup code. */
 export function disableTwoFactor(code: string): Promise<Result<unknown>> {
   return call('/two-factor/disable', { code });
+}
+
+export interface Passkey {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+export function listPasskeys(): Promise<Result<Passkey[]>> {
+  return call('/passkeys');
+}
+
+/** A 409 `last_sign_in_method` means it is the only way this person can sign in. */
+export function removePasskey(id: string): Promise<Result<unknown>> {
+  return call(`/passkeys/${encodeURIComponent(id)}`, undefined, 'DELETE');
 }
 
 /** Ends this browser's session. */

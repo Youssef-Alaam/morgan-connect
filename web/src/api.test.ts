@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { changePassword, decideApproval, secondFactor, signIn, signOut, standing } from './api.ts';
+import {
+  changePassword,
+  decideApproval,
+  listPasskeys,
+  removePasskey,
+  secondFactor,
+  signIn,
+  signOut,
+  standing,
+} from './api.ts';
 import { errorKey } from './errors.ts';
 
 function answer(status: number, body: unknown): void {
@@ -70,6 +79,22 @@ describe('the account calls', () => {
     answer(200, { ok: true });
     await decideApproval('a/b?c', 'approved');
     expect(sent().path).toBe('/api/chat/approvals/a%2Fb%3Fc');
+  });
+
+  it('lists passkeys with a plain GET and removes one with DELETE', async () => {
+    answer(200, [{ id: 'p1', name: 'Laptop', createdAt: 'x', lastUsedAt: null }]);
+    expect((await listPasskeys()).ok).toBe(true);
+    expect(sent().path).toBe('/api/passkeys');
+    expect(sent().init).toEqual({});
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(null, { status: 204 }))),
+    );
+    expect(await removePasskey('p1')).toEqual({ ok: true, data: {} });
+    expect(sent().path).toBe('/api/passkeys/p1');
+    expect(sent().init).toEqual({ method: 'DELETE' });
+    await removePasskey('a/b');
+    expect(vi.mocked(fetch).mock.calls[1]?.[0]).toBe('/api/passkeys/a%2Fb');
   });
 
   it('turns an error answer into its status and error word', async () => {

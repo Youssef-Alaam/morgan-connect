@@ -13,6 +13,7 @@ interface Status {
 /** `/two-factor` answers each status in turn (the last one repeats); returns what was posted. */
 async function script(page: Page, statuses: Status[]): Promise<string[]> {
   await signedIn(page);
+  await page.route('**/api/passkeys', (route) => route.fulfill({ json: [] }));
   const posted: string[] = [];
   await page.route('**/api/two-factor', (route) =>
     route.fulfill({ json: statuses.length > 1 ? statuses.shift() : statuses[0] }),

@@ -47,6 +47,7 @@
     "label": "Problem",
     "invalid_credentials": "That email, password or code is not right.",
     "invalid_code": "That code is not right.",
+    "last_sign_in_method": "This is your only way to sign in, so it cannot be removed.",
     "invalid_request": "Check what you typed and try again.",
     "too_many_attempts": "Too many tries. Wait a few minutes and try again.",
     "network": "Morgan cannot be reached. Try again.",
@@ -194,6 +195,17 @@
       "saved": "I saved them",
       "disableCode": "Authenticator or backup code",
       "disableHint": "A current code from the app, or an unused backup code."
+    },
+    "passkeys": {
+      "title": "Passkeys",
+      "none": "No passkeys yet.",
+      "caption": "Your passkeys",
+      "name": "Name",
+      "added": "Added",
+      "lastUsed": "Last used",
+      "actions": "Actions",
+      "remove": "Remove",
+      "removeNamed": "Remove {{name}}"
     }
   },
   "change": {
