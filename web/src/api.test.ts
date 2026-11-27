@@ -66,6 +66,12 @@ describe('the account calls', () => {
     expect(sent().init.body).toBe(JSON.stringify({ decision: 'denied' }));
   });
 
+  it('encodes the id of the question into the path', async () => {
+    answer(200, { ok: true });
+    await decideApproval('a/b?c', 'approved');
+    expect(sent().path).toBe('/api/chat/approvals/a%2Fb%3Fc');
+  });
+
   it('turns an error answer into its status and error word', async () => {
     answer(401, { error: 'invalid_credentials' });
     expect(await signIn('a@example.test', 'bad')).toEqual({

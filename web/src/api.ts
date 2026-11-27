@@ -71,7 +71,7 @@ export function decideApproval(
   id: string,
   decision: 'approved' | 'denied',
 ): Promise<Result<unknown>> {
-  return call(`/chat/approvals/${id}`, { decision });
+  return call(`/chat/approvals/${encodeURIComponent(id)}`, { decision });
 }
 
 export function sendMessage(text: string, messageId: string): Promise<Result<unknown>> {
