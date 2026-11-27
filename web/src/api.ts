@@ -211,6 +211,57 @@ export function profilesOf(userId: string): Promise<Result<Profiles>> {
   return call(`/members/${encodeURIComponent(userId)}/profiles`);
 }
 
+export interface AuditRow {
+  id: string;
+  at: string;
+  personId: string | null;
+  person: string | null;
+  subjectId: string | null;
+  subject: string | null;
+  tool: string;
+  actionType: string;
+  decision: string;
+  outcome: string;
+  reason: string | null;
+}
+
+export interface AuditPage {
+  rows: AuditRow[];
+  more: boolean;
+  /** Every action type in the log, for the filter. */
+  actions: string[];
+}
+
+/** What to show: empty text means no filter on that field. Dates are `year-month-day`, UTC. */
+export interface AuditFilters {
+  person: string;
+  action: string;
+  decision: string;
+  outcome: string;
+  from: string;
+  to: string;
+}
+
+const DAY_MS = 86_400_000;
+
+/** One page of the audit log, newest first; `before` is the id of the oldest row already shown. */
+export function listAudit(filters: AuditFilters, before?: string): Promise<Result<AuditPage>> {
+  const query = new URLSearchParams();
+  const { person, action, decision, outcome, from, to } = filters;
+  const set = (name: string, value: string) => {
+    if (value !== '') query.set(name, value);
+  };
+  set('person', person);
+  set('action', action);
+  set('decision', decision);
+  set('outcome', outcome);
+  set('from', from);
+  // The last day counts whole, so the limit is the start of the day after it.
+  set('to', to === '' ? '' : new Date(Date.parse(to) + DAY_MS).toISOString());
+  if (before !== undefined) query.set('before', before);
+  return call(`/admin/audit?${query.toString()}`);
+}
+
 /** Ends this browser's session. */
 export function signOut(): Promise<Result<unknown>> {
   return call('/sign-out', {});

@@ -17,6 +17,7 @@ interface ChatProps {
   onUsers?: () => void;
   onProfiles?: () => void;
   onBudgets?: () => void;
+  onAudit?: () => void;
 }
 
 /** Follow the live stream into the lines; true while it is broken. A session that ended means sign in again. */
@@ -42,13 +43,14 @@ function useStream(setLines: Dispatch<SetStateAction<Line[]>>, onSignedOut: () =
   return broken;
 }
 
-/** The buttons that open the other pages; People, Access and Budgets only for the admin. */
+/** The buttons that open the other pages; People, Access, Budgets and Audit only for the admin. */
 function PageButtons({
   onSecurity,
   onUsers,
   onProfiles,
   onBudgets,
-}: Pick<ChatProps, 'onSecurity' | 'onUsers' | 'onProfiles' | 'onBudgets'>) {
+  onAudit,
+}: Pick<ChatProps, 'onSecurity' | 'onUsers' | 'onProfiles' | 'onBudgets' | 'onAudit'>) {
   const { t } = useTranslation();
   return (
     <>
@@ -65,6 +67,11 @@ function PageButtons({
       {onBudgets === undefined ? null : (
         <Button variant="secondary" onClick={onBudgets}>
           {t('budgets.open')}
+        </Button>
+      )}
+      {onAudit === undefined ? null : (
+        <Button variant="secondary" onClick={onAudit}>
+          {t('audit.open')}
         </Button>
       )}
       <Button variant="secondary" onClick={onSecurity}>
