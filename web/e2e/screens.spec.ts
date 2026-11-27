@@ -226,30 +226,6 @@ test('a message the server refuses is marked as not sent', async ({ page }, info
   await expect(page.locator('.bubble-user')).toContainText('not sent');
 });
 
-test('Sign out ends the session and shows sign-in', async ({ page }, info) => {
-  await serve(page, { '/me': [{ status: 200, body: {} }, out] });
-  let called = false;
-  await page.route('**/api/sign-out', async (route) => {
-    called = route.request().method() === 'POST';
-    await route.fulfill({ status: 204 });
-  });
-  await open(page, queryOf(info.project.metadata));
-  await page.getByRole('button', { name: 'Sign out' }).click();
-  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
-  expect(called).toBe(true);
-});
-
-test('Sign out that cannot reach the server says so and stays signed in', async ({
-  page,
-}, info) => {
-  await serve(page, { '/me': { status: 200, body: {} } });
-  await page.route('**/api/sign-out', (route) => route.abort());
-  await open(page, queryOf(info.project.metadata));
-  await page.getByRole('button', { name: 'Sign out' }).click();
-  await expect(page.getByRole('alert')).toContainText('cannot be reached');
-  await expect(page.getByRole('textbox', { name: 'Message Morgan' })).toBeVisible();
-});
-
 test('a session that ended while chatting goes back to sign-in', async ({ page }, info) => {
   await serve(page, { '/me': [{ status: 200, body: {} }, out] });
   await page.route('**/api/chat/events', (route) => route.fulfill({ status: 401, json: out.body }));

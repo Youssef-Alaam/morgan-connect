@@ -14,11 +14,16 @@ interface TopBarProps {
 export function TopBar({ onSignedOut, children }: TopBarProps) {
   const { t } = useTranslation();
   const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
   const out = () => {
     setError(undefined);
+    setBusy(true);
     void signOut().then((answer) => {
       if (answer.ok || answer.status === 401) onSignedOut();
-      else setError(answer.error);
+      else {
+        setError(answer.error);
+        setBusy(false);
+      }
     });
   };
   return (
@@ -27,7 +32,7 @@ export function TopBar({ onSignedOut, children }: TopBarProps) {
         <h1>{t('app.name')}</h1>
         <div className="page-bar-actions">
           {children}
-          <Button variant="secondary" onClick={out}>
+          <Button variant="secondary" disabled={busy} onClick={out}>
             {t('app.signOut')}
           </Button>
         </div>
