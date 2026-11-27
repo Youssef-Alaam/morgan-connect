@@ -7,6 +7,7 @@ import { PROFILE_FUNCTIONS } from './profiles.js';
 import { TASK_CAP_FUNCTIONS } from './task-cap.js';
 import { ACCOUNT_FUNCTIONS } from './invites.js';
 import { SYSTEM_FUNCTIONS } from './system.js';
+import { TOPUP_FUNCTIONS } from './topups.js';
 
 /** Every function the app role may execute, by signature. */
 const NAMED_FUNCTIONS = [
@@ -17,6 +18,7 @@ const NAMED_FUNCTIONS = [
   ...PROFILE_FUNCTIONS,
   ...BUDGET_FUNCTIONS,
   ...TASK_CAP_FUNCTIONS,
+  ...TOPUP_FUNCTIONS,
 ];
 
 export interface AppCredentials {
@@ -93,6 +95,8 @@ export async function ensureAppRole(owner: Db, databaseUrl: string): Promise<voi
     await revokeProfileWrites(trx, who);
     // Budgets are read by their owner but written only by admin_set_budget.
     await sql`revoke update, delete on public.budgets from ${who}`.execute(trx);
+    // Top-ups are read by their owner never written directly: only the named request functions write (no insert policy).
+    await sql`revoke update, delete on public.budget_topups from ${who}`.execute(trx);
     // The migration books are the owner's alone to write.
     await sql`revoke insert, update, delete, truncate on public.schema_info, public.kysely_migration,
       public.kysely_migration_lock from ${who}`.execute(trx);

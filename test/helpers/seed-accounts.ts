@@ -1,6 +1,6 @@
 import type { Db, Owner } from '../../src/data/index.js';
 
-/** A login, a session, a password link, an invite, a link code, a web event, a second factor, a passkey, a profile choice and a budget for this person. */
+/** A login, a session, a password link, an invite, a link code, a web event, a second factor, a passkey, a profile choice, a budget and a top-up for this person. */
 export async function seedAccounts(owner: Db, who: Owner, chatId: string): Promise<void> {
   const person = { user_id: who.userId, workspace_id: who.workspaceId };
   await owner
@@ -45,8 +45,26 @@ export async function seedAccounts(owner: Db, who: Owner, chatId: string): Promi
     .insertInto('profile_assignments')
     .values({ ...person, preset: 'standard' })
     .execute();
+  await seedBudget(owner, who, chatId);
+}
+
+/** A monthly limit and one approved top-up for this person. */
+async function seedBudget(owner: Db, who: Owner, chatId: string): Promise<void> {
+  const person = { user_id: who.userId, workspace_id: who.workspaceId };
   await owner
     .insertInto('budgets')
     .values({ ...person, monthly_limit_usd: chatId === 'b' ? '9' : '1' })
+    .execute();
+  await owner
+    .insertInto('budget_topups')
+    .values({
+      ...person,
+      amount_usd: '5',
+      month: '2026-11',
+      status: 'approved',
+      channel: 'fake',
+      chat_id: chatId,
+      expires_at: new Date(Date.now() + 3_600_000),
+    })
     .execute();
 }

@@ -16,6 +16,7 @@ import {
   loadHistory,
   recordWebEvent,
   removePasskey,
+  topupTotal,
   usageSince,
   webEventsAfter,
   withOwner,
@@ -207,6 +208,17 @@ describe('user-data tables', () => {
     );
     await expect(edit).rejects.toThrow(/permission denied/);
     expect(await budgetOf(ctx.app, ctx.bob)).toBe('9.00000000');
+  });
+
+  it('budget_topups', async () => {
+    await expectIsolated('budget_topups', ctx);
+    expect(await topupTotal(ctx.app, ctx.alice, '2026-11')).toBe('5.00000000');
+    expect(await topupTotal(ctx.app, ctx.bob, '2026-11')).toBe('5.00000000');
+    // A member can read their own request but never write one: only request_topup does.
+    const forged = withOwner(ctx.app, ctx.bob, (trx) =>
+      trx.updateTable('budget_topups').set({ amount_usd: '1000' }).execute(),
+    );
+    await expect(forged).rejects.toThrow(/permission denied/);
   });
 
   it('has run for every table in COVERED', () => {
