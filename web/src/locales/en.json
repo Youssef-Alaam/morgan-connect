@@ -4,7 +4,8 @@
     "empty": "Nothing here yet.",
     "loading": "Loading.",
     "unreachable": "Morgan cannot be reached.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "signOut": "Sign out"
   },
   "signIn": {
     "title": "Sign in",

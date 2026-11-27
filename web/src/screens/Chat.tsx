@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { sendMessage, standing } from '../api.ts';
 import { ChatBubble } from '../components/ChatBubble.tsx';
 import { Composer } from '../components/Composer.tsx';
+import { TopBar } from './TopBar.tsx';
 import { apply, followEvents, type Line } from '../events.ts';
 
 interface ChatProps {
@@ -51,7 +52,7 @@ export function Chat({ onSignedOut }: ChatProps) {
 
   return (
     <main className="page chat">
-      <h1>{t('app.name')}</h1>
+      <TopBar onSignedOut={onSignedOut} />
       <p role="status">{broken ? t('chat.reconnecting') : ''}</p>
       <div className="chat-log" role="log" aria-label={t('chat.log')}>
         {lines.map((line) => (
