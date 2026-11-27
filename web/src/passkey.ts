@@ -1,7 +1,9 @@
 // The browser's part of adding a passkey: the authenticator (PIN, face, finger or a key) makes it.
 
 /** True when this browser can make passkeys at all. */
-export const passkeysSupported = (): boolean => typeof PublicKeyCredential !== 'undefined';
+export const passkeysSupported = (): boolean =>
+  typeof PublicKeyCredential !== 'undefined' &&
+  typeof PublicKeyCredential.parseCreationOptionsFromJSON === 'function';
 
 /**
  * Ask the browser to make a passkey from the server's options (the JSON form of the creation

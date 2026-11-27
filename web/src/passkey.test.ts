@@ -37,6 +37,14 @@ describe('createPasskey', () => {
     expect(await createPasskey({})).toBeUndefined();
   });
 
+  it('counts a browser without the JSON helpers as unable, and does not ask', async () => {
+    vi.stubGlobal('PublicKeyCredential', { name: 'without the JSON helpers' });
+    create.mockClear();
+    expect(passkeysSupported()).toBe(false);
+    expect(await createPasskey({})).toBeUndefined();
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it('returns nothing, without asking, in a browser that cannot make passkeys', async () => {
     vi.stubGlobal('PublicKeyCredential', undefined);
     expect(passkeysSupported()).toBe(false);

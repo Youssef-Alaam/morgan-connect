@@ -53,10 +53,10 @@ export function AddPasskey({ onAdded, onUnavailable }: AddPasskeyProps) {
       made === undefined
         ? undefined
         : await addPasskey(made, name.trim() === '' ? t(`${K}.defaultName`) : name.trim());
-    if (saved?.ok === true) {
-      setCode(undefined);
-      onAdded();
-    } else setError(saved === undefined ? 'passkey_cancelled' : saved.error);
+    // The code was spent on the options call, however this ends: the next try asks for a new one.
+    setCode(undefined);
+    if (saved?.ok === true) onAdded();
+    else setError(saved === undefined ? 'passkey_cancelled' : saved.error);
   };
   const submit = async (event: SyntheticEvent) => {
     event.preventDefault();

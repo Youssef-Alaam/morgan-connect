@@ -156,6 +156,7 @@ test('a refused passkey is explained, and an install without passkeys says so', 
   await page.getByRole('button', { name: 'Add a passkey' }).click();
   await expect(page.getByText('Passkeys are not available on this install.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add a passkey' })).toHaveCount(0);
+});
 
 test('a list that cannot be read shows the error and no longer says loading', async ({
   page,
@@ -167,4 +168,24 @@ test('a list that cannot be read shows the error and no longer says loading', as
   await expect(page.getByRole('alert')).toContainText('cannot be reached');
   await expect(page.getByRole('heading', { name: 'Passkeys' })).toBeVisible();
   await expect(page.getByText('Loading.')).toHaveCount(0);
+});
+
+test('a refused passkey after a code asks for a fresh code on the next try', async ({
+  page,
+}, info) => {
+  await withAuthenticator(page);
+  await script(page, [[]], (route) =>
+    route.fulfill({ status: 409, json: { error: 'already_registered' } }),
+  );
+  await page.route('**/api/passkeys/options', (route) =>
+    (route.request().postDataJSON() as { code?: string }).code === undefined
+      ? route.fulfill({ status: 401, json: { error: 'invalid_code' } })
+      : route.fulfill({ json: OPTIONS }),
+  );
+  await openSecurity(page, info);
+  await page.getByRole('button', { name: 'Add a passkey' }).click();
+  await page.getByLabel('Authenticator or backup code').fill('123456');
+  await page.getByRole('button', { name: 'Add a passkey' }).click();
+  await expect(page.getByRole('alert')).toContainText('already has a passkey');
+  await expect(page.getByLabel('Authenticator or backup code')).toHaveCount(0);
 });
