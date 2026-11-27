@@ -39,4 +39,10 @@ export {
   type BudgetVerdict,
   type KeySource,
 } from './budget.js';
-export { createTopups, type AskOutcome, type Topups, type TopupsOptions } from './topups.js';
+export {
+  createTopups,
+  topupAnswerText,
+  type AskOutcome,
+  type Topups,
+  type TopupsOptions,
+} from './topups.js';

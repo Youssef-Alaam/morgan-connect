@@ -128,6 +128,12 @@ async function openQueue(config: Config, logger: Logger): Promise<TurnQueue> {
   return queue;
 }
 
+/** Only the Telegram chats can be written to from here yet. */
+const tellVia =
+  (telegram: ChannelAdapter) =>
+  (channel: string, chatId: string, text: string): Promise<void> =>
+    channel === 'telegram' ? telegram.send(chatId, text) : Promise.resolve();
+
 /** "Ask for more" goes to the admin's Telegram chat, the only place that can show the buttons yet. */
 const topupsFor = (config: Config, db: Db, telegram: ChannelAdapter, logger: Logger): Topups =>
   createTopups({
@@ -140,13 +146,14 @@ const topupsFor = (config: Config, db: Db, telegram: ChannelAdapter, logger: Log
     ttlMs: TOPUP_TTL_MS,
     adminChannel: 'telegram',
     askAdmin: telegram.askApproval,
-    tell: (channel, chatId, text) =>
-      channel === 'telegram' ? telegram.send(chatId, text) : Promise.resolve(),
+    tell: tellVia(telegram),
   });
 
 interface Chat {
   /** The web chat's way into the pipeline, the same one Telegram uses. */
   chat: Omit<ChatDeps, 'logger' | 'db'>;
+  /** Say something to a member in their own chat; undefined without a Telegram token. */
+  tell: ((channel: string, chatId: string, text: string) => Promise<void>) | undefined;
   stop: () => Promise<void>;
 }
 
@@ -196,6 +203,7 @@ async function startChat(
   }
   return {
     chat: { events: web, ingest: (message) => ingest(deps, message), decide: approvals.decide },
+    tell: telegram && tellVia(telegram),
     stop: async () => {
       stopWatching();
       await telegram?.stop();
@@ -302,7 +310,7 @@ export async function start(
   const app = createApp({
     dbVersion: () => dbVersion(db),
     logger,
-    auth: { db, ...signInSettings(config) },
+    auth: { db, ...signInSettings(config), tellMember: chat.tell },
     chat: chat.chat,
     ...(config.WEB_DIR === undefined ? {} : { webDir: config.WEB_DIR }),
   });

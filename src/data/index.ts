@@ -99,6 +99,7 @@ export {
 } from './budgets.js';
 export {
   TOPUP_FUNCTIONS,
+  answerTopup,
   cancelTopup,
   listWaitingTopups,
   openTopupFor,

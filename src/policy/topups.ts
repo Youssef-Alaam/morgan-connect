@@ -63,6 +63,13 @@ export interface Topups {
 const hashOf = (memberId: string, amountUsd: string, month: string): string =>
   approvalHash('budget.topup', { userId: memberId, amountUsd, month });
 
+/** What the member is told when the admin has answered. */
+export function topupAnswerText(decision: 'approved' | 'denied', amountUsd: string): string {
+  return decision === 'approved'
+    ? `${formatUsd(amountUsd)} was added to this month's limit. Carry on.`
+    : 'The admin said no to more this month.';
+}
+
 /** Spend the approval, then answer the request. Undefined when either step did not take. */
 function settle(
   options: TopupsOptions,
@@ -104,12 +111,8 @@ async function apply(
     );
     return false;
   }
-  const text =
-    answer.decision === 'approved'
-      ? `${formatUsd(resolved.amountUsd)} was added to this month's limit. Carry on.`
-      : 'The admin said no to more this month.';
   await options
-    .tell(resolved.channel, resolved.chatId, text)
+    .tell(resolved.channel, resolved.chatId, topupAnswerText(answer.decision, resolved.amountUsd))
     .catch(logFailure('top-up reply not sent'));
   return true;
 }

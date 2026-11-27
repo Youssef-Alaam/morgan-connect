@@ -10,6 +10,7 @@ export const TOPUP_FUNCTIONS: readonly string[] = [
   'cancel_topup(uuid)',
   'admin_set_topup_amount(uuid, numeric)',
   'admin_list_topups()',
+  'admin_answer_topup(uuid, text)',
 ];
 
 export type TopupRequest =
@@ -237,5 +238,35 @@ export function listWaitingTopups(db: Db, admin: Owner): Promise<WaitingTopup[]>
       createdAt: row.created_at,
       expiresAt: row.expires_at,
     }));
+  });
+}
+
+/**
+ * The admin's answer from the page: answers the same question Telegram shows, so it counts once
+ * whichever side is first. Undefined when it is not theirs to give, it lapsed, or it was already
+ * answered. Audited either way.
+ */
+export function answerTopup(
+  db: Db,
+  admin: Owner,
+  id: string,
+  status: 'approved' | 'refused',
+): Promise<ResolvedTopup | undefined> {
+  return withOwner(db, admin, async (trx) => {
+    const { rows } = await sql<{
+      member_id: string;
+      amount: string;
+      channel: string;
+      chat_id: string;
+    }>`select * from admin_answer_topup(${id}::uuid, ${status})`.execute(trx);
+    const row = rows[0];
+    return (
+      row && {
+        memberId: row.member_id,
+        amountUsd: row.amount,
+        channel: row.channel,
+        chatId: row.chat_id,
+      }
+    );
   });
 }
