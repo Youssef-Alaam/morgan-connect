@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState, type SyntheticEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { confirmTwoFactor, startTwoFactor, twoFactorStatus, type Result } from '../api.ts';
+import {
+  confirmTwoFactor,
+  disableTwoFactor,
+  startTwoFactor,
+  twoFactorStatus,
+  type Result,
+} from '../api.ts';
 import { Badge } from '../components/Badge.tsx';
 import { Button } from '../components/Button.tsx';
 import { CodeInput } from '../components/CodeInput.tsx';
@@ -8,7 +14,7 @@ import { TextInput } from '../components/TextInput.tsx';
 import { ErrorBanner, typed } from './ErrorBanner.tsx';
 
 type Step =
-  | { name: 'loading' | 'unavailable' | 'failed' | 'off' | 'on' }
+  | { name: 'loading' | 'unavailable' | 'failed' | 'off' | 'on' | 'disable' }
   | { name: 'setup'; secret: string; uri: string }
   | { name: 'codes'; codes: string[] };
 
@@ -112,13 +118,15 @@ function Setup({ secret, uri, onConfirmed, onFail, onCancel }: SetupProps) {
   );
 }
 
-/** The state of the switch (a badge), and the button that turns it on while it is off. */
-function Switch({ on, onPress }: { on: boolean; onPress?: () => void }) {
+/** The state of the switch (a badge) and the one button that changes it. */
+function Switch({ on, onPress }: { on: boolean; onPress: () => void }) {
   const { t } = useTranslation();
   return (
     <div className="page-bar-actions">
       <Badge>{t(`${K}.${on ? 'on' : 'off'}`)}</Badge>
-      {onPress === undefined ? null : <Button onClick={onPress}>{t(`${K}.turnOn`)}</Button>}
+      <Button variant={on ? 'secondary' : 'primary'} onClick={onPress}>
+        {t(`${K}.${on ? 'turnOff' : 'turnOn'}`)}
+      </Button>
     </div>
   );
 }
@@ -134,6 +142,29 @@ function BackupCodes({ codes, onSaved }: { codes: string[]; onSaved: () => void 
       </pre>
       <Button onClick={onSaved}>{t(`${K}.saved`)}</Button>
     </>
+  );
+}
+
+// Turning it off takes a current code: an authenticator code or an unused backup code.
+function Disable(props: {
+  onFail: (error: string) => void;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <CodeForm
+      label={t(`${K}.disableCode`)}
+      hint={t(`${K}.disableHint`)}
+      submitLabel={t(`${K}.turnOff`)}
+      numeric={false}
+      onSubmit={disableTwoFactor}
+      onDone={(answer) => {
+        if (!answer.ok) props.onFail(answer.error);
+        else props.onDone();
+      }}
+      onCancel={props.onCancel}
+    />
   );
 }
 
@@ -167,11 +198,21 @@ export function Authenticator() {
         <p>{t(`${K}.${step.name}`)}</p>
       ) : null}
       {step.name === 'off' ? <Switch on={false} onPress={turnOn} /> : null}
-      {step.name === 'on' ? <Switch on /> : null}
+      {step.name === 'on' ? (
+        <Switch
+          on
+          onPress={() => {
+            setStep({ name: 'disable' });
+          }}
+        />
+      ) : null}
       {step.name === 'setup' ? (
         <Setup {...step} onConfirmed={confirmed} onFail={setError} onCancel={back('off')} />
       ) : null}
       {step.name === 'codes' ? <BackupCodes codes={step.codes} onSaved={load} /> : null}
+      {step.name === 'disable' ? (
+        <Disable onFail={setError} onDone={load} onCancel={back('on')} />
+      ) : null}
     </section>
   );
 }
