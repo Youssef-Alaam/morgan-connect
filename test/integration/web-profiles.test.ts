@@ -127,6 +127,7 @@ interface Preview {
   previous: string;
   preset: string;
   warnings: { actionType: string; from: string; to: string; warning: string }[];
+  refused: boolean;
 }
 const preview = async (who: Owner, query: string) =>
   call('GET', `admin/profile-preview?${query}`, await cookieFor(who));
@@ -183,4 +184,20 @@ it('previews for one device, and refuses a member, a stranger device and bad inp
   expect((await preview(ctx.bob, `userId=${ctx.bob.userId}&preset=trusted`)).status).toBe(403);
   expect((await preview(ctx.alice, `userId=${ctx.bob.userId}&preset=root`)).status).toBe(400);
   expect((await preview(ctx.alice, `userId=nope&preset=trusted`)).status).toBe(400);
+});
+
+it('flags a preview the save would refuse: the admin making themselves Restricted', async () => {
+  const own = await preview(ctx.alice, `userId=${ctx.alice.userId}&preset=restricted`);
+  expect(((await own.json()) as Preview).refused).toBe(true);
+  const theirs = await preview(ctx.alice, `userId=${ctx.bob.userId}&preset=restricted`);
+  expect(((await theirs.json()) as Preview).refused).toBe(false);
+});
+
+it('does not preview a person in another workspace', async () => {
+  const stranger = await ctx.owner
+    .insertInto('users')
+    .values({ workspace_id: ctx.otherWorkspaceId, role: 'member' })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  expect((await preview(ctx.alice, `userId=${stranger.id}&preset=trusted`)).status).toBe(404);
 });

@@ -122,7 +122,7 @@ export async function previewProfile(
   db: Db,
   caller: Owner,
   target: { userId: string; deviceId?: string | undefined; preset: Preset },
-): Promise<Assignment | undefined> {
+): Promise<(Assignment & { refused: boolean }) | undefined> {
   const current = await profilesOf(db, caller, target.userId);
   if (current === undefined) return undefined;
   const now =
@@ -132,7 +132,17 @@ export async function previewProfile(
   if (now === undefined) return undefined;
   const presets = await listPresets(db);
   const next = toProfile(presets.find((row) => row.preset === target.preset));
-  return { previous: now.preset, preset: target.preset, warnings: loosened(now.modes, next) };
+  // The database refuses an admin setting their own person profile to Restricted (see assignProfile).
+  const refused =
+    target.userId === caller.userId &&
+    target.deviceId === undefined &&
+    target.preset === 'restricted';
+  return {
+    previous: now.preset,
+    preset: target.preset,
+    warnings: loosened(now.modes, next),
+    refused,
+  };
 }
 
 export interface DeviceProfile extends AccessProfile {
