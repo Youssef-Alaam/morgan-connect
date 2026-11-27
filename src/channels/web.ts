@@ -13,8 +13,10 @@ export interface WebChannel extends ChannelSender {
   readonly channel: 'web';
   /** Show the owner's question as an `approval` event: `text` holds the exact arguments. */
   askApproval: NonNullable<ChannelSender['askApproval']>;
-  /** Note that a posted message arrived. A resent message is noted once. */
-  acknowledge: (owner: Owner, chatId: string, messageId: string) => Promise<void>;
+  /** Show that a question is over (`outcome` is the word); a session that ended has nothing to show. */
+  approvalClosed: (chatId: string, approvalId: string, outcome: string) => Promise<void>;
+  /** Note that a posted message arrived, keeping its text so a reload shows it. A resent message is noted once. */
+  acknowledge: (owner: Owner, chatId: string, messageId: string, text: string) => Promise<void>;
   /** This person's events on one session after `afterId`, oldest first. */
   eventsAfter: (owner: Owner, chatId: string, afterId: string) => Promise<WebEvent[]>;
   /** Call `wake` whenever the session gets an event. Returns the way to stop. */
@@ -43,8 +45,22 @@ export function createWebChannel(db: Db): WebChannel {
       await recordWebEvent(db, owner, chatId, { kind: 'approval', ref: approvalId, text });
       notify(owner, chatId);
     },
-    acknowledge: async (owner, chatId, messageId) => {
-      const stored = await recordWebEvent(db, owner, chatId, { kind: 'ack', ref: messageId });
+    approvalClosed: async (chatId, approvalId, outcome) => {
+      const owner = await ownerOf(db, { channel: 'web', chatId });
+      if (owner === undefined) return;
+      await recordWebEvent(db, owner, chatId, {
+        kind: 'approval_closed',
+        ref: approvalId,
+        text: outcome,
+      });
+      notify(owner, chatId);
+    },
+    acknowledge: async (owner, chatId, messageId, text) => {
+      const stored = await recordWebEvent(db, owner, chatId, {
+        kind: 'ack',
+        ref: messageId,
+        text,
+      });
       if (stored !== undefined) notify(owner, chatId);
     },
     eventsAfter: (owner, chatId, afterId) => webEventsAfter(db, owner, chatId, afterId),

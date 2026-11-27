@@ -21,6 +21,8 @@ let ctx: Isolation;
 let app: ReturnType<typeof createApp>;
 let web: ReturnType<typeof createWebChannel>;
 let approvals: ReturnType<typeof createApprovals>;
+/** The approvals instance whose turn is waiting: only its waiting room can wake that turn. */
+let asking: ReturnType<typeof createApprovals>;
 const sessions = { alice: '', bob: '' };
 const cookies = {
   alice: 'morgan_session=alice-token',
@@ -37,6 +39,15 @@ const tool: ToolDefinition = {
   run,
 };
 
+/** The same wiring as boot: the question and its ending both go out on the web stream. */
+const approvalsWith = (ttlMs: number) =>
+  createApprovals({
+    db: ctx.app,
+    ttlMs,
+    prompt: ({ caller, text, id }) => web.askApproval(caller.chatId, text, id),
+    closed: ({ caller, id, outcome }) => web.approvalClosed(caller.chatId, id, outcome),
+  });
+
 beforeAll(async () => {
   ctx = await startIsolation();
   const expiresAt = new Date(Date.now() + 3_600_000);
@@ -50,11 +61,8 @@ beforeAll(async () => {
   });
   await createSession(ctx.app, ctx.alice, { tokenHash: sha256('alice-tablet-token'), expiresAt });
   web = createWebChannel(ctx.app);
-  approvals = createApprovals({
-    db: ctx.app,
-    ttlMs: 60_000,
-    prompt: ({ caller, text, id }) => web.askApproval(caller.chatId, text, id),
-  });
+  approvals = approvalsWith(60_000);
+  asking = approvals;
   app = createApp({
     dbVersion: () => Promise.resolve('17'),
     logger: createLogger('silent'),
@@ -62,7 +70,7 @@ beforeAll(async () => {
     chat: {
       events: web,
       ingest: () => Promise.resolve(),
-      decide: (id, decision, from) => approvals.decide(id, decision, from),
+      decide: (id, decision, from) => asking.decide(id, decision, from),
     },
   });
 }, 180_000);
@@ -82,6 +90,7 @@ const args = { title: 'Pay the plumber', amount: 40 };
 
 /** Alice's turn calls a gated tool on her web session; resolves with the question as the stream shows it. */
 async function ask(source = approvals) {
+  asking = source;
   const gate = createGate({ db: ctx.app, tools: [tool], approvals: source });
   const caller = { channel: 'web', chatId: sessions.alice };
   const before = await ctx.owner
@@ -206,12 +215,7 @@ it("refuses the same person's other session: a question belongs to the one it wa
 
 it('cannot answer a replayed question once it has expired', async () => {
   run.mockClear();
-  const quick = createApprovals({
-    db: ctx.app,
-    ttlMs: 150,
-    prompt: ({ caller, text, id }) => web.askApproval(caller.chatId, text, id),
-  });
-  const { pending, question } = await ask(quick);
+  const { pending, question } = await ask(approvalsWith(150));
   expect(JSON.stringify(await pending)).not.toContain('done');
   // A browser that reconnects from the start is shown the old question again.
   const stored = await ctx.owner
@@ -224,4 +228,33 @@ it('cannot answer a replayed question once it has expired', async () => {
   const id = question?.data.ref ?? '';
   expect((await answer('alice', id, 'approved')).status).toBe(409);
   expect(run).not.toHaveBeenCalled();
+});
+
+it('tells the stream how each question ended, so a reload shows it settled', async () => {
+  const ended = async (decision: 'approved' | 'denied' | 'expired') => {
+    const { pending, question } = await ask(approvalsWith(decision === 'expired' ? 150 : 60_000));
+    const id = question?.data.ref ?? '';
+    if (decision !== 'expired') await answer('alice', id, decision);
+    await pending;
+    const [closed] = await readEvents(await stream('alice', question?.id), 1);
+    return [closed?.event, closed?.data.ref, closed?.data.text];
+  };
+  for (const decision of ['approved', 'denied', 'expired'] as const) {
+    const [event, ref, text] = await ended(decision);
+    expect([event, text]).toEqual(['approval_closed', decision]);
+    expect(ref).toMatch(/^[0-9a-f-]{36}$/);
+  }
+});
+
+it('does not fail the turn when the ending cannot be shown', async () => {
+  run.mockClear();
+  const quiet = createApprovals({
+    db: ctx.app,
+    ttlMs: 60_000,
+    prompt: ({ caller, text, id }) => web.askApproval(caller.chatId, text, id),
+    closed: () => Promise.reject(new Error('stream is down')),
+  });
+  const { pending, question } = await ask(quiet);
+  expect((await answer('alice', question?.data.ref ?? '', 'approved')).status).toBe(200);
+  expect(await pending).toContain('done');
 });

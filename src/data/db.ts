@@ -194,7 +194,7 @@ export interface Database {
     user_id: string;
     workspace_id: string;
     chat_id: string;
-    kind: 'ack' | 'message' | 'approval';
+    kind: 'ack' | 'message' | 'approval' | 'approval_closed';
     ref: string | null;
     text: Generated<string>;
     created_at: Generated<Date>;

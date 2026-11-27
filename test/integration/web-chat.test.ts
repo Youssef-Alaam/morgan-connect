@@ -102,10 +102,15 @@ it('acknowledges a message and streams its reply, in order', async () => {
   expect(BigInt(reply?.id ?? '0')).toBeGreaterThan(BigInt(ack?.id ?? '0'));
 });
 
+it('stores the member line with its acknowledgement, so a reload shows both sides', async () => {
+  const [ack] = await readEvents(await events('alice'), 1);
+  expect([ack?.event, ack?.data.ref, ack?.data.text]).toEqual(['ack', 'm1', 'hello']);
+});
+
 it('resumes after the last id seen, with nothing repeated', async () => {
   await send('alice', { text: 'second', messageId: 'm2' });
   const all = await readEvents(await events('alice'), 4);
-  expect(all.map((e) => e.data.text || e.data.ref)).toEqual(['m1', 'hello', 'm2', 'second']);
+  expect(all.map((e) => e.data.ref ?? e.data.text)).toEqual(['m1', 'hello', 'm2', 'second']);
   const rest = await readEvents(await events('alice', { 'last-event-id': all[1]?.id ?? '' }), 2);
   expect(rest.map((e) => e.id)).toEqual(all.slice(2).map((e) => e.id));
 });
@@ -115,7 +120,7 @@ it('never shows one person the events of another', async () => {
   await send('bob', { text: 'bob secret', messageId: 'b1' });
   await send('alice', { text: 'alice secret', messageId: 'a3' });
   const seen = await readEvents(bobsStream, 2);
-  expect(seen.map((e) => e.data.text || e.data.ref)).toEqual(['b1', 'bob secret']);
+  expect(seen.map((e) => e.data.ref ?? e.data.text)).toEqual(['b1', 'bob secret']);
   // Aiming at the other session by any parameter changes nothing: the session is the cookie's.
   const forged = await readEvents(await events('bob', { 'last-event-id': '0' }), 2);
   expect(JSON.stringify(forged)).not.toMatch(/alice|a3|hello|m1|m2|second/);

@@ -14,6 +14,8 @@ export const approvalsFor = (
   createApprovals({
     db,
     ttlMs: APPROVAL_TTL_MS,
+    closed: ({ caller, id, outcome }) =>
+      caller.channel === 'web' ? web.approvalClosed(caller.chatId, id, outcome) : Promise.resolve(),
     prompt: ({ caller, text, id }) => {
       if (caller.channel === 'web') return web.askApproval(caller.chatId, text, id);
       return telegram !== undefined && caller.channel === 'telegram'
