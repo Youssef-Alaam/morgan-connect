@@ -13,6 +13,17 @@ export async function open(page: Page, query: string): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
 }
 
+/**
+ * Load the mono face now and wait for it. A face loads only when text first uses it, so text that
+ * appears after a click is drawn in the fallback font until then: the screenshot would depend on
+ * how fast the machine is.
+ */
+export async function monoReady(page: Page): Promise<void> {
+  await page.evaluate(() =>
+    document.fonts.load("16px 'Space Mono'").then(() => document.fonts.ready),
+  );
+}
+
 export async function noViolations(page: Page): Promise<void> {
   const result = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])

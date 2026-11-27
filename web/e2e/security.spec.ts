@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { noViolations, open, queryOf, signedIn } from './support.ts';
+import { monoReady, noViolations, open, queryOf, signedIn } from './support.ts';
 
 // The account's security page against a scripted API: each test says what the server answers.
 const SECRET = 'JBSWY3DPEHPK3PXP';
@@ -45,12 +45,14 @@ test('the authenticator is turned on with its first code, and the backup codes s
   await openSecurity(page, info);
   await page.getByRole('button', { name: 'Turn on' }).click();
   await expect(page.getByText(SECRET)).toBeVisible();
+  await monoReady(page);
   await expect(page.locator('main')).toHaveScreenshot('security-setup.png');
   await noViolations(page);
   await page.getByLabel('First code').fill('123456');
   await page.getByRole('button', { name: 'Confirm' }).click();
   const codes = page.getByLabel('Your backup codes');
   await expect(codes).toContainText(CODES.join('\n'));
+  await monoReady(page);
   await expect(page.locator('main')).toHaveScreenshot('security-backup-codes.png');
   await noViolations(page);
   await page.getByRole('button', { name: 'I saved them' }).click();
