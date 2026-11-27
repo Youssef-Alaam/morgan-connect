@@ -196,6 +196,25 @@ test('a member sends a message and the reply streams in', async ({ page }, info)
   await noViolations(page);
 });
 
+test('a reload shows both sides of the conversation, replayed from the stream', async ({
+  page,
+}, info) => {
+  await serve(page, { '/me': { status: 200, body: {} } });
+  await page.route('**/api/chat/events', (route) =>
+    route.fulfill({
+      contentType: 'text/event-stream',
+      body:
+        'retry: 60000\n\n' +
+        sse(1, 'ack', { ref: 'u1', text: 'Remind me to call Narimane at six.' }) +
+        sse(2, 'message', { text: 'Done. I will message you at six.' }),
+    }),
+  );
+  await open(page, queryOf(info.project.metadata));
+  const log = page.getByRole('log', { name: 'Conversation' });
+  await expect(log.locator('.bubble-user')).toContainText('Remind me to call Narimane');
+  await expect(log.locator('.bubble-morgan')).toContainText('Done. I will message you at six.');
+});
+
 test('a message the server refuses is marked as not sent', async ({ page }, info) => {
   await serve(page, { '/me': { status: 200, body: {} } });
   await page.route('**/api/chat', (route) =>
