@@ -1,4 +1,16 @@
-import { cancelTopup, ownerOf, requestTopup, type Db } from '../data/index.js';
+import {
+  consumeApproval,
+  decideApproval,
+  cancelTopup,
+  openTopupFor,
+  ownerOf,
+  requestTopup,
+  resolveTopup,
+  type Db,
+  type OpenTopup,
+  type Owner,
+  type ResolvedTopup,
+} from '../data/index.js';
 import type { Logger } from '../ops/index.js';
 import { approvalHash } from './approval-hash.js';
 import { checkBudget, formatUsd, fromUnits, monthKey, toUnits, type KeySource } from './budget.js';
@@ -26,17 +38,80 @@ export interface TopupsOptions {
   adminChannel: string;
   /** Show the admin the question with its buttons. A failure means nobody could be asked. */
   askAdmin: (chatId: string, text: string, approvalId: string) => Promise<void>;
+  /** Tell the member what the admin decided; a failure is not the admin's problem. */
+  tell: (channel: string, chatId: string, text: string) => Promise<void>;
   now?: () => Date;
   logger?: Logger;
 }
 
 export interface Topups {
   ask: (chat: { channel: string; chatId: string }) => Promise<AskOutcome>;
+  /**
+   * The admin's tap on a question. Undefined when the question is not a top-up (the caller passes
+   * it on); otherwise whether the tap counted.
+   */
+  decide: (answer: {
+    id: string;
+    decision: 'approved' | 'denied';
+    channel: string;
+    chatId: string;
+  }) => Promise<boolean | undefined>;
 }
 
 /** What the admin's approval is bound to: this person, this amount, this month. */
 const hashOf = (memberId: string, amountUsd: string, month: string): string =>
   approvalHash('budget.topup', { userId: memberId, amountUsd, month });
+
+/** Spend the approval, then answer the request. Undefined when either step did not take. */
+function settle(
+  options: TopupsOptions,
+  admin: Owner,
+  topup: OpenTopup,
+  answer: { id: string; decision: 'approved' | 'denied'; now: Date },
+): Promise<ResolvedTopup | undefined> {
+  const approved = answer.decision === 'approved';
+  const answerIt = (): Promise<ResolvedTopup | undefined> =>
+    resolveTopup(options.db, admin, topup.topupId, approved ? 'approved' : 'refused');
+  if (!approved) return answerIt();
+  const argsSha256 = hashOf(topup.memberId, fromUnits(toUnits(topup.amountUsd)), topup.month);
+  return consumeApproval(options.db, admin, { id: answer.id, argsSha256, now: answer.now }).then(
+    (spent) => (spent ? answerIt() : undefined),
+  );
+}
+
+/** The admin's answer, applied: who may answer and that it counts once are the approvals store's job. */
+async function apply(
+  options: TopupsOptions,
+  admin: Owner,
+  topup: OpenTopup,
+  answer: { id: string; decision: 'approved' | 'denied'; channel: string; chatId: string },
+): Promise<boolean> {
+  const at = (options.now ?? (() => new Date()))();
+  if (!(await decideApproval(options.db, { ...answer, now: at }))) return false;
+  const logFailure = (what: string) => (): undefined => {
+    options.logger?.warn({ topupId: topup.topupId }, what);
+    return undefined;
+  };
+  const resolved = await settle(options, admin, topup, { ...answer, now: at }).catch(
+    logFailure('top-up answer not applied'),
+  );
+  if (resolved === undefined) {
+    // The tap counted but the answer did not take: close the request, so the member can ask again
+    // instead of waiting for it to lapse. If even that fails, it lapses at its own time.
+    await resolveTopup(options.db, admin, topup.topupId, 'refused').catch(
+      logFailure('top-up request not closed'),
+    );
+    return false;
+  }
+  const text =
+    answer.decision === 'approved'
+      ? `${formatUsd(resolved.amountUsd)} was added to this month's limit. Carry on.`
+      : 'The admin said no to more this month.';
+  await options
+    .tell(resolved.channel, resolved.chatId, text)
+    .catch(logFailure('top-up reply not sent'));
+  return true;
+}
 
 export function createTopups(options: TopupsOptions): Topups {
   const { db, timezone, now = () => new Date() } = options;
@@ -74,6 +149,12 @@ export function createTopups(options: TopupsOptions): Topups {
         return 'unavailable';
       }
       return 'sent';
+    },
+    decide: async (answer) => {
+      const admin = await ownerOf(db, answer);
+      if (admin === undefined) return undefined;
+      const topup = await openTopupFor(db, admin, answer.id);
+      return topup === undefined ? undefined : apply(options, admin, topup, answer);
     },
   };
 }
