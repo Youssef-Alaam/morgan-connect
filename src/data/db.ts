@@ -222,6 +222,20 @@ export interface Database {
     monthly_limit_usd: string;
     updated_at: Generated<Date>;
   };
+  budget_topups: {
+    id: Generated<string>;
+    user_id: string;
+    workspace_id: string;
+    amount_usd: string;
+    month: string;
+    status: Generated<'open' | 'approved' | 'refused' | 'expired' | 'cancelled'>;
+    approval_id: string | null;
+    channel: string;
+    chat_id: string;
+    created_at: Generated<Date>;
+    expires_at: Date;
+    decided_at: Date | null;
+  };
 }
 
 export type UsageStatus = 'ok' | 'failed' | 'aborted' | 'timeout';

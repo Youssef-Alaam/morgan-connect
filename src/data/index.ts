@@ -83,6 +83,14 @@ export { appendAudit, type AuditEntry } from './audit.js';
 export { DEFAULT_TASK_CAP, TASK_CAP_FUNCTIONS, setTaskCap, taskCapOf } from './task-cap.js';
 export { BUDGET_FUNCTIONS, budgetOf, isAdmin, setBudget } from './budgets.js';
 export {
+  TOPUP_FUNCTIONS,
+  cancelTopup,
+  requestTopup,
+  topupTotal,
+  type NewTopup,
+  type TopupRequest,
+} from './topups.js';
+export {
   recordUsage,
   usageSince,
   type UsageEntry,
