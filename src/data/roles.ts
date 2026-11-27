@@ -4,6 +4,7 @@ import { ADMIN_READ_FUNCTIONS } from './admin-read.js';
 import { BUDGET_FUNCTIONS } from './budgets.js';
 import { DEVICE_FUNCTIONS } from './devices.js';
 import { PROFILE_FUNCTIONS } from './profiles.js';
+import { TASK_CAP_FUNCTIONS } from './task-cap.js';
 import { ACCOUNT_FUNCTIONS } from './invites.js';
 import { SYSTEM_FUNCTIONS } from './system.js';
 
@@ -15,6 +16,7 @@ const NAMED_FUNCTIONS = [
   ...DEVICE_FUNCTIONS,
   ...PROFILE_FUNCTIONS,
   ...BUDGET_FUNCTIONS,
+  ...TASK_CAP_FUNCTIONS,
 ];
 
 export interface AppCredentials {

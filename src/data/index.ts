@@ -77,6 +77,7 @@ export {
 export { planCompaction, saveSummary, type CompactionPlan } from './compaction.js';
 export { conversationFor, endConversation } from './conversations.js';
 export { appendAudit, type AuditEntry } from './audit.js';
+export { DEFAULT_TASK_CAP, TASK_CAP_FUNCTIONS, setTaskCap, taskCapOf } from './task-cap.js';
 export { BUDGET_FUNCTIONS, budgetOf, isAdmin, setBudget } from './budgets.js';
 export {
   recordUsage,

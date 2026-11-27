@@ -27,6 +27,7 @@ export interface Database {
     workspace_id: Generated<string>;
     told_admin_can_read_at: Date | null;
     monthly_limit_usd: string | null;
+    max_parallel_tasks: number | null;
     created_at: Generated<Date>;
   };
   devices: {
