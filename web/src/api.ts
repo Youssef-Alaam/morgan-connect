@@ -227,3 +227,29 @@ export function decideApproval(
 export function sendMessage(text: string, messageId: string): Promise<Result<unknown>> {
   return call('/chat', { text, messageId });
 }
+
+export interface BudgetPerson {
+  id: string;
+  role: string;
+  email?: string;
+  /** Their own monthly limit; absent when the install default applies. */
+  limitUsd?: string;
+  taskCap?: number;
+  topupStepUsd?: string;
+  /** Approved top-ups this month and spend this month: exact decimal strings. */
+  topupUsd: string;
+  spentUsd: string;
+  calls: number;
+}
+
+export interface Budgets {
+  /** The local month the totals cover, `2026-11`. */
+  month: string;
+  defaults: { limitUsd: string | null; topupUsd: string | null };
+  people: BudgetPerson[];
+}
+
+/** Spend this month beside each person's limit; a member gets 403. */
+export function listBudgets(): Promise<Result<Budgets>> {
+  return call('/admin/budgets');
+}

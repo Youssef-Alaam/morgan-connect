@@ -16,6 +16,7 @@ interface ChatProps {
   /** Given only to the admin. */
   onUsers?: () => void;
   onProfiles?: () => void;
+  onBudgets?: () => void;
 }
 
 /** Follow the live stream into the lines; true while it is broken. A session that ended means sign in again. */
@@ -41,15 +42,17 @@ function useStream(setLines: Dispatch<SetStateAction<Line[]>>, onSignedOut: () =
   return broken;
 }
 
-/** The buttons that open the other pages; People and Access only for the admin. */
+/** The buttons that open the other pages; People, Access and Budgets only for the admin. */
 function PageButtons({
   onSecurity,
   onUsers,
   onProfiles,
+  onBudgets,
 }: {
   onSecurity: () => void;
   onUsers: (() => void) | undefined;
   onProfiles: (() => void) | undefined;
+  onBudgets: (() => void) | undefined;
 }) {
   const { t } = useTranslation();
   return (
@@ -64,6 +67,11 @@ function PageButtons({
           {t('profiles.open')}
         </Button>
       )}
+      {onBudgets === undefined ? null : (
+        <Button variant="secondary" onClick={onBudgets}>
+          {t('budgets.open')}
+        </Button>
+      )}
       <Button variant="secondary" onClick={onSecurity}>
         {t('security.title')}
       </Button>
@@ -72,7 +80,7 @@ function PageButtons({
 }
 
 // Talk to Morgan: your messages go out over POST, Morgan's answers arrive on the live stream.
-export function Chat({ onSignedOut, onSecurity, onUsers, onProfiles }: ChatProps) {
+export function Chat({ onSignedOut, onSecurity, onUsers, onProfiles, onBudgets }: ChatProps) {
   const { t } = useTranslation();
   const [lines, setLines] = useState<Line[]>([]);
   const broken = useStream(setLines, onSignedOut);
@@ -92,7 +100,12 @@ export function Chat({ onSignedOut, onSecurity, onUsers, onProfiles }: ChatProps
   return (
     <main className="page chat">
       <TopBar onSignedOut={onSignedOut}>
-        <PageButtons onSecurity={onSecurity} onUsers={onUsers} onProfiles={onProfiles} />
+        <PageButtons
+          onSecurity={onSecurity}
+          onUsers={onUsers}
+          onProfiles={onProfiles}
+          onBudgets={onBudgets}
+        />
       </TopBar>
       <p role="status">{broken ? t('chat.reconnecting') : ''}</p>
       <ErrorBanner error={error} />

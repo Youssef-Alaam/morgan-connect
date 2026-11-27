@@ -320,5 +320,20 @@
       "execute": "Run commands"
     },
     "inherits": "{{preset}}, same as the person"
+  },
+  "budgets": {
+    "title": "Budgets and usage",
+    "open": "Budgets",
+    "back": "Back to chat",
+    "caption": "Spend and limits for {{month}}",
+    "person": "Person",
+    "spent": "Spent",
+    "limit": "Limit this month",
+    "topups": "Top-ups this month",
+    "cap": "Tasks at once",
+    "step": "Top-up step",
+    "noLimit": "No limit",
+    "over": "(at limit)",
+    "chatOnly": "Chat only, no web login"
   }
 }
