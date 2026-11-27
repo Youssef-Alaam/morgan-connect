@@ -19,6 +19,7 @@ export {
   redeemLink,
   sessionOwner,
   turnOwner,
+  expireStaleTurns,
 } from './system.js';
 export { accountOf, createSession, endSession, type Account } from './accounts.js';
 export {

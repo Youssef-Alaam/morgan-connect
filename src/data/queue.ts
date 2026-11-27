@@ -5,6 +5,7 @@ import { PgBoss } from 'pg-boss';
  * one-waiting-job-per-turn policy needs a new name. Boot re-queues every queued turn into it.
  */
 const QUEUE = 'turns';
+const OLD_QUEUE = 'turn';
 
 /** A turn held back by its person's cap is looked at again after this many seconds. */
 const DEFER_SECONDS = 2;
@@ -61,6 +62,8 @@ export function createTurnQueue(
     expireInSeconds,
     start: async () => {
       await boss.start();
+      // The old queue's jobs are never read; boot re-queues every queued turn into the new one.
+      if ((await boss.getQueue(OLD_QUEUE)) !== null) await boss.deleteQueue(OLD_QUEUE);
       await boss.createQueue(QUEUE, {
         notify: true,
         // One redelivery is enough: a redelivered turn is claimed once and never re-sent, and

@@ -11,6 +11,7 @@ export const SYSTEM_FUNCTIONS: readonly string[] = [
   'system_chat_owner(text, text)',
   'system_turn_owner(uuid)',
   'system_queued_turn_ids()',
+  'system_expire_stale_turns(integer)',
   'system_expire_open_approvals()',
   'system_install_claimed()',
   'system_claim_install(text, text, text)',
@@ -49,6 +50,13 @@ export async function turnOwner(db: Db, turnId: string): Promise<Owner | undefin
   const { rows } = await sql<OwnerRow>`
     select user_id, workspace_id from system_turn_owner(${turnId}::uuid)`.execute(db);
   return toOwner(rows[0]);
+}
+
+/** Sweep: turns claimed longer ago than `olderThanSeconds` are dead; frees their person's slots. */
+export async function expireStaleTurns(db: Db, olderThanSeconds: number): Promise<number> {
+  const { rows } = await sql<{ n: number }>`
+    select system_expire_stale_turns(${olderThanSeconds}::integer) as n`.execute(db);
+  return rows[0]?.n ?? 0;
 }
 
 /** Startup sweep: every turn still queued, whoever it belongs to. */

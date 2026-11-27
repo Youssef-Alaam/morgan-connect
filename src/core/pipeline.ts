@@ -1,5 +1,6 @@
 import {
   claimTurn,
+  expireStaleTurns,
   finishTurn,
   getTurn,
   interruptTurn,
@@ -93,8 +94,13 @@ async function tellIfWaiting(
   }
 }
 
-/** Re-queue turns that were stored but never got a job (a crash between insert and enqueue). */
+/**
+ * Clean up after a dead worker, then re-queue turns that were stored but never got a job (a crash
+ * between insert and enqueue). A turn claimed longer ago than the job expiry is failed, which frees
+ * its person's slot; returns how many turns were re-queued.
+ */
 export async function requeueStuckTurns(deps: PipelineDeps): Promise<number> {
+  await expireStaleTurns(deps.db, deps.queue.expireInSeconds);
   const ids = await listQueuedTurnIds(deps.db);
   for (const id of ids) await deps.queue.enqueue(id);
   return ids.length;

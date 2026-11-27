@@ -6,6 +6,7 @@ import {
   type PipelineDeps,
   ingest,
   processTurn,
+  requeueStuckTurns,
   startWorker,
   watchStuckTurns,
 } from '../../src/core/index.js';
@@ -320,6 +321,10 @@ it('dedupes jobs on an install that already had a standard turn queue', async ()
     const { rows } = await sql<{ n: string }>`select count(*) as n from pgboss.job
       where name = 'turns' and data->>'turnId' = ${id}`.execute(db);
     expect(Number(rows[0]?.n)).toBe(1);
+    const old = await sql<{
+      n: string;
+    }>`select count(*) as n from pgboss.queue where name = 'turn'`.execute(db);
+    expect(Number(old.rows[0]?.n)).toBe(0);
   } finally {
     await queue.stop();
   }
@@ -334,4 +339,27 @@ it('gives a turn that was running before the migration its creation time as clai
   const { rows } = await sql<{ ok: boolean }>`select claimed_at = created_at as ok from turns
     where id = ${a}::uuid`.execute(db);
   expect(rows[0]?.ok).toBe(true);
+});
+
+it('fails a turn claimed long ago by a dead worker, which frees the slot', async () => {
+  const queue = createTurnQueue(postgres.url, () => undefined);
+  await queue.start();
+  try {
+    await setTaskCap(db, admin, member.userId, 1);
+    const [dead = '', next = ''] = await queued('M1', 2);
+    await claimTurn(db, member, dead);
+    expect(await claimTurn(db, member, next)).toBeUndefined();
+    // Recent claims stay: a live run is not touched.
+    await requeueStuckTurns(deps(new FakeChannel(), queue));
+    expect(await status(member, dead)).toBe('sending');
+    await sql`update turns set claimed_at = now() - interval '10 minutes' where id = ${dead}::uuid`.execute(
+      db,
+    );
+    await requeueStuckTurns(deps(new FakeChannel(), queue));
+    expect(await status(member, dead)).toBe('failed');
+    expect(await claimTurn(db, member, next)).toBeDefined();
+  } finally {
+    await setTaskCap(db, admin, member.userId, null);
+    await queue.stop();
+  }
 });
