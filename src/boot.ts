@@ -142,9 +142,10 @@ const approvalsFor = (db: Db, telegram: ChannelAdapter | undefined): Approvals =
   });
 
 /** "Ask for more" goes to the admin's Telegram chat, the only place that can show the buttons yet. */
-const topupsFor = (config: Config, db: Db, telegram: ChannelAdapter): Topups =>
+const topupsFor = (config: Config, db: Db, telegram: ChannelAdapter, logger: Logger): Topups =>
   createTopups({
     db,
+    logger,
     amountUsd: config.TOPUP_AMOUNT_USD,
     keySource: KEY_SOURCE,
     defaultLimitUsd: config.DEFAULT_MONTHLY_LIMIT_USD,
@@ -190,9 +191,12 @@ async function startChat(
     stopWatching = watchStuckTurns(deps, REQUEUE_EVERY_MS);
     if (telegram !== undefined) {
       await announceSetupCode(identity, logger);
-      const topups = topupsFor(config, db, telegram);
+      const topups = topupsFor(config, db, telegram, logger);
       await telegram.start(
         (message) => ingest(deps, message),
+        // A top-up question is answered here, and a false means it did not count (wrong chat, too
+        // late, or the answer could not be applied): it must not fall through to the tool approvals.
+        // Only a question that is not a top-up (undefined) goes on to them.
         async (answer) =>
           (await topups.decide(answer)) ?? approvals.decide(answer.id, answer.decision, answer),
         (chat) => topups.ask(chat),

@@ -106,7 +106,13 @@ it('asks the admin on a tap, and an approval lets the member carry on', async ()
     expect(question).toHaveLength(1);
     expect(question[0]?.text).toContain('Add $5.00 for this month?');
     expect(buttons(at(question, 0)).map((b) => b.text)).toEqual(['Approve', 'Deny']);
-    telegram.push(tapFrom(1, buttons(at(question, 0))[0]?.callback_data));
+    // Someone else tapping Approve (the member, in their own chat) changes nothing.
+    const approve = buttons(at(question, 0))[0]?.callback_data;
+    telegram.push(tapFrom(42, approve));
+    await vi.waitFor(answered(4), { timeout: 30_000 });
+    expect(telegram.answers[3]).toMatchObject({ text: 'No longer valid' });
+    expect(sentTo(42)()).toHaveLength(1);
+    telegram.push(tapFrom(1, approve));
     await vi.waitFor(
       () => {
         expect(sentTo(42)()).toHaveLength(2);
