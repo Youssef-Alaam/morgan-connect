@@ -2,9 +2,11 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 import {
   DEFAULT_TASK_CAP,
   createDb,
+  ensureAppRole,
   migrateToLatest,
   setTaskCap,
   taskCapOf,
+  withOwner,
   type Db,
   type Owner,
 } from '../../src/data/index.js';
@@ -69,4 +71,21 @@ it('refuses a member outside the admin workspace', async () => {
     .executeTakeFirstOrThrow();
   expect(await setTaskCap(db, admin, outsider.id, 9)).toBe(false);
   expect(await taskCapOf(db, { userId: outsider.id, workspaceId: stranger.id })).toBe(2);
+});
+
+it('does not let the app role write the cap directly, even for oneself', async () => {
+  const url = new URL(postgres.url);
+  url.username = 'morgan_app';
+  url.password = 'app-pass-cap';
+  await ensureAppRole(db, url.toString());
+  const app = createDb(url.toString());
+  try {
+    const raise = withOwner(app, member, (trx) =>
+      trx.updateTable('users').set({ max_parallel_tasks: 99 }).execute(),
+    );
+    await expect(raise).rejects.toThrow(/permission denied/);
+    expect(await taskCapOf(app, member)).toBe(2);
+  } finally {
+    await app.destroy();
+  }
 });
