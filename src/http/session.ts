@@ -24,6 +24,8 @@ export interface AuthDeps {
   passkeys?: RelyingParty | undefined;
   /** What the budgets page shows beside each person's own numbers (config); unset: UTC, no default limit. */
   budgets?: BudgetSettings | undefined;
+  /** Tell a member in their own chat what the admin decided; unset: nobody is told. A failure is only logged. */
+  tellMember?: ((channel: string, chatId: string, text: string) => Promise<void>) | undefined;
 }
 
 interface BudgetSettings {
