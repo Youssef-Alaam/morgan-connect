@@ -29,6 +29,8 @@ import { up as taskCap } from './0028-task-cap.js';
 import { up as turnClaimedAt } from './0029-turn-claimed-at.js';
 import { up as staleTurns } from './0030-stale-turns.js';
 import { up as budgetTopups } from './0031-budget-topups.js';
+import { up as budgetTopups } from './0029-budget-topups.js';
+import { up as budgetTopupAnswers } from './0032-budget-topup-answers.js';
 
 /** Applied in key order. Add new migrations here with the next number. */
 export const migrations: Record<string, Migration> = {
@@ -62,4 +64,6 @@ export const migrations: Record<string, Migration> = {
   '0029-turn-claimed-at': { up: turnClaimedAt },
   '0030-stale-turns': { up: staleTurns },
   '0031-budget-topups': { up: budgetTopups },
+  '0029-budget-topups': { up: budgetTopups },
+  '0032-budget-topup-answers': { up: budgetTopupAnswers },
 };

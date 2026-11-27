@@ -1,5 +1,12 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { cancelTopup, requestTopup, type NewTopup } from '../../src/data/index.js';
+import {
+  cancelTopup,
+  openTopupFor,
+  requestTopup,
+  resolveTopup,
+  topupTotal,
+  type NewTopup,
+} from '../../src/data/index.js';
 import { startIsolation, type Isolation } from '../helpers/isolation.js';
 
 // The data functions as the app role: who may open, see and answer a top-up request.
@@ -72,4 +79,27 @@ it('lets a lapsed request be replaced, and refuses the admin asking and a missin
     outcome: 'no_admin',
   });
   await ctx.owner.deleteFrom('budget_topups').execute();
+});
+
+it('shows the open request only to the admin, who answers it once and it counts only when approved', async () => {
+  const made = await requestTopup(ctx.app, ctx.bob, ask());
+  if (made.outcome !== 'created') throw new Error('expected a request');
+  expect(await openTopupFor(ctx.app, ctx.bob, made.approvalId)).toBeUndefined();
+  const open = await openTopupFor(ctx.app, ctx.alice, made.approvalId);
+  expect(open).toMatchObject({
+    memberId: ctx.bob.userId,
+    amountUsd: '5.00000000',
+    month: '2026-11',
+  });
+  expect(await resolveTopup(ctx.app, ctx.bob, made.topupId, 'approved')).toBeUndefined();
+  const before = await topupTotal(ctx.app, ctx.bob, '2026-11');
+  expect(await resolveTopup(ctx.app, ctx.alice, made.topupId, 'approved')).toMatchObject({
+    memberId: ctx.bob.userId,
+    amountUsd: '5.00000000',
+    chatId: 'b',
+  });
+  expect(await resolveTopup(ctx.app, ctx.alice, made.topupId, 'refused')).toBeUndefined();
+  expect(await openTopupFor(ctx.app, ctx.alice, made.approvalId)).toBeUndefined();
+  expect(Number(await topupTotal(ctx.app, ctx.bob, '2026-11')) - Number(before)).toBe(5);
+  expect(await topupTotal(ctx.app, ctx.bob, '2026-12')).toBe('0');
 });
