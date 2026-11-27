@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { standing, type Standing } from './api.ts';
 import { Button } from './components/Button.tsx';
 import { ChangePassword } from './screens/ChangePassword.tsx';
+import { Chat } from './screens/Chat.tsx';
 import { SignIn } from './screens/SignIn.tsx';
 
 const STATUS = {
   loading: 'app.loading',
   unknown: 'app.unreachable',
-  in: 'app.empty',
+  in: 'app.loading',
   change: 'app.loading',
   out: 'app.loading',
 } as const;
@@ -21,8 +22,12 @@ export function App() {
     void standing().then(setWhere);
   };
   useEffect(refresh, []);
+  const signedOut = useCallback(() => {
+    setWhere('out');
+  }, []);
   if (where === 'out') return <SignIn onDone={setWhere} />;
   if (where === 'change') return <ChangePassword onDone={refresh} />;
+  if (where === 'in') return <Chat onSignedOut={signedOut} />;
   return (
     <main className="page">
       <h1>{t('app.name')}</h1>

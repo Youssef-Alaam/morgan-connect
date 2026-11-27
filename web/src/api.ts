@@ -52,3 +52,7 @@ export async function standing(): Promise<Standing> {
   if (answer.status === 401) return 'out';
   return answer.error === PASSWORD_CHANGE ? 'change' : 'unknown';
 }
+
+export function sendMessage(text: string, messageId: string): Promise<Result<unknown>> {
+  return call('/chat', { text, messageId });
+}
