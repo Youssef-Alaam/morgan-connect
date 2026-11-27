@@ -1,6 +1,7 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from '@hono/node-server';
+import { approvalsFor } from './boot-approvals.js';
 import { type ChannelAdapter, createTelegramAdapter, createWebChannel } from './channels/index.js';
 import {
   assertFitsJobExpiry,
@@ -29,7 +30,6 @@ import {
 import { type AppDeps, type ChatDeps, createApp } from './http/index.js';
 import {
   createAnthropicEngine,
-  createApprovals,
   createGate,
   createHttpEngine,
   createTopups,
@@ -45,8 +45,6 @@ import { type Config, createLogger, loadConfig, type Logger } from './ops/index.
 const REQUEUE_EVERY_MS = 30_000;
 
 const TIMING = { retryDelayMs: 2000, typingIntervalMs: 4000, turnTimeoutMs: 120_000 };
-/** The turn waits for the owner inside its time limit, so a question closes before the turn does. */
-const APPROVAL_TTL_MS = 90_000;
 /** The admin may be away: a top-up question stays open this long (a day). */
 const TOPUP_TTL_MS = 24 * 60 * 60_000;
 // TODO(M2-10b+): 'own' once a person can bring their own key or subscription (D46); today every call uses the admin's key.
@@ -130,17 +128,6 @@ async function openQueue(config: Config, logger: Logger): Promise<TurnQueue> {
   return queue;
 }
 
-/** Questions to the owner go out on the chat they came from; only Telegram can ask yet (web: M2-12b). */
-const approvalsFor = (db: Db, telegram: ChannelAdapter | undefined): Approvals =>
-  createApprovals({
-    db,
-    ttlMs: APPROVAL_TTL_MS,
-    prompt: ({ caller, text, id }) =>
-      telegram !== undefined && caller.channel === 'telegram'
-        ? telegram.askApproval(caller.chatId, text, id)
-        : Promise.reject(new Error('This channel cannot ask for approval yet')),
-  });
-
 /** "Ask for more" goes to the admin's Telegram chat, the only place that can show the buttons yet. */
 const topupsFor = (config: Config, db: Db, telegram: ChannelAdapter, logger: Logger): Topups =>
   createTopups({
@@ -178,7 +165,7 @@ async function startChat(
       : createTelegramAdapter(config.TELEGRAM_BOT_TOKEN, logger, config.TELEGRAM_API_ROOT);
   const web = createWebChannel(db);
   const identity = createIdentity(db, { onClaimed });
-  const approvals = approvalsFor(db, telegram);
+  const approvals = approvalsFor(db, telegram, web);
   const reply = buildReplier(config, { db, logger, engine, approvals });
   const aborts = createTurnAborts();
   const senders = telegram === undefined ? [web] : [telegram, web];
@@ -208,7 +195,7 @@ async function startChat(
     throw error;
   }
   return {
-    chat: { events: web, ingest: (message) => ingest(deps, message) },
+    chat: { events: web, ingest: (message) => ingest(deps, message), decide: approvals.decide },
     stop: async () => {
       stopWatching();
       await telegram?.stop();
