@@ -15,6 +15,13 @@ describe('apply', () => {
     expect(apply([mine], { id: '1', kind: 'ack', ref: 'other' })).toEqual([mine]);
   });
 
+  it('brings the person line back from its ack text after a reload, once', () => {
+    const event = { id: '1', kind: 'ack', ref: 'u9', text: 'Earlier' } as const;
+    const replayed = apply([], event);
+    expect(replayed).toEqual([{ id: 'u9', from: 'user', text: 'Earlier', state: 'sent' }]);
+    expect(apply(replayed, event)).toEqual(replayed);
+  });
+
   it('adds Morgan line once, even when a reconnect replays it', () => {
     const event = { id: '7', kind: 'message', text: 'Hello' } as const;
     const once = apply([mine], event);
@@ -73,8 +80,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function emit(kind: string, lastEventId: string, data: string): void {
-  FakeSource.all[0]?.listeners.get(kind)?.({ lastEventId, data });
+function emit(kind: string, lastEventId: string, data: string, index = 0): void {
+  FakeSource.all[index]?.listeners.get(kind)?.({ lastEventId, data });
 }
 
 describe('followEvents', () => {
@@ -91,6 +98,19 @@ describe('followEvents', () => {
     expect(h.onOpen).toHaveBeenCalledOnce();
     stop();
     expect(FakeSource.all[0]?.closed).toBe(true);
+  });
+
+  it('opens from the start, and reopens after the last event seen', async () => {
+    setup('in');
+    expect(FakeSource.all[0]?.url).toBe('/api/chat/events');
+    emit('message', '9', '{"text":"Hi"}');
+    die(0);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(FakeSource.all[1]?.url).toBe('/api/chat/events?after=9');
+    emit('ack', '12', '{"ref":"u1"}', 1);
+    die(1);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(FakeSource.all[2]?.url).toBe('/api/chat/events?after=12');
   });
 
   it('leaves a browser retry alone (still connecting)', async () => {

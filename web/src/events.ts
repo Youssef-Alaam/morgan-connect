@@ -16,10 +16,17 @@ export interface ChatEvent {
   text?: string;
 }
 
-/** Apply one event to the lines: an ack marks the person's line as delivered, a message adds Morgan's. */
+/**
+ * Apply one event to the lines: an ack marks the person's line as delivered (and, replayed after a
+ * reload, brings the line back from its text), a message adds Morgan's.
+ */
 export function apply(lines: Line[], event: ChatEvent): Line[] {
   if (event.kind === 'ack') {
-    return lines.map((line) => (line.id === event.ref ? { ...line, state: 'sent' } : line));
+    if (lines.some((line) => line.id === event.ref)) {
+      return lines.map((line) => (line.id === event.ref ? { ...line, state: 'sent' } : line));
+    }
+    if (event.ref === undefined || event.text === undefined) return lines;
+    return [...lines, { id: event.ref, from: 'user', text: event.text, state: 'sent' }];
   }
   const id = `event-${event.id}`;
   // A reconnect replays what was seen already; each event shows once.
@@ -51,8 +58,12 @@ export function followEvents(h: Handlers, check: () => Promise<Standing>): () =>
   let timer: ReturnType<typeof setTimeout> | undefined;
   let delay = BASE_DELAY_MS;
   let stopped = false;
+  // A stream the browser did not reopen by itself starts after the last event it showed.
+  let last: string | undefined;
   const connect = (): void => {
-    const opened = new EventSource('/api/chat/events');
+    const opened = new EventSource(
+      last === undefined ? '/api/chat/events' : `/api/chat/events?after=${last}`,
+    );
     source = opened;
     opened.onopen = () => {
       delay = BASE_DELAY_MS;
@@ -63,7 +74,8 @@ export function followEvents(h: Handlers, check: () => Promise<Standing>): () =>
         const message = raw as MessageEvent<string>;
         try {
           const data = JSON.parse(message.data) as { ref?: string; text?: string };
-          h.onEvent({ id: message.lastEventId, kind, ...data });
+          last = message.lastEventId;
+          h.onEvent({ id: last, kind, ...data });
         } catch {
           // A malformed event is skipped; the stream goes on.
         }
