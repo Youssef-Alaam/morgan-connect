@@ -16,6 +16,10 @@ async function serve(page: Page, answers: Record<string, Answer | Answer[]>): Pr
   const bodies: string[] = [];
   await page.route('**/api/**', async (route: Route) => {
     const path = new URL(route.request().url()).pathname.slice('/api'.length);
+    if (path === '/chat/events' && answers[path] === undefined) {
+      await route.fulfill({ contentType: 'text/event-stream', body: 'retry: 60000\n\n' });
+      return;
+    }
     const given = answers[path];
     const next = Array.isArray(given) ? (given.length > 1 ? given.shift() : given[0]) : given;
     bodies.push(`${path} ${route.request().postData() ?? ''}`.trim());
@@ -53,7 +57,7 @@ test('sign-in with a password goes to the signed-in page', async ({ page }, info
   await page.getByLabel('Email').fill('narimane@example.test');
   await page.getByLabel('Password', { exact: true }).fill('correct horse battery');
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByText('Nothing here yet.')).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Message Morgan' })).toBeVisible();
   expect(seen).toContain(
     `/sign-in ${JSON.stringify({ email: 'narimane@example.test', password: 'correct horse battery' })}`,
   );
@@ -98,7 +102,7 @@ test('an authenticator code is asked for after the password', async ({ page }, i
   await noViolations(page);
   await page.getByLabel('Authenticator code').fill('123456');
   await page.getByRole('button', { name: 'Verify' }).click();
-  await expect(page.getByText('Nothing here yet.')).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Message Morgan' })).toBeVisible();
   expect(seen).toContain(
     `/sign-in/second-factor ${JSON.stringify({ challenge: 'chal-1', code: '123456' })}`,
   );
@@ -124,7 +128,7 @@ test('a backup code can be used instead, and the code step has a way back', asyn
   await noViolations(page);
   await page.getByLabel('Backup code').fill('abcd-efgh-ijkl');
   await page.getByRole('button', { name: 'Verify' }).click();
-  await expect(page.getByText('Nothing here yet.')).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Message Morgan' })).toBeVisible();
   expect(seen).toContain(
     `/sign-in/second-factor ${JSON.stringify({ challenge: 'chal-2', code: 'abcd-efgh-ijkl' })}`,
   );
@@ -147,7 +151,7 @@ test('a temporary password ends on the change-password screen', async ({ page },
   await page.getByLabel('New password').fill('my own long password');
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Save password' }).click();
-  await expect(page.getByText('Nothing here yet.')).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Message Morgan' })).toBeVisible();
   expect(seen).toContain(
     `/change-password ${JSON.stringify({ current: 'temporary-pass', password: 'my own long password', acceptedNotice: true })}`,
   );
@@ -159,4 +163,53 @@ test('a browser that is already on the temporary password lands on change-passwo
   await serve(page, { '/me': mustChange });
   await open(page, queryOf(info.project.metadata));
   await expect(page.getByRole('heading', { name: 'Choose your password' })).toBeVisible();
+});
+
+const sse = (id: number, kind: string, data: object): string =>
+  `id: ${String(id)}\nevent: ${kind}\ndata: ${JSON.stringify(data)}\n\n`;
+
+test('a member sends a message and the reply streams in', async ({ page }, info) => {
+  await serve(page, { '/me': { status: 200, body: {} } });
+  let sent: { messageId: string; text: string } | undefined;
+  await page.route('**/api/chat', async (route) => {
+    sent = route.request().postDataJSON() as { messageId: string; text: string };
+    await route.fulfill({ status: 202, json: { ok: true, messageId: sent.messageId } });
+  });
+  // The stream is quiet until a message was posted, then it replays the ack and the answer.
+  await page.route('**/api/chat/events', async (route) => {
+    const body =
+      sent === undefined
+        ? ''
+        : sse(1, 'ack', { ref: sent.messageId }) +
+          sse(2, 'message', { text: 'Done. I will message you at six.' });
+    await route.fulfill({ contentType: 'text/event-stream', body: `retry: 200\n\n${body}` });
+  });
+  await open(page, queryOf(info.project.metadata));
+  const box = page.getByRole('textbox', { name: 'Message Morgan' });
+  await box.fill('Remind me to call Narimane at six.');
+  await box.press('Enter');
+  const log = page.getByRole('log', { name: 'Conversation' });
+  await expect(log.locator('.bubble-user')).toContainText('Remind me to call Narimane');
+  await expect(log.locator('.bubble-morgan')).toContainText('Done. I will message you at six.');
+  expect(sent?.text).toBe('Remind me to call Narimane at six.');
+  await expect(log).toHaveScreenshot('chat-screen.png');
+  await noViolations(page);
+});
+
+test('a message the server refuses is marked as not sent', async ({ page }, info) => {
+  await serve(page, { '/me': { status: 200, body: {} } });
+  await page.route('**/api/chat', (route) =>
+    route.fulfill({ status: 400, json: { error: 'invalid_request' } }),
+  );
+  await open(page, queryOf(info.project.metadata));
+  await page.getByRole('textbox', { name: 'Message Morgan' }).fill('Hello');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.locator('.bubble-user')).toContainText('not sent');
+});
+
+test('a session that ended while chatting goes back to sign-in', async ({ page }, info) => {
+  await serve(page, { '/me': [{ status: 200, body: {} }, out] });
+  await page.route('**/api/chat/events', (route) => route.fulfill({ status: 401, json: out.body }));
+  await open(page, queryOf(info.project.metadata));
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 });

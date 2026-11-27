@@ -58,3 +58,14 @@ body {
   display: grid;
   gap: var(--space-3);
 }
+
+.chat {
+  max-inline-size: var(--chat-width);
+  margin-inline: auto;
+  justify-items: stretch;
+}
+
+.chat-log {
+  display: grid;
+  gap: var(--space-2);
+}

@@ -22,6 +22,15 @@
     "useApp": "Use the authenticator app",
     "back": "Back to password"
   },
+  "chat": {
+    "you": "You",
+    "morgan": "Morgan",
+    "message": "Message Morgan",
+    "send": "Send",
+    "log": "Conversation",
+    "reconnecting": "Reconnecting.",
+    "failed": "not sent"
+  },
   "errors": {
     "label": "Problem",
     "invalid_credentials": "That email, password or code is not right.",
