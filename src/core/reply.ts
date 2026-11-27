@@ -21,6 +21,7 @@ import {
   type Gate,
 } from '../policy/index.js';
 import { joinSystem, trusted, type SystemPrompt } from '../safety/index.js';
+import { withSwitchedOffNote } from './switched-off.js';
 import { compact, type BeforeCompact } from './compaction.js';
 import { isCommand } from './commands.js';
 import { toEngineHistory } from './summary-view.js';
@@ -298,7 +299,7 @@ async function compactWhenFull(
   }
 }
 
-/** `/new`: forget the chat, then tell the engine the conversation is over. A failure there never blocks `/new`. */
+/** `/new`: forget the chat and end the engine conversation; an engine failure never blocks it. */
 async function startOver(deps: ReplyDeps, turn: Turn): Promise<void> {
   const chat = { channel: turn.channel, chatId: turn.chatId };
   const ended = await endConversation(deps.db, owner(turn), chat);
@@ -332,16 +333,18 @@ export function createReplier(deps: ReplyDeps): Replier {
       const timedOut = (): boolean => limit.aborted && signal?.aborted !== true;
       const { answer, context } = await ask(deps, turn, both, timedOut);
       await compactWhenFull(deps, turn, context, { signal: both, timedOut });
+      const told = withSwitchedOffNote(deps.gate, turn.id, answer);
       return renewed
         ? `${IDLE_REPLY}
 
-${answer}`
-        : answer;
+${told}`
+        : told;
     } catch (error) {
       const kind = error instanceof EngineError ? error.kind : 'failed';
       deps.logger.warn({ turnId: turn.id, kind }, 'model reply failed');
       return signal?.aborted === true ? STOPPED_REPLY : FAILURE_REPLY;
     } finally {
+      deps.gate?.takeSwitchedOff(turn.id);
       stopTyping();
     }
   };

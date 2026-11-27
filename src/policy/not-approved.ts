@@ -14,7 +14,9 @@ const EXPIRED_REFUSAL =
   'Nobody approved it in time. It was not run. Tell the user, and ask again only if they want it.';
 const UNAVAILABLE_REFUSAL =
   'The owner could not be asked, so it was not run. Tell the user what you wanted to do instead.';
-const OFF_REFUSAL = 'This tool is turned off. It was not run.';
+/** What the user is told when the profile has the action off (story 27); i18n key `policy.switchedOff`. */
+export const SWITCHED_OFF = 'This is switched off for this chat.';
+const OFF_REFUSAL = `${SWITCHED_OFF} It was not run. Do not try another way; tell the user exactly: "${SWITCHED_OFF}"`;
 const refusalFor = (mode: Mode): string => (mode === 'ask' ? ASK_REFUSAL : OFF_REFUSAL);
 
 /** What the audit row and the model get when the owner did not approve. */
