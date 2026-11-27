@@ -3,6 +3,7 @@ import type { Logger } from '../ops/index.js';
 import { authRoutes } from './auth.js';
 import type { ChatDeps } from './chat.js';
 import { API_PREFIX, type AuthDeps } from './session.js';
+import { webRoutes } from './web.js';
 
 export interface AppDeps {
   /** Resolves to the database server version, or rejects when the database is unreachable. */
@@ -12,6 +13,8 @@ export interface AppDeps {
   auth?: Omit<AuthDeps, 'logger'>;
   /** The web chat (`/api/chat`), behind the same session gate; needs `auth`. */
   chat?: Omit<ChatDeps, 'logger' | 'db'>;
+  /** The built web app (`web/dist`), served for every page path; left out, only the API answers. */
+  webDir?: string;
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -37,5 +40,6 @@ export function createApp(deps: AppDeps): Hono {
       return c.json({ error: 'server_error' }, 500);
     });
   }
+  if (deps.webDir !== undefined) app.route('/', webRoutes(deps.webDir));
   return app;
 }

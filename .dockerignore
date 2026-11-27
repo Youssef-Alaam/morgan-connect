@@ -5,3 +5,7 @@ coverage
 .github
 .env
 *.log
+web/dist
+**/node_modules
+web/test-results
+web/test-results-stack
