@@ -91,7 +91,10 @@ function Setup({ secret, uri, onConfirmed, onFail, onCancel }: SetupProps) {
     <>
       <p>{t(`${K}.secretHint`)}</p>
       <p>
-        {t(`${K}.secret`)}: <code dir="ltr">{secret}</code>
+        {t(`${K}.secret`)}:{' '}
+        <code className="mono" dir="ltr">
+          {secret}
+        </code>
       </p>
       <a href={uri}>{t(`${K}.open`)}</a>
       <CodeForm
@@ -126,7 +129,7 @@ function BackupCodes({ codes, onSaved }: { codes: string[]; onSaved: () => void 
   return (
     <>
       <p>{t(`${K}.codesHint`)}</p>
-      <pre dir="ltr" aria-label={t(`${K}.codesTitle`)}>
+      <pre className="mono" dir="ltr" aria-label={t(`${K}.codesTitle`)}>
         <code>{codes.join('\n')}</code>
       </pre>
       <Button onClick={onSaved}>{t(`${K}.saved`)}</Button>
