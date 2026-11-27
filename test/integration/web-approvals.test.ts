@@ -22,7 +22,11 @@ let app: ReturnType<typeof createApp>;
 let web: ReturnType<typeof createWebChannel>;
 let approvals: ReturnType<typeof createApprovals>;
 const sessions = { alice: '', bob: '' };
-const cookies = { alice: 'morgan_session=alice-token', bob: 'morgan_session=bob-token' };
+const cookies = {
+  alice: 'morgan_session=alice-token',
+  bob: 'morgan_session=bob-token',
+  aliceTablet: 'morgan_session=alice-tablet-token',
+};
 const run = vi.fn<ToolDefinition['run']>(() => Promise.resolve('done'));
 const tool: ToolDefinition = {
   name: 'notes.create',
@@ -44,6 +48,7 @@ beforeAll(async () => {
     tokenHash: sha256('bob-token'),
     expiresAt,
   });
+  await createSession(ctx.app, ctx.alice, { tokenHash: sha256('alice-tablet-token'), expiresAt });
   web = createWebChannel(ctx.app);
   approvals = createApprovals({
     db: ctx.app,
@@ -76,8 +81,8 @@ const stream = (who: keyof typeof cookies, lastId = '0') =>
 const args = { title: 'Pay the plumber', amount: 40 };
 
 /** Alice's turn calls a gated tool on her web session; resolves with the question as the stream shows it. */
-async function ask() {
-  const gate = createGate({ db: ctx.app, tools: [tool], approvals });
+async function ask(source = approvals) {
+  const gate = createGate({ db: ctx.app, tools: [tool], approvals: source });
   const caller = { channel: 'web', chatId: sessions.alice };
   const before = await ctx.owner
     .selectFrom('web_events')
@@ -186,4 +191,37 @@ it('tells a switched-off web chat the same sentence it gets on Telegram', async 
   await web.send(sessions.bob, typeof told === 'string' ? told : told.text);
   const [shown] = await readEvents(await stream('bob'), 1);
   expect(shown?.data.text).toContain(SWITCHED_OFF);
+});
+
+it("refuses the same person's other session: a question belongs to the one it was shown on", async () => {
+  run.mockClear();
+  const { pending, question } = await ask();
+  const id = question?.data.ref ?? '';
+  expect((await answer('aliceTablet', id, 'approved')).status).toBe(409);
+  expect(run).not.toHaveBeenCalled();
+  expect((await answer('alice', id, 'approved')).status).toBe(200);
+  await pending;
+  expect(run).toHaveBeenCalledTimes(1);
+});
+
+it('cannot answer a replayed question once it has expired', async () => {
+  run.mockClear();
+  const quick = createApprovals({
+    db: ctx.app,
+    ttlMs: 150,
+    prompt: ({ caller, text, id }) => web.askApproval(caller.chatId, text, id),
+  });
+  const { pending, question } = await ask(quick);
+  expect(JSON.stringify(await pending)).not.toContain('done');
+  // A browser that reconnects from the start is shown the old question again.
+  const stored = await ctx.owner
+    .selectFrom('web_events')
+    .select('id')
+    .where('chat_id', '=', sessions.alice)
+    .execute();
+  const replay = await readEvents(await stream('alice'), stored.length);
+  expect(replay.map((event) => event.data.ref)).toContain(question?.data.ref);
+  const id = question?.data.ref ?? '';
+  expect((await answer('alice', id, 'approved')).status).toBe(409);
+  expect(run).not.toHaveBeenCalled();
 });
