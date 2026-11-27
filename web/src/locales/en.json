@@ -58,7 +58,9 @@
     "same_password": "Choose a password different from the current one.",
     "notice_required": "Tick the box to continue.",
     "link_invalid": "This link has expired or was already used. Ask for a new one.",
-    "email_taken": "That email already has an account."
+    "email_taken": "That email already has an account.",
+    "forbidden": "Only the admin can do that.",
+    "not_found": "That is already gone. Reload the page."
   },
   "gallery": {
     "title": "Components",
