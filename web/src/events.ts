@@ -7,11 +7,19 @@ export interface Line {
   text: string;
   /** Only for the person's own lines: still going, delivered to the server, or refused. */
   state?: 'sending' | 'sent' | 'failed';
+  /** Only for a question to the person: Morgan's text is the description and the exact arguments. */
+  approval?: Approval;
+}
+
+/** `outcome` is unset while the question is open; `sending` while the person's answer is on its way. */
+export interface Approval {
+  id: string;
+  outcome?: 'sending' | 'approved' | 'denied' | 'expired' | 'aborted' | 'invalid';
 }
 
 export interface ChatEvent {
   id: string;
-  kind: 'ack' | 'message';
+  kind: 'ack' | 'message' | 'approval' | 'approval_closed';
   ref?: string;
   text?: string;
 }
@@ -28,13 +36,31 @@ export function apply(lines: Line[], event: ChatEvent): Line[] {
     if (event.ref === undefined || event.text === undefined) return lines;
     return [...lines, { id: event.ref, from: 'user', text: event.text, state: 'sent' }];
   }
+  if (event.kind === 'approval_closed') {
+    return lines.map((line) => {
+      const { approval } = line;
+      return approval !== undefined && approval.id === event.ref
+        ? { ...line, approval: closed(approval, event) }
+        : line;
+    });
+  }
   const id = `event-${event.id}`;
   // A reconnect replays what was seen already; each event shows once.
   if (lines.some((line) => line.id === id)) return lines;
-  return [...lines, { id, from: 'morgan', text: event.text ?? '' }];
+  const line: Line = { id, from: 'morgan', text: event.text ?? '' };
+  if (event.kind === 'approval' && event.ref !== undefined) line.approval = { id: event.ref };
+  return [...lines, line];
 }
 
-const KINDS = ['ack', 'message'] as const;
+const OUTCOMES = ['approved', 'denied', 'expired', 'aborted'] as const;
+
+/** The server's word for how a question ended; a word this screen does not know counts as aborted. */
+function closed(approval: Approval, event: ChatEvent): Approval {
+  const outcome = OUTCOMES.find((word) => word === event.text) ?? 'aborted';
+  return { ...approval, outcome };
+}
+
+const KINDS = ['ack', 'message', 'approval', 'approval_closed'] as const;
 const BASE_DELAY_MS = 1000;
 const MAX_DELAY_MS = 30_000;
 /** `EventSource.CLOSED`: the browser gave up (an HTTP error) and will not retry by itself. */

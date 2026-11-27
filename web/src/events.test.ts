@@ -30,6 +30,39 @@ describe('apply', () => {
   });
 });
 
+describe('apply, approvals', () => {
+  const asked = { id: '5', kind: 'approval', ref: 'q1', text: 'Morgan asks' } as const;
+
+  it('adds a question once, even when a reconnect replays it', () => {
+    const once = apply([], asked);
+    expect(once).toEqual([
+      { id: 'event-5', from: 'morgan', text: 'Morgan asks', approval: { id: 'q1' } },
+    ]);
+    expect(apply(once, asked)).toEqual(once);
+  });
+
+  it.each(['approved', 'denied', 'expired', 'aborted'])('settles it as %s', (word) => {
+    const settled = apply(apply([], asked), {
+      id: '6',
+      kind: 'approval_closed',
+      ref: 'q1',
+      text: word,
+    });
+    expect(settled[0]?.approval).toEqual({ id: 'q1', outcome: word });
+  });
+
+  it('calls a word it does not know cancelled, and leaves other lines alone', () => {
+    const lines = apply([mine], asked);
+    const settled = apply(lines, { id: '6', kind: 'approval_closed', ref: 'q1', text: 'odd' });
+    expect(settled[0]).toEqual(mine);
+    expect(settled[1]?.approval?.outcome).toBe('aborted');
+    expect(
+      apply(lines, { id: '7', kind: 'approval_closed', ref: 'other', text: 'denied' }),
+    ).toEqual(lines);
+    expect(apply(lines, { id: '8', kind: 'approval_closed', text: 'denied' })).toEqual(lines);
+  });
+});
+
 class FakeSource {
   static all: FakeSource[] = [];
   listeners = new Map<string, (event: unknown) => void>();

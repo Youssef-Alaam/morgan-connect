@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { changePassword, secondFactor, signIn, signOut, standing } from './api.ts';
+import { changePassword, decideApproval, secondFactor, signIn, signOut, standing } from './api.ts';
 import { errorKey } from './errors.ts';
 
 function answer(status: number, body: unknown): void {
@@ -53,6 +53,23 @@ describe('the account calls', () => {
     expect(await signOut()).toEqual({ ok: true, data: {} });
     expect(sent().path).toBe('/api/sign-out');
     expect(sent().init.method).toBe('POST');
+  });
+
+  it('posts the answer to a question under its id', async () => {
+    answer(409, { error: 'not_open' });
+    expect(await decideApproval('q-1', 'denied')).toEqual({
+      ok: false,
+      status: 409,
+      error: 'not_open',
+    });
+    expect(sent().path).toBe('/api/chat/approvals/q-1');
+    expect(sent().init.body).toBe(JSON.stringify({ decision: 'denied' }));
+  });
+
+  it('encodes the id of the question into the path', async () => {
+    answer(200, { ok: true });
+    await decideApproval('a/b?c', 'approved');
+    expect(sent().path).toBe('/api/chat/approvals/a%2Fb%3Fc');
   });
 
   it('turns an error answer into its status and error word', async () => {

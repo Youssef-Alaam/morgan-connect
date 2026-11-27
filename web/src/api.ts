@@ -66,6 +66,14 @@ export function signOut(): Promise<Result<unknown>> {
   return call('/sign-out', {});
 }
 
+/** Answer a question Morgan asked. A 409 means it is no longer open (answered, expired or over). */
+export function decideApproval(
+  id: string,
+  decision: 'approved' | 'denied',
+): Promise<Result<unknown>> {
+  return call(`/chat/approvals/${encodeURIComponent(id)}`, { decision });
+}
+
 export function sendMessage(text: string, messageId: string): Promise<Result<unknown>> {
   return call('/chat', { text, messageId });
 }
