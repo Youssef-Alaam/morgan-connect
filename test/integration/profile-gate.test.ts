@@ -1,4 +1,9 @@
+import { sql } from 'kysely';
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
+import { createReplier } from '../../src/core/index.js';
+import { createLogger } from '../../src/ops/index.js';
+import { ScriptedEngine } from '../helpers/fake-engine.js';
+import { FakeChannel } from '../helpers/fake-channel.js';
 import { assignProfile, createApprovals, createGate } from '../../src/policy/index.js';
 import type { ApprovalPrompt } from '../../src/policy/approvals.js';
 import { SWITCHED_OFF } from '../../src/policy/not-approved.js';
@@ -127,9 +132,68 @@ it("sends an ask on a member's chat to the member, never the admin", async () =>
   ]);
 });
 
-it('refuses a chat nobody linked, as switched off', async () => {
+it('refuses a chat nobody linked as switched off, with exactly one ownerless audit row', async () => {
   const { gate } = setup('read', 'stranger.read');
   const result = await gate.toolsFor({ channel: 'fake', chatId: 'nobody' })[0]?.run({});
   expect(JSON.stringify(result)).toContain(SWITCHED_OFF);
   expect(run).not.toHaveBeenCalled();
+  expect(await audit('stranger.read')).toEqual([
+    { decision: 'off', outcome: 'refused', user_id: null },
+  ]);
+});
+
+it('fails closed when the profile cannot be read: the tool is not run', async () => {
+  const { gate } = setup('read', 'broken.read');
+  await sql`alter table access_profiles rename to access_profiles_away`.execute(ctx.owner);
+  try {
+    const result = await gate.toolsFor(A)[0]?.run({});
+    expect(JSON.stringify(result)).toContain(SWITCHED_OFF);
+  } finally {
+    await sql`alter table access_profiles_away rename to access_profiles`.execute(ctx.owner);
+  }
+  expect(run).not.toHaveBeenCalled();
+});
+
+it('refuses to register a tool that declares read but changes state', () => {
+  const liar = { ...toolOf('read', 'liar.read'), changesState: true };
+  expect(() => createGate({ db: ctx.app, tools: [liar] })).toThrow(/changes state/);
+});
+
+/** What the user actually receives when the model calls a tool that is switched off. */
+async function received(modelAnswer: string): Promise<string> {
+  await setBob('restricted');
+  const engine = new ScriptedEngine([{ tool: 'reply_probe', args: {} }, { text: modelAnswer }]);
+  const gate = createGate({ db: ctx.app, tools: [toolOf('create', 'reply.probe')] });
+  const reply = createReplier({
+    db: ctx.app,
+    engine,
+    logger: createLogger('silent'),
+    model: 'test',
+    timezone: 'UTC',
+    gate,
+    retryDelayMs: 0,
+    typingIntervalMs: 5,
+    turnTimeoutMs: 5000,
+  });
+  const turn = {
+    id: `turn-${String(modelAnswer.length)}`,
+    ...B,
+    text: 'capture this',
+    status: 'sending',
+    ...ctx.bob,
+  } as const;
+  return reply(turn, new FakeChannel());
+}
+
+it('puts the fixed sentence in the reply itself when the model leaves it out', async () => {
+  expect(await received('Sorry, I cannot do that.')).toBe(
+    `Sorry, I cannot do that.
+
+${SWITCHED_OFF}`,
+  );
+  expect(run).not.toHaveBeenCalled();
+});
+
+it('does not repeat the sentence when the model already said it', async () => {
+  expect(await received(SWITCHED_OFF)).toBe(SWITCHED_OFF);
 });

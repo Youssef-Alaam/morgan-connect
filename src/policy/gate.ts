@@ -46,6 +46,8 @@ export interface Gate {
   /** The tools for one turn. They are the only way the engine can reach a tool. */
   toolsFor: (caller: Caller) => EngineTool[];
   /** For a tool name the model made up: refused, and recorded. */
+  /** True once if a tool call in this turn was refused because the profile has it off. */
+  takeSwitchedOff: (turnId: string) => boolean;
   unknownTool: (caller: Caller) => (name: string, args: Record<string, unknown>) => Promise<string>;
 }
 
@@ -69,8 +71,24 @@ function checkTools(tools: readonly ToolDefinition[]): void {
     if (!(ACTION_TYPES as readonly string[]).includes(tool.actionType)) {
       throw new Error(`Tool ${tool.name} has an unknown action type`);
     }
+    if (tool.actionType === 'read' && tool.changesState) {
+      throw new Error(`Tool ${tool.name} changes state but is declared as a read`);
+    }
     if (names.has(engineName(tool.name))) throw new Error(`Two tools are named ${tool.name}`);
     names.add(engineName(tool.name));
+  }
+}
+
+/** The person's profile on this chat decides; a chat nobody linked gets `off`. */
+async function decisionFor(db: Db, caller: Caller, tool: ToolDefinition): Promise<Mode> {
+  try {
+    const owner = await ownerOf(db, caller);
+    if (owner === undefined) return 'off';
+    const { modes } = await profileFor(db, owner, caller);
+    return decide(modes, tool.actionType);
+  } catch {
+    // Fail closed: a profile that cannot be read never lets a tool run.
+    return 'off';
   }
 }
 
@@ -84,14 +102,8 @@ export function createGate(options: GateOptions): Gate {
   const timeoutMs = options.toolTimeoutMs ?? 30_000;
   checkTools(tools);
   const recorder = createRecorder(db, logger);
-
-  /** The person's profile on this chat decides; a chat nobody linked gets `off`. */
-  async function decisionFor(caller: Caller, tool: ToolDefinition): Promise<Mode> {
-    const owner = await ownerOf(db, caller);
-    if (owner === undefined) return 'off';
-    const { modes } = await profileFor(db, owner, caller);
-    return decide(modes, tool.actionType);
-  }
+  /** Turns in which the user must be told something was switched off (read once by the reply). */
+  const switchedOff = new Set<string>();
 
   async function invoke(
     tool: ToolDefinition,
@@ -99,14 +111,17 @@ export function createGate(options: GateOptions): Gate {
     args: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<string | EngineToolOutput> {
-    const decision = await decisionFor(caller, tool);
+    const decision = await decisionFor(db, caller, tool);
     const call = { caller, tool, args, decision };
     const stopped = await beforeRun(
       { decision, approvals, signal },
       { caller, tool, args },
       recorder,
     );
-    if (stopped !== undefined) return stopped;
+    if (stopped !== undefined) {
+      if (decision === 'off' && caller.turnId !== undefined) switchedOff.add(caller.turnId);
+      return stopped;
+    }
     const ran = await runGuarded(tool, args, signal, timeoutMs);
     const outcome = ran.kind === 'ok' ? 'ok' : ran.kind === 'aborted' ? 'aborted' : 'error';
     await recorder.recordAfterRun({ ...call, outcome });
@@ -119,6 +134,7 @@ export function createGate(options: GateOptions): Gate {
   }
 
   return {
+    takeSwitchedOff: (turnId) => switchedOff.delete(turnId),
     toolsFor: (caller) =>
       tools.map((tool) => ({
         name: engineName(tool.name),
