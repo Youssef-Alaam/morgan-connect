@@ -88,7 +88,15 @@ export { planCompaction, saveSummary, type CompactionPlan } from './compaction.j
 export { conversationFor, endConversation } from './conversations.js';
 export { appendAudit, type AuditEntry } from './audit.js';
 export { DEFAULT_TASK_CAP, TASK_CAP_FUNCTIONS, setTaskCap, taskCapOf } from './task-cap.js';
-export { BUDGET_FUNCTIONS, budgetOf, isAdmin, setBudget } from './budgets.js';
+export {
+  BUDGET_FUNCTIONS,
+  budgetOf,
+  budgetSummary,
+  isAdmin,
+  setBudget,
+  type BudgetLine,
+  type BudgetSummary,
+} from './budgets.js';
 export {
   TOPUP_FUNCTIONS,
   cancelTopup,

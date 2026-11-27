@@ -15,6 +15,7 @@ import { createFailureLimiter } from '../identity/limiter.js';
 import { chatRoutes, type ChatDeps } from './chat.js';
 import { createPasswordHasher } from '../identity/password.js';
 import { adminRoutes } from './admin.js';
+import { budgetRoutes } from './budgets.js';
 import { deviceRoutes } from './devices.js';
 import { passkeyAccountRoutes, passkeySignInRoutes } from './passkeys.js';
 import { memberRoutes } from './members.js';
@@ -140,6 +141,7 @@ export function authRoutes(deps: AuthDeps, chat?: Omit<ChatDeps, 'db'>): Hono<Si
   memberRoutes(routes, deps, shared);
   if (chat !== undefined) chatRoutes(routes, { ...chat, db });
   adminRoutes(routes, deps);
+  budgetRoutes(routes, deps);
   deviceRoutes(routes, deps);
   profileRoutes(routes, deps);
   twoFactorRoutes(routes, deps, two);
