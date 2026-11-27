@@ -61,6 +61,26 @@ export async function standing(): Promise<Standing> {
   return answer.error === PASSWORD_CHANGE ? 'change' : 'unknown';
 }
 
+export interface TwoFactorStatus {
+  /** False when this install has no key to keep the secret with. */
+  available: boolean;
+  enabled: boolean;
+}
+
+export function twoFactorStatus(): Promise<Result<TwoFactorStatus>> {
+  return call('/two-factor');
+}
+
+/** The key to type (or open as `uri`) in an authenticator app; nothing is on until `confirmTwoFactor`. */
+export function startTwoFactor(): Promise<Result<{ secret: string; uri: string }>> {
+  return call('/two-factor/setup', {});
+}
+
+/** The first code turns it on; the answer holds the backup codes, shown once and never again. */
+export function confirmTwoFactor(code: string): Promise<Result<{ backupCodes: string[] }>> {
+  return call('/two-factor/confirm', { code });
+}
+
 /** Ends this browser's session. */
 export function signOut(): Promise<Result<unknown>> {
   return call('/sign-out', {});
