@@ -88,20 +88,28 @@ async function apply(
 ): Promise<boolean> {
   const at = (options.now ?? (() => new Date()))();
   if (!(await decideApproval(options.db, { ...answer, now: at }))) return false;
+  const logFailure = (what: string) => (): undefined => {
+    options.logger?.warn({ topupId: topup.topupId }, what);
+    return undefined;
+  };
   const resolved = await settle(options, admin, topup, { ...answer, now: at }).catch(
-    () => undefined,
+    logFailure('top-up answer not applied'),
   );
   if (resolved === undefined) {
     // The tap counted but the answer did not take: close the request, so the member can ask again
     // instead of waiting for it to lapse. If even that fails, it lapses at its own time.
-    await resolveTopup(options.db, admin, topup.topupId, 'refused').catch(() => undefined);
+    await resolveTopup(options.db, admin, topup.topupId, 'refused').catch(
+      logFailure('top-up request not closed'),
+    );
     return false;
   }
   const text =
     answer.decision === 'approved'
       ? `${formatUsd(resolved.amountUsd)} was added to this month's limit. Carry on.`
       : 'The admin said no to more this month.';
-  await options.tell(resolved.channel, resolved.chatId, text).catch(() => undefined);
+  await options
+    .tell(resolved.channel, resolved.chatId, text)
+    .catch(logFailure('top-up reply not sent'));
   return true;
 }
 

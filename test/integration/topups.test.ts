@@ -87,6 +87,7 @@ const makeTopups = (): Topups =>
 
 beforeEach(async () => {
   asked = [];
+  warned.length = 0;
   told = [];
   failAsking = false;
   clock = start;
@@ -284,6 +285,7 @@ it('closes the request when the answer cannot be applied, so the member can ask 
   expect(told).toEqual([]);
   const rows = await owner.selectFrom('budget_topups').select('status').execute();
   expect(rows).toEqual([{ status: 'refused' }]);
+  expect(warned.map((w) => w[1])).toEqual(['top-up answer not applied']);
   expect(await limitNow()).toMatchObject({ allowed: false, limitUsd: '1.00000000' });
   expect(await topups.ask(memberChat)).toBe('sent');
 });
