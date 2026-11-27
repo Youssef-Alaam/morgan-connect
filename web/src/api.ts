@@ -81,6 +81,11 @@ export function confirmTwoFactor(code: string): Promise<Result<{ backupCodes: st
   return call('/two-factor/confirm', { code });
 }
 
+/** Turning it off takes a current authenticator code or an unused backup code. */
+export function disableTwoFactor(code: string): Promise<Result<unknown>> {
+  return call('/two-factor/disable', { code });
+}
+
 /** Ends this browser's session. */
 export function signOut(): Promise<Result<unknown>> {
   return call('/sign-out', {});

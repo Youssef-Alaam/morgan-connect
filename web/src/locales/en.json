@@ -182,6 +182,7 @@
       "on": "On",
       "off": "Off",
       "turnOn": "Turn on",
+      "turnOff": "Turn off",
       "cancel": "Cancel",
       "secret": "Setup key",
       "secretHint": "Type this key into your authenticator app, or open it there.",
@@ -190,7 +191,9 @@
       "confirm": "Confirm",
       "codesTitle": "Your backup codes",
       "codesHint": "Save these now. Each works once if you lose the app. They are not shown again.",
-      "saved": "I saved them"
+      "saved": "I saved them",
+      "disableCode": "Authenticator or backup code",
+      "disableHint": "A current code from the app, or an unused backup code."
     }
   },
   "change": {

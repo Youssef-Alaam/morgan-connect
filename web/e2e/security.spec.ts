@@ -102,6 +102,20 @@ test('a wrong first code is refused in words and the setup stays', async ({ page
   await expect(page.getByText(SECRET)).toBeVisible();
 });
 
+test('turning it off needs a code, and Cancel leaves it on', async ({ page }, info) => {
+  const on = { available: true, enabled: true };
+  const posted = await script(page, [on, { available: true, enabled: false }]);
+  await openSecurity(page, info);
+  await page.getByRole('button', { name: 'Turn off' }).click();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByText('On', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Turn off' }).click();
+  await page.getByLabel('Authenticator or backup code').fill('aaaa-1111-bbbb');
+  await page.getByRole('button', { name: 'Turn off' }).last().click();
+  await expect(page.getByText('Off', { exact: true })).toBeVisible();
+  expect(posted).toEqual([`disable ${JSON.stringify({ code: 'aaaa-1111-bbbb' })}`]);
+});
+
 test('an install without a key says so, and Back returns to the chat', async ({ page }, info) => {
   await script(page, [{ available: false, enabled: false }]);
   await openSecurity(page, info);
