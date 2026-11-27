@@ -15,6 +15,7 @@ import {
   claimTurn,
   createDb,
   createTurnQueue,
+  expireStaleTurns,
   finishTurn,
   getTurn,
   insertTurn,
@@ -362,4 +363,29 @@ it('fails a turn claimed long ago by a dead worker, which frees the slot', async
     await setTaskCap(db, admin, member.userId, null);
     await queue.stop();
   }
+});
+
+it('starts even when the old queue cannot be deleted, and reports it', async () => {
+  const old = new PgBoss({ connectionString: postgres.url });
+  old.on('error', () => undefined);
+  await old.start();
+  await old.createQueue('turn', { policy: 'standard' });
+  await old.stop({ graceful: false });
+  const spy = vi.spyOn(PgBoss.prototype, 'deleteQueue').mockRejectedValue(new Error('no rights'));
+  const errors: Error[] = [];
+  const queue = createTurnQueue(postgres.url, (error) => errors.push(error));
+  try {
+    await queue.start();
+    expect(errors.map((error) => error.message)).toEqual(['no rights']);
+  } finally {
+    spy.mockRestore();
+    await queue.stop();
+  }
+});
+
+it('never sweeps a claim younger than a minute, whatever age is asked for', async () => {
+  const [a = ''] = await queued('M1', 1);
+  await claimTurn(db, member, a);
+  expect(await expireStaleTurns(db, 0)).toBe(0);
+  expect(await status(member, a)).toBe('sending');
 });

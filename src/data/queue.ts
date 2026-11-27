@@ -33,6 +33,15 @@ export interface QueueTuning {
   superviseIntervalSeconds: number;
 }
 
+/** The old queue's jobs are never read. Best effort: a failure is reported, never stops start. */
+async function dropOldQueue(boss: PgBoss, onError: (error: Error) => void): Promise<void> {
+  try {
+    if ((await boss.getQueue(OLD_QUEUE)) !== null) await boss.deleteQueue(OLD_QUEUE);
+  } catch (error) {
+    onError(error instanceof Error ? error : new Error('could not delete the old queue'));
+  }
+}
+
 /** Install or upgrade the queue's tables. Run as the owner role, so the app role never needs CREATE on the database. */
 export async function installQueueSchema(ownerUrl: string): Promise<void> {
   const boss = new PgBoss({ connectionString: ownerUrl });
@@ -63,7 +72,7 @@ export function createTurnQueue(
     start: async () => {
       await boss.start();
       // The old queue's jobs are never read; boot re-queues every queued turn into the new one.
-      if ((await boss.getQueue(OLD_QUEUE)) !== null) await boss.deleteQueue(OLD_QUEUE);
+      await dropOldQueue(boss, onError);
       await boss.createQueue(QUEUE, {
         notify: true,
         // One redelivery is enough: a redelivered turn is claimed once and never re-sent, and
