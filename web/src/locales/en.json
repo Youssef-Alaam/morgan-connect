@@ -253,6 +253,26 @@
     "unlinkNamed": "Unlink {{channel}} chat of {{person}}",
     "cancel": "Cancel",
     "confirmUnlink": "Unlink this chat?",
-    "confirmUnlinkText": "The {{channel}} chat of {{person}} stops reaching Morgan. They can link it again with a new code."
+    "confirmUnlinkText": "The {{channel}} chat of {{person}} stops reaching Morgan. They can link it again with a new code.",
+    "invites": {
+      "title": "Invite links",
+      "none": "No open invites.",
+      "caption": "Open invite links",
+      "limit": "Monthly limit (USD)",
+      "noLimit": "No limit",
+      "expires": "Expires (UTC)",
+      "actions": "Actions",
+      "revoke": "Revoke",
+      "revokeNamed": "Revoke the invite that expires {{when}}",
+      "hours": "Link lasts (hours)",
+      "limitHint": "Leave empty for no limit.",
+      "create": "Create invite link",
+      "link": "Invite link",
+      "linkHint": "Send it to the person. It works once and is not shown again.",
+      "copy": "Copy link",
+      "copied": "Copied.",
+      "confirmRevoke": "Revoke this invite?",
+      "confirmRevokeText": "The link that expires {{when}} stops working. Anyone you sent it to can no longer join with it."
+    }
   }
 }

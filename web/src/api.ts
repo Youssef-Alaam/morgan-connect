@@ -141,6 +141,31 @@ export function unlinkDevice(id: string): Promise<Result<unknown>> {
   return call(`/devices/${encodeURIComponent(id)}`, undefined, 'DELETE');
 }
 
+export interface PendingInvite {
+  id: string;
+  monthlyLimitUsd?: number;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/** The invites nobody has used yet. */
+export function listInvites(): Promise<Result<{ invites: PendingInvite[] }>> {
+  return call('/admin/invites');
+}
+
+/** A new invite; the answer holds its one-time token, which the server never shows again. */
+export function createInvite(
+  monthlyLimitUsd: number | null,
+  ttlHours: number,
+): Promise<Result<{ token: string; ttlHours: number }>> {
+  return call('/invites', { monthlyLimitUsd, ttlHours });
+}
+
+/** A 404 means it was used or revoked meanwhile. */
+export function revokeInvite(id: string): Promise<Result<unknown>> {
+  return call(`/admin/invites/${encodeURIComponent(id)}`, undefined, 'DELETE');
+}
+
 /** Ends this browser's session. */
 export function signOut(): Promise<Result<unknown>> {
   return call('/sign-out', {});

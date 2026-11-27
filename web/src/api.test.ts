@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   changePassword,
+  createInvite,
   decideApproval,
   listPasskeys,
+  listInvites,
+  revokeInvite,
   removePasskey,
   secondFactor,
   signIn,
@@ -95,6 +98,23 @@ describe('the account calls', () => {
     expect(sent().init).toEqual({ method: 'DELETE' });
     await removePasskey('a/b');
     expect(vi.mocked(fetch).mock.calls[1]?.[0]).toBe('/api/passkeys/a%2Fb');
+  });
+
+  it('makes invites, lists and revokes open invites', async () => {
+    answer(200, { token: 't', ttlHours: 72 });
+    await createInvite(5, 72);
+    expect(sent().path).toBe('/api/invites');
+    expect(sent().init.body).toBe(JSON.stringify({ monthlyLimitUsd: 5, ttlHours: 72 }));
+    answer(200, { invites: [] });
+    await listInvites();
+    expect(sent().path).toBe('/api/admin/invites');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(null, { status: 204 }))),
+    );
+    await revokeInvite('a/b');
+    expect(sent().path).toBe('/api/admin/invites/a%2Fb');
+    expect(sent().init).toEqual({ method: 'DELETE' });
   });
 
   it('turns an error answer into its status and error word', async () => {

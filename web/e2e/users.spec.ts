@@ -30,6 +30,7 @@ const people = () => [
 async function script(page: Page, role: string): Promise<string[]> {
   await signedIn(page);
   await page.route('**/api/me', (route) => route.fulfill({ json: { user: { role } } }));
+  await page.route('**/api/admin/invites', (route) => route.fulfill({ json: { invites: [] } }));
   const unlinked: string[] = [];
   await page.route('**/api/admin/people', (route) =>
     route.fulfill(
@@ -60,8 +61,10 @@ test('the admin sees everyone with role, status and chats, and unlinks a chat', 
   await page.getByRole('button', { name: 'People' }).click();
   await expect(page.getByRole('heading', { name: 'People' })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'sara@example.test', exact: true })).toBeVisible();
-  await expect(page.getByText('Temporary password')).toBeVisible();
-  await expect(page.locator('main')).toHaveScreenshot('users-list.png');
+  await expect(page.getByText('Temporary password', { exact: true })).toBeVisible();
+  await expect(page.getByRole('table', { name: 'Everyone in your workspace' })).toHaveScreenshot(
+    'users-list.png',
+  );
   await noViolations(page);
   await page.getByRole('button', { name: 'Unlink telegram chat of sara@example.test' }).click();
   const ask = page.getByRole('dialog', { name: 'Unlink this chat?' });
