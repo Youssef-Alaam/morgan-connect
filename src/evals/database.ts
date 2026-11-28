@@ -1,4 +1,6 @@
+import { ok as assert } from 'node:assert';
 import { randomBytes } from 'node:crypto';
+import { sql } from 'kysely';
 import {
   assertRlsApplies,
   createDb,
@@ -6,6 +8,9 @@ import {
   migrateToLatest,
   type Db,
 } from '../data/index.js';
+
+/** Not `morgan_app`: a role belongs to the whole server, and a real install's app role may share it. */
+const EVAL_ROLE = 'morgan_eval_app';
 
 export interface EvalDatabase {
   /** The owner role, which sees every row: for checks only, never handed to the runner. */
@@ -23,20 +28,20 @@ export interface EvalDatabase {
 export async function openEvalDatabase(ownerUrl: string): Promise<EvalDatabase> {
   const owner = createDb(ownerUrl);
   const url = new URL(ownerUrl);
-  url.username = 'morgan_app';
+  url.username = EVAL_ROLE;
   url.password = randomBytes(18).toString('hex');
+  let app: Db | undefined;
   try {
     await migrateToLatest(owner);
+    const taken = await sql<{
+      n: string;
+    }>`select count(*) as n from pg_roles where rolname = ${EVAL_ROLE}`.execute(owner);
+    assert(taken.rows[0]?.n === '0', `The role ${EVAL_ROLE} exists: use a fresh throwaway server`);
     await ensureAppRole(owner, url.toString());
-  } catch (error) {
-    await owner.destroy();
-    throw error;
-  }
-  const app = createDb(url.toString());
-  try {
+    app = createDb(url.toString());
     await assertRlsApplies(app);
   } catch (error) {
-    await app.destroy();
+    await app?.destroy();
     await owner.destroy();
     throw error;
   }
