@@ -27,7 +27,7 @@ import {
   type Db,
   type TurnQueue,
 } from './data/index.js';
-import { type AppDeps, type ChatDeps, createApp } from './http/index.js';
+import { type AppDeps, type ChatDeps, createApp, providersFrom } from './http/index.js';
 import {
   createAnthropicEngine,
   createGate,
@@ -277,11 +277,12 @@ function listen(
 /** The optional sign-in features the config switches on (second-factor key, passkeys), and the budget figures the admin page shows. */
 function signInSettings(
   config: Config,
-): Pick<NonNullable<AppDeps['auth']>, 'twoFactorKey' | 'passkeys' | 'budgets'> {
+): Pick<NonNullable<AppDeps['auth']>, 'twoFactorKey' | 'passkeys' | 'budgets' | 'providers'> {
   const { TWO_FACTOR_KEY: key, WEBAUTHN_RP_ID: rpId, WEBAUTHN_ORIGIN: origin } = config;
   return {
     twoFactorKey: key === undefined ? undefined : Buffer.from(key, 'base64'),
     passkeys: rpId === undefined || origin === undefined ? undefined : { rpId, origin },
+    providers: providersFrom(config),
     budgets: {
       timezone: config.TIMEZONE,
       defaultLimitUsd: config.DEFAULT_MONTHLY_LIMIT_USD,
