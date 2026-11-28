@@ -18,7 +18,9 @@ export type Preset = (typeof PRESETS)[number];
 
 /** The profile that applies to one device: what each action type may do, and the shell-gate level. */
 export interface AccessProfile {
+  /** With `custom`, the preset the admin started from; the modes are their own. */
   preset: Preset;
+  custom: boolean;
   modes: Profile;
   shellGate: ShellGate;
 }
@@ -37,21 +39,43 @@ export function presetFor(assigned: Assigned): Preset {
   return isPreset(chosen) ? chosen : defaultPreset(assigned.role);
 }
 
-/** A stored preset as a profile. A type it does not list, or lists with an unknown mode, is `off`. */
-const toProfile = (row: PresetRow | undefined): Profile =>
+/** Stored modes as a profile. A type they do not list, or list with an unknown mode, is `off`. */
+const toProfile = (modes: Readonly<Record<string, unknown>> | undefined): Profile =>
   Object.fromEntries(
     ACTION_TYPES.map((type) => {
-      const mode: unknown = row?.modes[type];
+      const mode: unknown = modes?.[type];
       return [type, isMode(mode) ? mode : 'off'];
     }),
   ) as Profile;
 
-/** The profile an assignment resolves to, from the stored presets. */
+/** The profile an assignment resolves to: its own custom modes, else the stored preset's. */
 function resolve(presets: PresetRow[], assigned: Assigned): AccessProfile {
   const preset = presetFor(assigned);
   const stored = presets.find((row) => row.preset === preset);
-  return { preset, modes: toProfile(stored), shellGate: stored?.shellGate ?? 'risky_only' };
+  const own = assigned.devicePreset === undefined ? assigned.personModes : assigned.deviceModes;
+  return {
+    preset,
+    custom: own !== undefined,
+    modes: toProfile(own ?? stored?.modes),
+    shellGate: stored?.shellGate ?? 'risky_only',
+  };
 }
+
+/** Custom modes as sent by the admin's page: every action type exactly once, each a known mode. */
+export function asModes(value: unknown): Profile | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const entries = Object.entries(value);
+  const known = entries.every(
+    ([type, mode]) => ACTION_TYPES.some((t) => t === type) && isMode(mode),
+  );
+  return known && entries.length === ACTION_TYPES.length
+    ? toProfile(Object.fromEntries(entries))
+    : undefined;
+}
+
+/** Nothing but reading left on: Restricted, or custom modes that amount to it. */
+const shut = (modes: Profile): boolean =>
+  ACTION_TYPES.every((type) => type === 'read' || decide(modes, type) === 'off');
 
 /**
  * The profile for this person on this chat (the gate's question in M2-9b). A damaged preset row
@@ -88,8 +112,22 @@ export function loosened(before: Profile, after: Profile): RiskWarning[] {
 export interface Assignment {
   previous: Preset;
   preset: Preset;
+  custom: boolean;
   warnings: RiskWarning[];
 }
+
+/** A choice: a preset, or custom modes per action type (with the preset they started from). */
+interface Target {
+  userId: string;
+  deviceId?: string | undefined;
+  preset: Preset;
+  modes?: Profile | undefined;
+}
+
+const modesOf = (presets: PresetRow[], target: Target): Profile =>
+  target.modes === undefined
+    ? toProfile(presets.find((row) => row.preset === target.preset)?.modes)
+    : toProfile(target.modes);
 
 /**
  * The admin sets a preset for a person, or for one of their devices. Undefined when refused. The
@@ -99,17 +137,18 @@ export interface Assignment {
 export async function assignProfile(
   db: Db,
   caller: Owner,
-  target: { userId: string; deviceId?: string | undefined; preset: Preset },
+  target: Target,
 ): Promise<Assignment | undefined> {
-  const before = await assignPreset(db, caller, target);
+  const { modes, ...rest } = target;
+  const before = await assignPreset(db, caller, modes === undefined ? rest : { ...rest, modes });
   if (before === undefined) return undefined;
   const presets = await listPresets(db);
-  const modesOf = (name: Preset): Profile => toProfile(presets.find((row) => row.preset === name));
-  const previous = presetFor(before);
+  const previous = resolve(presets, before);
   return {
-    previous,
+    previous: previous.preset,
     preset: target.preset,
-    warnings: loosened(modesOf(previous), modesOf(target.preset)),
+    custom: modes !== undefined,
+    warnings: loosened(previous.modes, modesOf(presets, target)),
   };
 }
 
@@ -121,7 +160,7 @@ export async function assignProfile(
 export async function previewProfile(
   db: Db,
   caller: Owner,
-  target: { userId: string; deviceId?: string | undefined; preset: Preset },
+  target: Target,
 ): Promise<(Assignment & { refused: boolean }) | undefined> {
   const current = await profilesOf(db, caller, target.userId);
   if (current === undefined) return undefined;
@@ -131,12 +170,13 @@ export async function previewProfile(
       : current.devices.find((device) => device.deviceId === target.deviceId);
   if (now === undefined) return undefined;
   const presets = await listPresets(db);
-  const next = toProfile(presets.find((row) => row.preset === target.preset));
-  // The database refuses an admin making themselves Restricted, person or device (migration 0024).
-  const refused = target.userId === caller.userId && target.preset === 'restricted';
+  const next = modesOf(presets, target);
+  // The database refuses an admin shutting themselves out, person or device (migration 0040).
+  const refused = target.userId === caller.userId && shut(next);
   return {
     previous: now.preset,
     preset: target.preset,
+    custom: target.modes !== undefined,
     warnings: loosened(now.modes, next),
     refused,
   };
@@ -158,11 +198,15 @@ export async function profilesOf(
   const overview = await overviewOf(db, caller, userId);
   if (overview === undefined) return undefined;
   const presets = await listPresets(db);
-  const base = { role: overview.role, personPreset: overview.personPreset };
+  const base = {
+    role: overview.role,
+    personPreset: overview.personPreset,
+    personModes: overview.personModes,
+  };
   return {
     person: resolve(presets, { ...base, devicePreset: undefined }),
     devices: overview.devices.map((device) => ({
-      ...resolve(presets, { ...base, devicePreset: device.preset }),
+      ...resolve(presets, { ...base, devicePreset: device.preset, deviceModes: device.modes }),
       deviceId: device.id,
       channel: device.channel,
       own: device.preset !== undefined,

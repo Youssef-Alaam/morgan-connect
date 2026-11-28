@@ -1,16 +1,36 @@
 import { type Hono } from 'hono';
 import { z } from 'zod';
 import { isAdmin, listPresets } from '../data/index.js';
-import { assignProfile, PRESETS, previewProfile, profilesOf } from '../policy/index.js';
+import { asModes, assignProfile, PRESETS, previewProfile, profilesOf } from '../policy/index.js';
 import { type AuthDeps, type Signed } from './session.js';
 
 const userId = z.uuid();
+// Custom modes name every action type, each off, ask or auto, and nothing else.
+const modes = z.unknown().transform((value, ctx) => {
+  const parsed = asModes(value);
+  if (parsed === undefined) ctx.addIssue({ code: 'custom', message: 'bad modes' });
+  return parsed ?? z.NEVER;
+});
+const json = z.string().transform((text, ctx) => {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return parsed;
+  } catch {
+    ctx.addIssue({ code: 'custom', message: 'not json' });
+    return z.NEVER;
+  }
+});
 const preview = z.object({
   userId: z.uuid(),
   deviceId: z.uuid().optional(),
   preset: z.enum(PRESETS),
+  modes: json.pipe(modes).optional(),
 });
-const choice = z.object({ preset: z.enum(PRESETS), deviceId: z.uuid().optional() });
+const choice = z.object({
+  preset: z.enum(PRESETS),
+  deviceId: z.uuid().optional(),
+  modes: modes.optional(),
+});
 
 /**
  * Access profiles (M2-9a). Anyone signed in reads their own; the admin reads and sets anyone's in
