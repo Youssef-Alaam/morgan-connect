@@ -196,6 +196,8 @@ export interface PresetRow {
 /** The profile that applies to a person, and to each of their chats (`own`: chosen for that chat). */
 interface Applied {
   preset: Preset;
+  /** The admin set the modes per action type; `preset` is the one they started from. */
+  custom: boolean;
   modes: Record<string, Mode>;
 }
 export interface Profiles {

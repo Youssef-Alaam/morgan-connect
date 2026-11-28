@@ -6,6 +6,8 @@ export interface Choice {
   userId: string;
   deviceId?: string;
   preset: Preset;
+  /** Off / ask / auto per action type, instead of the preset's own. */
+  modes?: Record<string, Mode>;
 }
 
 export interface Preview {
@@ -18,6 +20,7 @@ export interface Preview {
 export function previewProfile(choice: Choice): Promise<Result<Preview>> {
   const query = new URLSearchParams({ userId: choice.userId, preset: choice.preset });
   if (choice.deviceId !== undefined) query.set('deviceId', choice.deviceId);
+  if (choice.modes !== undefined) query.set('modes', JSON.stringify(choice.modes));
   return call(`/admin/profile-preview?${query.toString()}`);
 }
 

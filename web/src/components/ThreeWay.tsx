@@ -68,7 +68,7 @@ export function ThreeWay({ label, value, labels, onChange, risk }: ThreeWayProps
         ))}
       </div>
       {risk === undefined ? null : (
-        <p id={riskId} className="risk">
+        <p id={riskId} className="risk" dir="auto">
           {risk}
         </p>
       )}

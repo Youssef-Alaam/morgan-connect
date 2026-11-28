@@ -125,10 +125,13 @@
 }
 
 .three-way {
+  --three-way-pad: var(--border-width);
   display: inline-flex;
+  align-self: flex-start;
+  inline-size: max-content;
+  padding: var(--three-way-pad);
   border: var(--border-width) solid var(--input-border);
   border-radius: var(--radius);
-  overflow: hidden;
 }
 
 .three-way-option {
@@ -139,12 +142,14 @@
   color: var(--text);
   font: inherit;
   font-weight: 700;
+  border-radius: calc(var(--radius) - var(--three-way-pad) - var(--border-width));
   cursor: pointer;
 }
 
+/* Neutral, not the accent: the accent is kept for Save when a change carries risk. */
 .three-way-option[aria-checked='true'] {
-  background: var(--accent);
-  color: var(--onAccent);
+  background: var(--text);
+  color: var(--surface);
 }
 
 .three-way-option:focus-visible {
@@ -388,4 +393,13 @@
 .approval-actions {
   display: flex;
   gap: var(--space-2);
+}
+
+.visually-hidden {
+  position: absolute;
+  inline-size: var(--border-width);
+  block-size: var(--border-width);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
