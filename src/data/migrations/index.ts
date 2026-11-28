@@ -39,6 +39,7 @@ import { up as adminAnswerTopup } from './0038-admin-answer-topup.js';
 import { up as adminAuditList } from './0039-admin-audit-list.js';
 import { up as customProfiles } from './0040-custom-profiles.js';
 import { up as routes } from './0041-routes.js';
+import { up as providersState } from './0042-providers-state.js';
 
 /** Applied in key order. Add new migrations here with the next number. */
 export const migrations: Record<string, Migration> = {
@@ -82,4 +83,5 @@ export const migrations: Record<string, Migration> = {
   '0039-admin-audit-list': { up: adminAuditList },
   '0040-custom-profiles': { up: customProfiles },
   '0041-routes': { up: routes },
+  '0042-providers-state': { up: providersState },
 };

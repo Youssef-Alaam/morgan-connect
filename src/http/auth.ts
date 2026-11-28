@@ -21,6 +21,7 @@ import { deviceRoutes } from './devices.js';
 import { passkeyAccountRoutes, passkeySignInRoutes } from './passkeys.js';
 import { memberRoutes } from './members.js';
 import { profileRoutes } from './profiles.js';
+import { providerRoutes } from './providers.js';
 import {
   addressOf,
   COOKIE,
@@ -145,6 +146,7 @@ export function authRoutes(deps: AuthDeps, chat?: Omit<ChatDeps, 'db'>): Hono<Si
   auditRoutes(routes, deps);
   adminChatRoute(routes, deps);
   budgetRoutes(routes, deps);
+  providerRoutes(routes, deps);
   topupAnswerRoute(routes, deps);
   deviceRoutes(routes, deps);
   profileRoutes(routes, deps);
