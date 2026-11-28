@@ -4,6 +4,7 @@ import { ADMIN_READ_FUNCTIONS } from './admin-read.js';
 import { AUDIT_VIEW_FUNCTIONS } from './audit-view.js';
 import { BUDGET_FUNCTIONS } from './budgets.js';
 import { DEVICE_FUNCTIONS } from './devices.js';
+import { ROUTE_FUNCTIONS } from './routes.js';
 import { PROFILE_FUNCTIONS } from './profiles.js';
 import { TASK_CAP_FUNCTIONS } from './task-cap.js';
 import { ACCOUNT_FUNCTIONS } from './invites.js';
@@ -21,6 +22,7 @@ const NAMED_FUNCTIONS = [
   ...TASK_CAP_FUNCTIONS,
   ...TOPUP_FUNCTIONS,
   ...AUDIT_VIEW_FUNCTIONS,
+  ...ROUTE_FUNCTIONS,
 ];
 
 export interface AppCredentials {
@@ -99,9 +101,9 @@ export async function ensureAppRole(owner: Db, databaseUrl: string): Promise<voi
     await sql`revoke update, delete on public.budgets from ${who}`.execute(trx);
     // Top-ups are read by their owner never written directly: only the named request functions write (no insert policy).
     await sql`revoke update, delete on public.budget_topups from ${who}`.execute(trx);
-    // The migration books are the owner's alone to write.
+    // The migration books are the owner's alone to write, and a route's switch only admin_set_route's.
     await sql`revoke insert, update, delete, truncate on public.schema_info, public.kysely_migration,
-      public.kysely_migration_lock from ${who}`.execute(trx);
+      public.kysely_migration_lock, public.routes from ${who}`.execute(trx);
     if (state.boss) await grantQueueSchema(trx, who);
   });
 }

@@ -1,5 +1,6 @@
 import { appendAudit, type Db, type Turn } from '../data/index.js';
 import type { Logger } from '../ops/index.js';
+import { refusedForRoute } from './route-reply.js';
 import { checkBudget, type KeySource } from '../policy/index.js';
 
 export const BUDGET_REPLY = "You've reached this month's limit.";
@@ -55,4 +56,12 @@ export async function refusedForBudget(
     deps.logger.warn({ turnId: turn.id }, 'budget refusal not audited');
   }
   return { text: BUDGET_REPLY, askMore: true };
+}
+
+/** The checks before any model call, in order: the route is on, then the person is within their limit. */
+export async function refusedBeforeModel(
+  deps: Parameters<typeof refusedForBudget>[0] & { route?: string | undefined },
+  turn: Turn,
+): Promise<ReplyResult | undefined> {
+  return (await refusedForRoute(deps, turn)) ?? (await refusedForBudget(deps, turn));
 }

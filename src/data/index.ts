@@ -21,6 +21,7 @@ export {
   turnOwner,
   expireStaleTurns,
 } from './system.js';
+export { routeEnabled, setRoute } from './routes.js';
 export { listAudit, type AuditFilter, type AuditPage, type AuditRow } from './audit-view.js';
 export { accountOf, createSession, endSession, type Account } from './accounts.js';
 export {
