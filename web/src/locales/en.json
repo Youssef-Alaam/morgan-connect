@@ -309,7 +309,7 @@
     "off": "Off",
     "ask": "Ask",
     "auto": "Auto",
-    "allows": "What {{preset}} allows",
+    "allows": "What {{target}} may do",
     "action": "Action",
     "mode": "Setting",
     "type": {
@@ -320,7 +320,26 @@
       "send": "Send",
       "execute": "Run commands"
     },
-    "inherits": "{{preset}}, same as the person"
+    "inherits": "{{preset}}, same as the person",
+    "risk": "Risk",
+    "review": "Change for {{target}}",
+    "confirmText": "Set {{target}} to {{preset}}?",
+    "refused": "You cannot turn off everything but reading for yourself. Leave at least one other action on.",
+    "save": "Save",
+    "cancel": "Cancel",
+    "forChatInherited": "Their {{channel}} chat, same as the person",
+    "modeFor": "{{type}} setting",
+    "custom": "Custom",
+    "perAction": "Per action",
+    "edit": "Edit",
+    "editFor": "per action for {{target}}",
+    "loosens_one": "This loosens 1 action type; its risk is shown above.",
+    "loosens_other": "This loosens {{count}} action types; each risk is shown above.",
+    "channel": {
+      "telegram": "Telegram",
+      "whatsapp": "WhatsApp",
+      "web": "Web"
+    }
   },
   "budgets": {
     "title": "Budgets and usage",
@@ -457,6 +476,34 @@
       "name": {
         "telegram": "Telegram",
         "web": "Web chat"
+      }
+    }
+  },
+  "profile": {
+    "risk": {
+      "create": {
+        "auto": "Auto lets Morgan create notes and files without asking first. Use it only for things you can undo.",
+        "ask": "Ask lets Morgan do this once the person approves each time."
+      },
+      "overwrite": {
+        "auto": "Auto lets Morgan overwrite existing content without asking. The old version may be lost.",
+        "ask": "Ask lets Morgan do this once the person approves each time."
+      },
+      "delete": {
+        "auto": "Auto lets Morgan delete without asking. Deleted things may not come back.",
+        "ask": "Ask lets Morgan do this once the person approves each time."
+      },
+      "send": {
+        "auto": "Auto lets Morgan send messages and emails in this person's name without asking.",
+        "ask": "Ask lets Morgan do this once the person approves each time."
+      },
+      "execute": {
+        "auto": "Auto lets Morgan run commands without asking. A wrong command can change or break things.",
+        "ask": "Ask lets Morgan do this once the person approves each time."
+      },
+      "read": {
+        "auto": "Auto lets Morgan read without asking.",
+        "ask": "Ask lets Morgan do this once the person approves each time."
       }
     }
   }
