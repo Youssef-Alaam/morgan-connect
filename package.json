@@ -28,7 +28,8 @@
     "check": "npm run commits && npm run secrets && npm run format && npm run lint && npm run typecheck && npm run depcruise && npm run knip && npm run licences && npm run licences:web && npm run audit && npm run test:unit",
     "evals": "tsc -p tsconfig.evals.json && node dist-evals/evals/cli.js",
     "build:web": "npm run build -w web",
-    "licences:web": "node scripts/check-web-licences.mjs"
+    "licences:web": "node scripts/check-web-licences.mjs",
+    "check:optional": "node scripts/check-optional-imports.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.4",
