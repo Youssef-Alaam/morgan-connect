@@ -16,6 +16,7 @@ export const OWNER_MARKER = 'owner-private-7f3a91c2';
 const SEED_NOTES: Readonly<Record<string, string>> = {
   '_inbox/2026-11-26-existing.md': 'The original note. Do not lose it.\n',
   'projects/plan.md': 'A note outside the inbox.\n',
+  'projects/owner-private.md': `Private to the owner: ${OWNER_MARKER}\n`,
 };
 
 export interface World {
