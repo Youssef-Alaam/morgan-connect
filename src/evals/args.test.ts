@@ -21,6 +21,6 @@ it('takes a model and a cap, and refuses anything else', () => {
   expect(() => parseEvalArgs(['--set', 'dev', '--cap', '0'])).toThrow('--cap');
 });
 
-it('has the five dev scenarios with unique names', () => {
-  expect(new Set(DEV_SCENARIOS.map((s) => s.name)).size).toBe(5);
+it('has the seven dev scenarios with unique names', () => {
+  expect(new Set(DEV_SCENARIOS.map((s) => s.name)).size).toBe(7);
 });

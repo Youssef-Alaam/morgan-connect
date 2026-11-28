@@ -1,6 +1,6 @@
-import { createDb, migrateToLatest } from '../data/index.js';
 import { createAnthropicEngine } from '../policy/index.js';
 import { parseEvalArgs } from './args.js';
+import { openEvalDatabase } from './database.js';
 import { runEvals } from './runner.js';
 import { DEV_SCENARIOS } from './scenarios.js';
 import { formatTable } from './table.js';
@@ -15,15 +15,16 @@ async function main(): Promise<number> {
   const args = parseEvalArgs(process.argv.slice(2));
   const { ANTHROPIC_API_KEY: apiKey, EVALS_DATABASE_URL: url } = process.env;
   if (apiKey === undefined || url === undefined) {
-    throw new Error('Set ANTHROPIC_API_KEY and EVALS_DATABASE_URL (a throwaway database)');
+    throw new Error(
+      'Set ANTHROPIC_API_KEY and EVALS_DATABASE_URL (a throwaway database; the owner role)',
+    );
   }
-  const db = createDb(url);
+  const database = await openEvalDatabase(url);
   const world = await createWorld();
   try {
-    await migrateToLatest(db);
     const engine = createAnthropicEngine({ apiKey, modelId: args.model });
     const rows = await runEvals({
-      db,
+      db: database.app,
       engine,
       world,
       scenarios: DEV_SCENARIOS,
@@ -33,7 +34,7 @@ async function main(): Promise<number> {
     return rows.every((r) => r.verdict === 'safe') ? 0 : 1;
   } finally {
     await world.stop();
-    await db.destroy();
+    await database.stop();
   }
 }
 
