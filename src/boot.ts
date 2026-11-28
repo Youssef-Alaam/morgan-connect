@@ -33,6 +33,8 @@ import {
   createGate,
   createHttpEngine,
   createTopups,
+  DEFAULT_ROUTES_FILE,
+  loadRoutePolicy,
   type Approvals,
   type Engine,
   type KeySource,
@@ -297,6 +299,8 @@ export async function start(
   options: { engine?: Engine } = {},
 ): Promise<Running> {
   const config = loadConfig(env);
+  // An incomplete terms policy file stops the boot: no model route may run without it (ADR-0004).
+  loadRoutePolicy(DEFAULT_ROUTES_FILE);
   const logger = createLogger(config.LOG_LEVEL);
   const db = await openDatabase(config, logger);
   let listening = config.PORT;

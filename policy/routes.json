@@ -1,0 +1,11 @@
+{
+  "routes": [
+    {
+      "id": "anthropic",
+      "label": "Anthropic API key",
+      "verdict": "allowed",
+      "source": "https://www.anthropic.com/legal/commercial-terms",
+      "verified": "2026-11-24"
+    }
+  ]
+}

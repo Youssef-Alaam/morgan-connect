@@ -16,6 +16,7 @@ COPY package.json package-lock.json ./
 COPY web/package.json ./web/
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY --from=build /app/dist ./dist
+COPY policy ./policy
 COPY --from=build /app/web/dist ./web/dist
 ENV WEB_DIR=/app/web/dist
 USER node
