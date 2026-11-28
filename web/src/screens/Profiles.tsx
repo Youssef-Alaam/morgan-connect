@@ -12,6 +12,7 @@ import { TopBar } from './TopBar.tsx';
 import { useProfiles, type Editing, type Focus, type Pending } from './useProfiles.ts';
 
 const K = 'profiles';
+const RISKY = 'btn-risky';
 const PRESETS = ['restricted', 'standard', 'trusted'] as const;
 
 interface ReviewProps {
@@ -42,6 +43,7 @@ function Review({ pending, busy, onSave, onCancel }: ReviewProps) {
       </p>
       <Button
         variant={risky ? 'primary' : 'secondary'}
+        className={risky ? RISKY : undefined}
         disabled={preview.refused || busy}
         onClick={onSave}
       >
