@@ -10,6 +10,7 @@ export const RLS_EXEMPT_TABLES: readonly string[] = [
   'kysely_migration_lock',
   'setup_codes',
   'access_profiles',
+  'routes',
 ];
 
 /** Schemas outside `public` that are install-wide as a whole: the queue (pg-boss) keeps only ids. */

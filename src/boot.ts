@@ -71,6 +71,11 @@ function chooseEngine(config: Config): Engine | undefined {
   return apiKey === undefined ? undefined : createAnthropicEngine({ apiKey, modelId });
 }
 
+/** The one route the config names: the id the admin switches, and what the page shows about it. */
+function routeIdOf(config: Config): string {
+  return config.ENGINE === 'http' ? 'http' : 'anthropic';
+}
+
 /** The vault tool is registered only when its URL and token are both set. */
 function vaultFrom(config: Config): { vault?: VaultOptions } {
   const { VAULT_REMOTE_URL: remoteUrl, VAULT_TOKEN: token } = config;
@@ -98,6 +103,7 @@ function buildReplier(
         db,
         logger,
         engine: model,
+        route: routeIdOf(config),
         model: config.ENGINE === 'http' ? 'http-engine' : config.ANTHROPIC_MODEL,
         gate: createGate({
           db,

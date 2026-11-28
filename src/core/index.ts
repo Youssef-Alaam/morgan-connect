@@ -21,4 +21,5 @@ export {
   type ReplyDeps,
 } from './reply.js';
 export { BUDGET_REPLY } from './budget-reply.js';
+export { ROUTE_OFF_REPLY } from './route-reply.js';
 export { createTurnAborts, type TurnAborts } from './aborts.js';
