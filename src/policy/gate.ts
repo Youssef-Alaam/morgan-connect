@@ -13,6 +13,7 @@ import {
 } from '../tools/index.js';
 import type { Approvals } from './approvals.js';
 import { abortedError, runGuarded } from './guard.js';
+import { createModelCallCheck } from './model-call.js';
 import { decide, type Mode } from './profile.js';
 import { profileFor } from './profiles.js';
 import { createRecorder, type Caller } from './recorder.js';
@@ -34,6 +35,12 @@ export interface GateOptions {
   logger?: Pick<Logger, 'error'>;
   /** A tool that runs longer than this is stopped (default 30 s). */
   toolTimeoutMs?: number;
+  /** The clock for the terms policy's 90-day rule (default: the real one). */
+  now?: () => Date;
+  /** The terms policy file (default `policy/routes.json`). */
+  routesFile?: string;
+  /** Has the admin opted in to this grey route? Default: nobody has. */
+  routeOptedIn?: (route: string) => boolean;
 }
 
 const UNKNOWN_REFUSAL = 'There is no such tool. Use only the tools you were given.';
@@ -48,6 +55,12 @@ export interface Gate {
   /** For a tool name the model made up: refused, and recorded. */
   /** True once if a tool call in this turn was refused because the profile has it off. */
   takeSwitchedOff: (turnId: string) => boolean;
+  /**
+   * Before every model call, engine or safety model: the terms policy file and the admin's switch
+   * must both say on. Returns the sentence to tell the person (and has written the audit row), or
+   * undefined when the call may go ahead.
+   */
+  refuseModelCall: (caller: Caller, route: string) => Promise<string | undefined>;
   unknownTool: (caller: Caller) => (name: string, args: Record<string, unknown>) => Promise<string>;
 }
 
@@ -92,6 +105,10 @@ async function decisionFor(db: Db, caller: Caller, tool: ToolDefinition): Promis
   }
 }
 
+/** The model-call check built from the gate's options (the logger may be absent). */
+const modelCallCheck = ({ db, logger, now, routesFile, routeOptedIn }: GateOptions) =>
+  createModelCallCheck({ db, logger, now, routesFile, optedIn: routeOptedIn });
+
 /**
  * The one gate (L2): every tool call goes through here, is decided by the profile, and writes
  * exactly one audit row, after the run, so the row records how it went.
@@ -134,6 +151,7 @@ export function createGate(options: GateOptions): Gate {
   }
 
   return {
+    refuseModelCall: modelCallCheck(options),
     takeSwitchedOff: (turnId) => switchedOff.delete(turnId),
     toolsFor: (caller) =>
       tools.map((tool) => ({

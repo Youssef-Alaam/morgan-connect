@@ -15,6 +15,7 @@ export {
 } from '../providers/index.js';
 export { approvalHash } from './approval-hash.js';
 export { createGate, type Caller, type Gate } from './gate.js';
+export { ROUTE_OFF_REPLY } from './model-call.js';
 export { DEFAULT_ROUTES_FILE, loadRoutePolicy } from './routes.js';
 export { SWITCHED_OFF } from './not-approved.js';
 export type { VaultOptions } from '../tools/index.js';

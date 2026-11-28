@@ -60,7 +60,7 @@ export async function refusedForBudget(
 
 /** The checks before any model call, in order: the route is on, then the person is within their limit. */
 export async function refusedBeforeModel(
-  deps: Parameters<typeof refusedForBudget>[0] & { route?: string | undefined },
+  deps: Parameters<typeof refusedForBudget>[0] & Parameters<typeof refusedForRoute>[0],
   turn: Turn,
 ): Promise<ReplyResult | undefined> {
   return (await refusedForRoute(deps, turn)) ?? (await refusedForBudget(deps, turn));
