@@ -24,8 +24,23 @@ export interface AuthDeps {
   passkeys?: RelyingParty | undefined;
   /** What the budgets page shows beside each person's own numbers (config); unset: UTC, no default limit. */
   budgets?: BudgetSettings | undefined;
+  /** The model routes and channels the providers page shows (config); unset: none. */
+  providers?: ProvidersConfig | undefined;
   /** Tell a member in their own chat what the admin decided; unset: nobody is told. A failure is only logged. */
   tellMember?: ((channel: string, chatId: string, text: string) => Promise<void>) | undefined;
+}
+
+/** One model route from config. Only the last four characters of its key ever reach this layer. */
+interface RouteInfo {
+  id: string;
+  provider: string;
+  model: string;
+  keyLast4: string | null;
+}
+
+export interface ProvidersConfig {
+  routes: readonly RouteInfo[];
+  telegram: boolean;
 }
 
 interface BudgetSettings {

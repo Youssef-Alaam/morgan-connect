@@ -114,6 +114,7 @@ export interface Database {
     created_at: Generated<Date>;
     last_used_at: Date | null;
   };
+  routes: { id: string; enabled: Generated<boolean>; updated_at: Generated<Date> };
   access_profiles: {
     preset: string;
     modes: Record<string, string>;

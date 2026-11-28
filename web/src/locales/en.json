@@ -421,5 +421,43 @@
         "summary": "Summary"
       }
     }
+  },
+  "providers": {
+    "title": "Providers and channels",
+    "open": "Providers",
+    "back": "Back to chat",
+    "routes": {
+      "caption": "Model routes set up for this install",
+      "none": "No model route is set up.",
+      "provider": "Provider",
+      "model": "Model",
+      "key": "Key (last four)",
+      "noKey": "None",
+      "status": "Status",
+      "actions": "Actions",
+      "on": "On",
+      "off": "Switched off",
+      "switchOff": "Switch off",
+      "switchOn": "Switch on",
+      "switchOffNamed": "Switch off {{provider}}",
+      "switchOnNamed": "Switch on {{provider}}"
+    },
+    "confirm": {
+      "title": "Switch this route off?",
+      "text": "Nobody can get an answer from {{provider}} ({{model}}) until you switch it on again. Each message is refused with a short line and recorded in the audit log."
+    },
+    "channels": {
+      "caption": "Channels and the last message each received",
+      "channel": "Channel",
+      "status": "Status",
+      "last": "Last message (UTC)",
+      "configured": "Set up",
+      "notConfigured": "Not set up",
+      "never": "None yet",
+      "name": {
+        "telegram": "Telegram",
+        "web": "Web chat"
+      }
+    }
   }
 }

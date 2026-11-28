@@ -21,7 +21,7 @@ import {
 import { joinSystem, trusted, type SystemPrompt } from '../safety/index.js';
 import { startOver } from './start-over.js';
 import { withSwitchedOffNote } from './switched-off.js';
-import { refusedForBudget, type BudgetSettings, type ReplyResult } from './budget-reply.js';
+import { refusedBeforeModel, type BudgetSettings, type ReplyResult } from './budget-reply.js';
 import { compact, type BeforeCompact } from './compaction.js';
 import { isCommand } from './commands.js';
 import { toEngineHistory } from './summary-view.js';
@@ -48,11 +48,10 @@ export interface ReplyDeps {
   system?: SystemPrompt;
   /** The tools the model may call, each behind the policy gate. */
   gate?: Gate;
-  /**
-   * Spend limits (M2-10a). Unset: no limit is checked. Checked here in core, once at the start of each turn, not in the policy gate (which only
-   * guards tools). Compaction calls are not checked. M2-10b builds on this.
-   */
+  /** Spend limits (M2-10a). Unset: none checked. Checked in core once per turn, not in the policy gate (tools only); compaction is not checked. */
   budget?: BudgetSettings;
+  /** Which configured route answers (M2-15e). When the admin switches it off, a turn is refused before any model call. Unset: never checked. */
+  route?: string;
   /** The model id the engine uses; written to the usage ledger. */
   model: string;
   /** Where "today" starts for /usage, and the zone of the time shown to the model (an IANA name). */
@@ -314,7 +313,7 @@ async function modelReply(
   turn: Turn,
   { both, timedOut }: { both: AbortSignal; timedOut: () => boolean },
 ): Promise<ReplyResult> {
-  const refused = await refusedForBudget(deps, turn);
+  const refused = await refusedBeforeModel(deps, turn);
   if (refused !== undefined) return refused;
   const renewed = await startOverWhenIdle(deps, turn);
   const { answer, context } = await ask(deps, turn, both, timedOut);

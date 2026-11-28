@@ -358,3 +358,34 @@ export function answerTopup(
 ): Promise<Result<{ amountUsd: string }>> {
   return call(`/admin/topups/${encodeURIComponent(id)}`, { decision });
 }
+
+export interface ProviderRoute {
+  id: string;
+  provider: string;
+  model: string;
+  /** The last four characters of the key; null when there is none to show. Never more. */
+  keyLast4: string | null;
+  enabled: boolean;
+}
+
+interface ProviderChannel {
+  id: string;
+  configured: boolean;
+  /** ISO time of the newest message it received; null when none yet. */
+  lastMessageAt: string | null;
+}
+
+export interface Providers {
+  routes: ProviderRoute[];
+  channels: ProviderChannel[];
+}
+
+/** The configured model routes and channels; a member gets 403. */
+export function listProviders(): Promise<Result<Providers>> {
+  return call('/admin/providers');
+}
+
+/** Switch a route on or off; a switched-off route refuses the next model call. */
+export function switchRoute(id: string, enabled: boolean): Promise<Result<unknown>> {
+  return call(`/admin/providers/${encodeURIComponent(id)}`, { enabled }, 'PUT');
+}
