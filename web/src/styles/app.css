@@ -54,6 +54,10 @@ body {
   justify-items: stretch;
 }
 
+.providers-channels {
+  margin-block-start: var(--space-5);
+}
+
 .screen-wide {
   max-inline-size: var(--chat-width);
 }

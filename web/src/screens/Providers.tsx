@@ -153,7 +153,9 @@ export function Providers({ onBack, onSignedOut }: ProvidersProps) {
           ) : (
             <RouteTable routes={data.routes} onSwitch={onSwitch} />
           )}
-          <ChannelTable channels={data.channels} />
+          <div className="providers-channels">
+            <ChannelTable channels={data.channels} />
+          </div>
         </>
       )}
       {asking === undefined ? null : (

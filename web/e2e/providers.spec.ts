@@ -62,8 +62,9 @@ test('switching off asks first; Cancel sends nothing, Switch off sends the chang
   const state = await script(page, 'admin');
   const sent: string[] = [];
   await page.route('**/api/admin/providers/anthropic', async (route) => {
-    sent.push(route.request().postData() ?? '');
-    state.off = true;
+    const body = route.request().postData() ?? '';
+    sent.push(body);
+    state.off = body.includes('false');
     await route.fulfill({ status: 204 });
   });
   await open(page, queryOf(info.project.metadata));
@@ -78,4 +79,8 @@ test('switching off asks first; Cancel sends nothing, Switch off sends the chang
   await expect(page.getByText('Switched off')).toBeVisible();
   expect(sent).toEqual(['{"enabled":false}']);
   await expect(page.getByRole('button', { name: 'Switch on Anthropic' })).toBeVisible();
+  // Switching back on needs no question and sends the change at once.
+  await page.getByRole('button', { name: 'Switch on Anthropic' }).click();
+  await expect(page.getByRole('button', { name: 'Switch off Anthropic' })).toBeVisible();
+  expect(sent).toEqual(['{"enabled":false}', '{"enabled":true}']);
 });
