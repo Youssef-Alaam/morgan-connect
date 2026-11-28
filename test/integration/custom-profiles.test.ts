@@ -1,5 +1,6 @@
+import { sql } from 'kysely';
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
-import { createSession, type Owner } from '../../src/data/index.js';
+import { createSession, withOwner, type Owner } from '../../src/data/index.js';
 import { createApp } from '../../src/http/index.js';
 import { sha256 } from '../../src/identity/admin-link.js';
 import { createLogger } from '../../src/ops/index.js';
@@ -148,4 +149,18 @@ it('refuses the admin a custom profile that shuts them out like Restricted would
   const own = { userId: ctx.alice.userId, preset: 'standard' as const, modes: shut };
   expect(await assignProfile(ctx.app, ctx.alice, own)).toBeUndefined();
   expect(await (await previewOf(ctx.alice.userId, shut)).json()).toMatchObject({ refused: true });
+});
+
+it('refuses and audits an unknown preset sent straight to the database', async () => {
+  const { rows } = await withOwner(ctx.app, ctx.alice, (trx) =>
+    sql`select * from admin_assign_profile(${ctx.bob.userId}, null, 'root', null)`.execute(trx),
+  );
+  expect(rows).toEqual([]);
+  const last = await ctx.owner
+    .selectFrom('audit_log')
+    .select(['outcome', 'reason'])
+    .where('tool', '=', 'admin.profile.assign')
+    .orderBy('id', 'desc')
+    .executeTakeFirstOrThrow();
+  expect(last).toEqual({ outcome: 'refused', reason: 'root for person' });
 });
