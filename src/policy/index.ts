@@ -24,6 +24,7 @@ export {
   previewProfile,
   loosened,
   profilesOf,
+  asModes,
   profileFor,
   type AccessProfile,
   type DeviceProfile,

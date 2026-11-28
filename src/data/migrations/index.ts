@@ -37,6 +37,7 @@ import { up as adminUsageSummary } from './0036-admin-usage-summary.js';
 import { up as topupStep } from './0037-topup-step.js';
 import { up as adminAnswerTopup } from './0038-admin-answer-topup.js';
 import { up as adminAuditList } from './0039-admin-audit-list.js';
+import { up as customProfiles } from './0040-custom-profiles.js';
 
 /** Applied in key order. Add new migrations here with the next number. */
 export const migrations: Record<string, Migration> = {
@@ -78,4 +79,5 @@ export const migrations: Record<string, Migration> = {
   '0037-topup-step': { up: topupStep },
   '0038-admin-answer-topup': { up: adminAnswerTopup },
   '0039-admin-audit-list': { up: adminAuditList },
+  '0040-custom-profiles': { up: customProfiles },
 };
