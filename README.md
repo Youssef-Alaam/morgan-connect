@@ -10,9 +10,9 @@ Built in the open, one milestone at a time. Nothing here is ready to use yet.
 
 | Milestone | What it delivers                                                    | State       |
 | --------- | ------------------------------------------------------------------- | ----------- |
-| M0        | Public repo, checks in CI, a stack that boots                       | In progress |
-| M1        | Tracer bullet: Telegram, one model, one approved action, cost shown | Next        |
-| M2        | Many users, accounts, budgets, web chat                             | Planned     |
+| M0        | Public repo, checks in CI, a stack that boots                       | Done        |
+| M1        | Tracer bullet: Telegram, one model, one approved action, cost shown | Done        |
+| M2        | Many users, accounts, budgets, web chat                             | In progress |
 | M3        | Safety and heavy tools; first release gate                          | Planned     |
 | M4        | Daily driver: vault, memory, schedules, connectors                  | Planned     |
 | M5        | Second engine, router, WhatsApp                                     | Planned     |
@@ -21,7 +21,7 @@ Built in the open, one milestone at a time. Nothing here is ready to use yet.
 
 ## Follow the build
 
-- [Spec](docs/spec.md), [standards](docs/STANDARDS.md) and [tickets](docs/tickets/m0-m1.md)
+- [Spec](docs/spec.md), [standards](docs/STANDARDS.md) and tickets ([M0-M1](docs/tickets/m0-m1.md), [M2](docs/tickets/m2.md), [M3](docs/tickets/m3.md))
 - Decisions: [grill log](docs/grill-log.md) and [ADRs](docs/adr/)
 - Pull requests show each ticket as it lands
 
