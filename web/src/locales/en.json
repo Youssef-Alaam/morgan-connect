@@ -320,7 +320,14 @@
       "send": "Send",
       "execute": "Run commands"
     },
-    "inherits": "{{preset}}, same as the person"
+    "inherits": "{{preset}}, same as the person",
+    "risk": "Risk",
+    "review": "Change for {{target}}",
+    "confirmText": "Set {{target}} to {{preset}}?",
+    "refused": "You cannot make yourself Restricted. Pick a different profile.",
+    "save": "Save",
+    "cancel": "Cancel",
+    "forChatInherited": "Their {{channel}} chat, same as the person"
   },
   "budgets": {
     "title": "Budgets and usage",
@@ -457,6 +464,34 @@
       "name": {
         "telegram": "Telegram",
         "web": "Web chat"
+      }
+    }
+  },
+  "profile": {
+    "risk": {
+      "create": {
+        "auto": "Auto lets Morgan create notes and files without asking first. Use it only for things you can undo.",
+        "ask": "Ask lets Morgan do this once the person approves each time."
+      },
+      "overwrite": {
+        "auto": "Auto lets Morgan overwrite existing content without asking. The old version may be lost.",
+        "ask": "Ask lets Morgan do this once the person approves each time."
+      },
+      "delete": {
+        "auto": "Auto lets Morgan delete without asking. Deleted things may not come back.",
+        "ask": "Ask lets Morgan do this once the person approves each time."
+      },
+      "send": {
+        "auto": "Auto lets Morgan send messages and emails in this person's name without asking.",
+        "ask": "Ask lets Morgan do this once the person approves each time."
+      },
+      "execute": {
+        "auto": "Auto lets Morgan run commands without asking. A wrong command can change or break things.",
+        "ask": "Ask lets Morgan do this once the person approves each time."
+      },
+      "read": {
+        "auto": "Auto lets Morgan read without asking.",
+        "ask": "Ask lets Morgan do this once the person approves each time."
       }
     }
   }
