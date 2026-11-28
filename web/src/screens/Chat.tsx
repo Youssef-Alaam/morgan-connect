@@ -18,6 +18,7 @@ interface ChatProps {
   onProfiles?: () => void;
   onBudgets?: () => void;
   onAudit?: () => void;
+  onProviders?: () => void;
 }
 
 /** Follow the live stream into the lines; true while it is broken. A session that ended means sign in again. */
@@ -50,7 +51,11 @@ function PageButtons({
   onProfiles,
   onBudgets,
   onAudit,
-}: Pick<ChatProps, 'onSecurity' | 'onUsers' | 'onProfiles' | 'onBudgets' | 'onAudit'>) {
+  onProviders,
+}: Pick<
+  ChatProps,
+  'onSecurity' | 'onUsers' | 'onProfiles' | 'onBudgets' | 'onAudit' | 'onProviders'
+>) {
   const { t } = useTranslation();
   return (
     <>
@@ -72,6 +77,11 @@ function PageButtons({
       {onAudit === undefined ? null : (
         <Button variant="secondary" onClick={onAudit}>
           {t('audit.open')}
+        </Button>
+      )}
+      {onProviders === undefined ? null : (
+        <Button variant="secondary" onClick={onProviders}>
+          {t('providers.open')}
         </Button>
       )}
       <Button variant="secondary" onClick={onSecurity}>

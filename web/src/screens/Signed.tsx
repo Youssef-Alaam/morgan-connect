@@ -4,6 +4,7 @@ import { Audit } from './Audit.tsx';
 import { Budgets } from './Budgets.tsx';
 import { Chat } from './Chat.tsx';
 import { Profiles } from './Profiles.tsx';
+import { Providers } from './Providers.tsx';
 import { Security } from './Security.tsx';
 import { Users } from './Users.tsx';
 
@@ -11,7 +12,7 @@ interface SignedProps {
   onSignedOut: () => void;
 }
 
-type View = 'chat' | 'security' | 'users' | 'profiles' | 'budgets' | 'audit';
+type View = 'chat' | 'security' | 'users' | 'profiles' | 'budgets' | 'audit' | 'providers';
 
 // The screens of a signed-in person: the chat, the account's security page and, for the admin, the people and access pages.
 export function Signed({ onSignedOut }: SignedProps) {
@@ -30,6 +31,7 @@ export function Signed({ onSignedOut }: SignedProps) {
   if (view === 'profiles') return <Profiles onBack={go('chat')} onSignedOut={onSignedOut} />;
   if (view === 'budgets') return <Budgets onBack={go('chat')} onSignedOut={onSignedOut} />;
   if (view === 'audit') return <Audit onBack={go('chat')} onSignedOut={onSignedOut} />;
+  if (view === 'providers') return <Providers onBack={go('chat')} onSignedOut={onSignedOut} />;
   return (
     <Chat
       onSignedOut={onSignedOut}
@@ -40,6 +42,7 @@ export function Signed({ onSignedOut }: SignedProps) {
             onProfiles: go('profiles'),
             onBudgets: go('budgets'),
             onAudit: go('audit'),
+            onProviders: go('providers'),
           }
         : {})}
     />
