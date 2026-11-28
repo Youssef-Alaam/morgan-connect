@@ -164,3 +164,21 @@ it('refuses and audits an unknown preset sent straight to the database', async (
     .executeTakeFirstOrThrow();
   expect(last).toEqual({ outcome: 'refused', reason: 'root for person' });
 });
+
+it('refuses and audits custom modes that name an unknown type, with a short reason', async () => {
+  const bad = JSON.stringify({ read: 'auto', ['x'.repeat(500)]: 'auto' });
+  const { rows } = await withOwner(ctx.app, ctx.alice, (trx) =>
+    sql`select * from admin_assign_profile(${ctx.bob.userId}, null, 'standard', ${bad}::jsonb)`.execute(
+      trx,
+    ),
+  );
+  expect(rows).toEqual([]);
+  const last = await ctx.owner
+    .selectFrom('audit_log')
+    .select(['outcome', 'reason'])
+    .where('tool', '=', 'admin.profile.assign')
+    .orderBy('id', 'desc')
+    .executeTakeFirstOrThrow();
+  expect(last.outcome).toBe('refused');
+  expect(last.reason?.length).toBe(200);
+});
