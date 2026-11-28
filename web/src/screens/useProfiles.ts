@@ -66,9 +66,12 @@ function useChange(reload: (id: string) => void, fail: (error: string | undefine
     asked.current += 1;
     void saveProfile(pending.choice).then((answer) => {
       setSaving(false);
+      if (!answer.ok) {
+        fail(answer.error); // the change stays, so the admin can try again
+        return;
+      }
       setPending(undefined);
-      if (answer.ok) reload(pending.choice.userId);
-      else fail(answer.error);
+      reload(pending.choice.userId);
     });
   };
   const cancel = () => {

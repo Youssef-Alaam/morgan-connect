@@ -331,8 +331,8 @@
     "modeFor": "{{type}} setting",
     "custom": "Custom",
     "perAction": "Per action",
-    "edit": "Edit per action",
-    "editFor": "for {{target}}",
+    "edit": "Edit",
+    "editFor": "per action for {{target}}",
     "loosens_one": "This loosens 1 action type; its risk is shown above.",
     "loosens_other": "This loosens {{count}} action types; each risk is shown above.",
     "channel": {

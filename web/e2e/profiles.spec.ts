@@ -296,3 +296,15 @@ test('a member is not offered the page', async ({ page }, info) => {
   await expect.poll(() => asked).toBe(2);
   await expect(page.getByRole('button', { name: 'Access' })).toHaveCount(0);
 });
+
+test('a failed save keeps the change so it can be saved again', async ({ page }, info) => {
+  await script(page, loosening);
+  await page.route('**/api/members/*/profile', (route) =>
+    route.fulfill({ status: 500, json: { error: 'server_error' } }),
+  );
+  await openAccess(page, queryOf(info.project.metadata));
+  await page.getByLabel('Profile for sara@example.test').selectOption('trusted');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('alert')).toContainText('Something went wrong');
+  await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled();
+});
