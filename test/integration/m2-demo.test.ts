@@ -226,3 +226,27 @@ it("lets the admin read the second person's chat from the console, and audits th
     },
   ]);
 });
+
+it('refuses a member on the console chat read and cannot change a profile', async () => {
+  const app = createApp({
+    dbVersion: () => Promise.resolve('17'),
+    logger: createLogger('silent'),
+    auth: { db: ctx.app },
+  });
+  await createSession(ctx.app, ctx.bob, {
+    tokenHash: sha256('member-demo'),
+    expiresAt: new Date(Date.now() + 3_600_000),
+  });
+  const read = await app.request(`/api/admin/people/${ctx.alice.userId}/chat`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie: 'morgan_session=member-demo' },
+    body: JSON.stringify({ reason: 'curious' }),
+  });
+  expect(read.status).toBe(403);
+  expect(
+    await assignProfile(ctx.app, ctx.bob, { userId: ctx.bob.userId, preset: 'trusted' }),
+  ).toBeUndefined();
+  expect(
+    await assignProfile(ctx.app, ctx.bob, { userId: carol.userId, preset: 'trusted' }),
+  ).toBeUndefined();
+});
