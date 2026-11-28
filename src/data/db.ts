@@ -125,6 +125,7 @@ export interface Database {
     workspace_id: string;
     device_id: string | null;
     preset: string;
+    modes: Record<string, string> | null;
     created_at: Generated<Date>;
   };
   setup_codes: {
