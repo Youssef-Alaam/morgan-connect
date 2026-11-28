@@ -138,8 +138,12 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Install without optional dependencies
-        run: npm ci --omit=optional --ignore-scripts
+      # `npm ci --omit=optional` would also drop the test runner's own platform binaries, so install
+      # everything and then remove only this project's declared optional packages (the engine SDKs).
+      - name: Install, then remove the project's optional engine SDKs
+        run: |
+          npm ci --ignore-scripts
+          node -e "for (const n of Object.keys(require('./package.json').optionalDependencies ?? {})) require('fs').rmSync('node_modules/' + n, { recursive: true, force: true })"
       - name: No module outside the optional adapter folders imports an optional package
         run: npm run check:optional
       - name: Build
